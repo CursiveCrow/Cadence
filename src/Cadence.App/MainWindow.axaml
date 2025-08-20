@@ -1,0 +1,102 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:Cadence.App"
+        mc:Ignorable="d"
+        x:Class="Cadence.App.MainWindow"
+        Width="1000" Height="720"
+        Title="Cadence — Score (time + structure)">
+
+  <Design.DataContext>
+    <vm:MainWindowViewModel/>
+  </Design.DataContext>
+
+  <Grid RowDefinitions="Auto,*">
+    <StackPanel Orientation="Horizontal" Margin="8">
+      <Button Content="Load Seed" Command="{Binding LoadSeedCommand}" Margin="0,0,8,0"/>
+      <Button Content="Run Scheduler" Command="{Binding RunSchedulerCommand}" Margin="0,0,8,0"/>
+      <CheckBox Content="Show Dependencies" IsChecked="{Binding ShowDependencies}" Margin="0,0,8,0"/>
+      <CheckBox Content="Align by Schedule" IsChecked="{Binding AlignBySchedule}" />
+    </StackPanel>
+
+    <!-- Combined Score view -->
+    <ScrollViewer Grid.Row="1">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/> <!-- Chords ribbon -->
+          <RowDefinition Height="*"/>    <!-- Time staff -->
+        </Grid.RowDefinitions>
+
+        <!-- Chords ribbon (structural overlay) -->
+        <ItemsControl Grid.Row="0" Items="{Binding Chords}" Margin="16,8,16,4">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal"/>
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border CornerRadius="8" Padding="8" Margin="4" Background="#EEF">
+                <TextBlock Text="{Binding Name}" />
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Time staff with measures + notes -->
+        <Grid Grid.Row="1" Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Measure headers -->
+            <RowDefinition Height="*"/>    <!-- Notes canvas -->
+          </Grid.RowDefinitions>
+
+          <!-- Measure headers -->
+          <ItemsControl Grid.Row="0" Items="{Binding Measures}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal"/>
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border BorderBrush="#CCC" BorderThickness="0,0,1,1" Padding="8" Margin="0,0,16,0">
+                  <StackPanel>
+                    <TextBlock Text="{Binding Label}" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding CapacityText}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- Notes lane -->
+          <ItemsControl Grid.Row="1" Items="{Binding Notes}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <Canvas Height="240"/>
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemContainerStyle>
+              <Style Selector="ContentPresenter">
+                <Setter Property="Canvas.Left" Value="{Binding CanvasLeft}"/>
+                <Setter Property="Canvas.Top" Value="{Binding CanvasTop}"/>
+              </Style>
+            </ItemsControl.ItemContainerStyle>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border CornerRadius="6" Padding="6" Background="{Binding Color}" BorderBrush="#333" BorderThickness="1">
+                  <StackPanel>
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding DurationText}" FontSize="11"/>
+                    <TextBlock Text="{Binding ChordName}" FontSize="11" Foreground="#555"/>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Grid>
+      </Grid>
+    </ScrollViewer>
+  </Grid>
+</Window>
