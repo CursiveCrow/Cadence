@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Cadence.Domain;
@@ -9,23 +8,39 @@ namespace Cadence.App;
 
 public partial class MainWindowViewModel : ObservableObject
 {
+    // Toggles
     [ObservableProperty] private bool showDependencies;
     [ObservableProperty] private bool alignBySchedule;
+    [ObservableProperty] private bool edgeBundling;
+    [ObservableProperty] private bool criticalOnly;
 
+    // Selection
+    [ObservableProperty] private NoteVm? selectedNote;
+
+    // Timeline geometry
+    [ObservableProperty] private double timelineWidth;
+
+    // Collections used by the Score view
     public ObservableCollection<MeasureVm> Measures { get; } = new();
     public ObservableCollection<ChordVm> Chords { get; } = new();
-    public ObservableCollection<NoteVm> Notes { get; } = new();
+    public ObservableCollection<NoteVm> VisibleNotes { get; } = new();     // filtered by CriticalOnly
+    public ObservableCollection<NoteVm> AllNotes { get; } = new();          // full set from snapshot
+    public ObservableCollection<EdgeVm> Edges { get; } = new();
 
     private Piece? _piece;
-    private readonly IScheduler _scheduler = new SimpleAsapScheduler();
+    private readonly IScheduler _scheduler = new SimpleAsapScheduler(); // replace with CPM+SSGS later
+    private readonly Dictionary<Guid, NoteVm> _idToVm = new();
+    private readonly Dictionary<Guid, List<Guid>> _succ = new();
+    private readonly Dictionary<Guid, List<Guid>> _pred = new();
+
+    // Rendering scale
+    private const double PxPerMinute = 2.0; // demo scale
+    private const double NoteHeight = 44.0;
 
     public MainWindowViewModel()
     {
-        // Load sample on startup for convenience
         if (File.Exists("fixtures/sample-piece.json"))
-        {
             LoadFromJson(File.ReadAllText("fixtures/sample-piece.json"));
-        }
     }
 
     [RelayCommand]
@@ -42,25 +57,38 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (_piece is null) return;
         var snap = await _scheduler.RunAsync(_piece, ScheduleMode.Forward);
-        // naive placement: compute canvas positions based on scheduled start
-        // Convert timespan to pixels (1 minute = 2 px, just for demo)
-        double pxPerMinute = 2.0;
 
-        Notes.Clear();
+        // Clear current view state
+        AllNotes.Clear();
+        _idToVm.Clear();
+
+        // Compute a base timeline width (for scrollable area & piece anchor)
+        TimelineWidth = Math.Max(800,
+            (_piece.DeadlineUtc - _piece.StartUtc).TotalMinutes * PxPerMinute + 240);
+
+        // Place notes (canvas coords + width)
         foreach (var sn in snap.Notes)
         {
             var n = _piece.Notes.First(x => x.Id == sn.NoteId);
             var chord = _piece.Chords.FirstOrDefault(c => c.Id == n.ChordId);
             var minutes = (sn.EndUtc - sn.StartUtc).TotalMinutes;
-            Notes.Add(new NoteVm
+            var vm = new NoteVm
             {
+                NoteId = n.Id,
                 Title = n.Title,
+                DurationBeats = n.DurationBeats,
                 DurationText = $"{n.DurationBeats:0.##} beats",
+                ChordId = chord?.Id,
                 ChordName = chord?.Name ?? "(no chord)",
-                CanvasLeft = (sn.StartUtc - _piece.StartUtc).TotalMinutes * pxPerMinute,
-                CanvasTop = (chord is null ? 0 : 60 + _piece.Chords.IndexOf(chord) * 50),
-                Color = chord is null ? "#FFD" : "#E6F3FF"
-            });
+                CanvasLeft = (sn.StartUtc - _piece.StartUtc).TotalMinutes * PxPerMinute,
+                CanvasTop = (chord is null ? 20 : 60 + _piece.Chords.IndexOf(chord) * 56),
+                Width = Math.Max(38, minutes * PxPerMinute),
+                Color = chord is null ? "#FFD" : "#E6F3FF",
+                Opacity = 1.0
+            };
+            vm.UpdateA11y();
+            AllNotes.Add(vm);
+            _idToVm[n.Id] = vm;
         }
 
         // Measures display
@@ -77,12 +105,30 @@ public partial class MainWindowViewModel : ObservableObject
         // Chords ribbon
         Chords.Clear();
         foreach (var c in _piece.Chords)
-        {
-            Chords.Add(new ChordVm { Name = c.Name });
-        }
+            Chords.Add(new ChordVm { Id = c.Id, Name = c.Name });
+
+        // Build adjacency for CPM & overlays
+        BuildAdjacency();
+
+        // Compute CPM (ignoring capacity) to mark critical notes
+        MarkCriticalNotesCpmIgnoringCapacity();
+
+        // Refresh visible notes & edges
+        RebuildVisibleNotes();
+        RebuildEdges();
     }
 
-    private void LoadFromJson(string json)
+    [RelayCommand]
+    private void SelectNote(NoteVm? vm)
+    {
+        SelectedNote = vm;
+        // Dimming logic for notes (keep text readable)
+        foreach (var n in AllNotes)
+            n.Opacity = (vm is null) ? 1.0 : (n.NoteId == vm.NoteId || n.ChordId == vm.ChordId ? 1.0 : 0.55);
+        RebuildEdges();
+    }
+
+    public void LoadFromJson(string json)
     {
         var seed = JsonSerializer.Deserialize<SeedPiece>(json, new JsonSerializerOptions
         {
@@ -146,6 +192,226 @@ public partial class MainWindowViewModel : ObservableObject
 
         _piece = piece;
     }
+
+    partial void OnShowDependenciesChanged(bool value) => RebuildEdges();
+    partial void OnEdgeBundlingChanged(bool value) => RebuildEdges();
+    partial void OnCriticalOnlyChanged(bool value)
+    {
+        RebuildVisibleNotes();
+        RebuildEdges();
+    }
+    partial void OnSelectedNoteChanged(NoteVm? value)
+    {
+        // Update A11y "selected" emphasis if needed later.
+    }
+
+    private void BuildAdjacency()
+    {
+        _succ.Clear();
+        _pred.Clear();
+        if (_piece is null) return;
+        foreach (var n in _piece.Notes)
+        {
+            _succ[n.Id] = new List<Guid>();
+            _pred[n.Id] = new List<Guid>();
+        }
+        foreach (var d in _piece.Dependencies)
+        {
+            if (_succ.TryGetValue(d.PredecessorNoteId, out var s)) s.Add(d.SuccessorNoteId);
+            if (_pred.TryGetValue(d.SuccessorNoteId, out var p)) p.Add(d.PredecessorNoteId);
+        }
+    }
+
+    private void MarkCriticalNotesCpmIgnoringCapacity()
+    {
+        if (_piece is null || _piece.Notes.Count == 0) return;
+
+        var allIds = _piece.Notes.Select(n => n.Id).ToList();
+        var duration = _piece.Notes.ToDictionary(n => n.Id, n => n.DurationBeats);
+
+        // Kahn topological order
+        var indeg = allIds.ToDictionary(id => id, id => _pred[id].Count);
+        var q = new Queue<Guid>(allIds.Where(id => indeg[id] == 0));
+        var order = new List<Guid>();
+        while (q.TryDequeue(out var id))
+        {
+            order.Add(id);
+            foreach (var s in _succ[id]) { indeg[s]--; if (indeg[s] == 0) q.Enqueue(s); }
+        }
+        if (order.Count != allIds.Count)
+        {
+            // Cycle: nothing marked critical
+            foreach (var vm in AllNotes) vm.IsCritical = false;
+            foreach (var vm in AllNotes) vm.UpdateA11y();
+            return;
+        }
+
+        var es = allIds.ToDictionary(id => id, _ => 0.0);
+        var ef = allIds.ToDictionary(id => id, _ => 0.0);
+        foreach (var id in order)
+        {
+            var maxPredEf = _pred[id].Count == 0 ? 0.0 : _pred[id].Max(p => ef[p]);
+            es[id] = maxPredEf;
+            ef[id] = es[id] + duration[id];
+        }
+        var projectLen = ef.Values.DefaultIfEmpty(0.0).Max();
+
+        var lf = allIds.ToDictionary(id => id, _ => projectLen);
+        var ls = allIds.ToDictionary(id => id, _ => 0.0);
+        for (int i = order.Count - 1; i >= 0; i--)
+        {
+            var id = order[i];
+            var minSuccLs = _succ[id].Count == 0 ? projectLen : _succ[id].Min(s => ls[s]);
+            lf[id] = minSuccLs;
+            ls[id] = lf[id] - duration[id];
+        }
+
+        foreach (var id in allIds)
+        {
+            var slack = ls[id] - es[id];
+            var isCrit = Math.Abs(slack) < 1e-9;
+            if (_idToVm.TryGetValue(id, out var vm))
+            {
+                vm.IsCritical = isCrit;
+                vm.UpdateA11y();
+            }
+        }
+    }
+
+    private void RebuildVisibleNotes()
+    {
+        VisibleNotes.Clear();
+        foreach (var n in (criticalOnly ? AllNotes.Where(n => n.IsCritical) : AllNotes))
+            VisibleNotes.Add(n);
+    }
+
+    private void RebuildEdges()
+    {
+        Edges.Clear();
+        if (_piece is null || VisibleNotes.Count == 0) return;
+
+        // Piece anchor to the right
+        var pieceX = TimelineWidth + 100;
+        var selected = SelectedNote;
+        var selectedChord = selected?.ChordId;
+
+        // Group by chord (null chord grouped under Guid.Empty)
+        var groups = VisibleNotes.GroupBy(n => n.ChordId ?? Guid.Empty).ToList();
+        foreach (var g in groups)
+        {
+            var notes = g.OrderBy(n => n.CanvasTop).ToList();
+            if (notes.Count == 0) continue;
+
+            // Bundling: anchor X = median of note centers; Y above the top-most note
+            double AnchorXFor(IEnumerable<NoteVm> vs) =>
+                vs.Select(v => v.CanvasLeft + v.Width * 0.5).OrderBy(x => x)
+                  .ElementAt(vs.Count() / 2);
+            var anchorX = edgeBundling ? AnchorXFor(notes) :
+                           notes.Select(v => v.CanvasLeft + v.Width * 0.5).Average();
+            var anchorY = notes.Min(v => v.CanvasTop) - 18.0;
+            var bottomY = notes.Max(v => v.CanvasTop) + NoteHeight + 6.0;
+
+            var chordId = g.Key == Guid.Empty ? (Guid?)null : g.Key;
+            var chordIsHighlighted = selectedChord.HasValue && chordId == selectedChord;
+
+            // Optional bundle spine
+            if (edgeBundling)
+                Edges.Add(EdgeVm.BundleSpine(anchorX, anchorY, bottomY, chordIsHighlighted ? 1.0 : DimOpacity(selected != null)));
+
+            // Note → Chord elbows
+            foreach (var n in notes)
+            {
+                // elbow via small up-then-across step
+                var x0 = n.CanvasLeft + n.Width * 0.5;
+                var y0 = n.CanvasTop;
+                var mid = y0 - 8.0;
+                var isHighlighted = (selected != null && n.NoteId == selected.NoteId) || chordIsHighlighted;
+                var opacity = isHighlighted ? 1.0 : DimOpacity(selected != null);
+                Edges.Add(EdgeVm.ContainsElbow(n.NoteId, chordId, x0, y0, x0, mid, anchorX, anchorY, opacity));
+            }
+
+            // Chord → Piece line
+            Edges.Add(EdgeVm.AggregatesLine(chordId, anchorX, anchorY, pieceX, anchorY,
+                chordIsHighlighted ? 1.0 : DimOpacity(selected != null)));
+        }
+
+        // Optional dependencies overlay
+        if (showDependencies)
+        {
+            var visibleSet = VisibleNotes.Select(v => v.NoteId).ToHashSet();
+            foreach (var from in VisibleNotes)
+            {
+                if (!_succ.TryGetValue(from.NoteId, out var s)) continue;
+                foreach (var toId in s)
+                {
+                    if (!visibleSet.Contains(toId) || !_idToVm.TryGetValue(toId, out var to)) continue;
+                    var isHighlighted = (selected?.NoteId == from.NoteId);
+                    var opacity = isHighlighted ? 1.0 : 0.35; // dimmer than structure edges
+                    Edges.Add(EdgeVm.DependencyCurve(
+                        from.CanvasLeft + from.Width, from.CanvasTop + NoteHeight * 0.5,
+                        to.CanvasLeft, to.CanvasTop + NoteHeight * 0.5,
+                        opacity));
+                }
+            }
+        }
+    }
+
+    private static double DimOpacity(bool hasSelection) => hasSelection ? 0.28 : 0.65;
+
+    private static HashSet<Guid> ComputeCriticalPathIds(Piece piece)
+    {
+        // Longest path in DAG by DurationBeats (ignoring capacity)
+        var preds = piece.Notes.ToDictionary(n => n.Id, n => new List<Guid>());
+        var succs = piece.Notes.ToDictionary(n => n.Id, n => new List<Guid>());
+        foreach (var d in piece.Dependencies)
+        {
+            preds[d.SuccessorNoteId].Add(d.PredecessorNoteId);
+            succs[d.PredecessorNoteId].Add(d.SuccessorNoteId);
+        }
+
+        // Kahn order
+        var indeg = piece.Notes.ToDictionary(n => n.Id, n => preds[n.Id].Count);
+        var q = new Queue<Guid>(indeg.Where(kv => kv.Value == 0).Select(kv => kv.Key));
+        var order = new List<Guid>();
+        while (q.TryDequeue(out var id))
+        {
+            order.Add(id);
+            foreach (var s in succs[id])
+            {
+                indeg[s]--;
+                if (indeg[s] == 0) q.Enqueue(s);
+            }
+        }
+        if (order.Count != piece.Notes.Count) return new HashSet<Guid>(); // cycle: none
+
+        var dur = piece.Notes.ToDictionary(n => n.Id, n => n.DurationBeats);
+        var dist = piece.Notes.ToDictionary(n => n.Id, n => 0.0);
+        var prev = new Dictionary<Guid, Guid?>();
+        foreach (var id in order)
+        {
+            var bestPred = (Guid?)null;
+            var best = 0.0;
+            foreach (var p in preds[id])
+            {
+                var cand = dist[p];
+                if (cand > best) { best = cand; bestPred = p; }
+            }
+            dist[id] = best + dur[id];
+            prev[id] = bestPred;
+        }
+
+        // backtrack from max distance node
+        var end = dist.OrderByDescending(kv => kv.Value).FirstOrDefault().Key;
+        var path = new HashSet<Guid>();
+        var cur = end;
+        while (cur != Guid.Empty)
+        {
+            path.Add(cur);
+            if (!prev.TryGetValue(cur, out var p) || p is null) break;
+            cur = p.Value;
+        }
+        return path;
+    }
 }
 
 public sealed class MeasureVm
@@ -156,17 +422,90 @@ public sealed class MeasureVm
 
 public sealed class ChordVm
 {
+    public Guid Id { get; set; }
     public string Name { get; set; } = "";
 }
 
 public sealed class NoteVm : ObservableObject
 {
+    public Guid NoteId { get; set; }
+    public Guid? ChordId { get; set; }
     public string Title { get; set; } = "";
     public string DurationText { get; set; } = "";
+    public double DurationBeats { get; set; }
     public string ChordName { get; set; } = "";
     public double CanvasLeft { get; set; }
     public double CanvasTop { get; set; }
+    public double Width { get; set; } = 80;
     public string Color { get; set; } = "#FFD";
+
+    [ObservableProperty] private bool isCritical;
+    [ObservableProperty] private double opacity = 1.0;
+
+    public string A11yName { get; private set; } = "";
+
+    public void UpdateA11y()
+    {
+        var crit = IsCritical ? ", critical path" : "";
+        A11yName = $"Note \"{Title}\", {DurationBeats:0.#} beats, chord {ChordName}{crit}.";
+    }
+}
+
+public sealed class EdgeVm
+{
+    public string PathData { get; init; } = "";
+    public string Stroke { get; init; } = "#999";
+    public double StrokeThickness { get; init; } = 1.0;
+    public double Opacity { get; init; } = 0.6;
+
+    // Structural (Note->Chord elbow)
+    public static EdgeVm ContainsElbow(Guid noteId, Guid? chordId,
+        double x0, double y0, double x1, double y1, double x2, double y2, double opacity)
+        => new()
+        {
+            PathData = M(x0, y0) + L(x1, y1) + L(x2, y2),
+            Stroke = "#8899CC",
+            StrokeThickness = 1.5,
+            Opacity = opacity
+        };
+
+    // Bundle spine (Chord)
+    public static EdgeVm BundleSpine(double x, double yTop, double yBottom, double opacity)
+        => new()
+        {
+            PathData = M(x, yTop) + L(x, yBottom),
+            Stroke = "#8899CC",
+            StrokeThickness = 2.0,
+            Opacity = opacity
+        };
+
+    // Chord -> Piece
+    public static EdgeVm AggregatesLine(Guid? chordId, double x0, double y0, double x1, double y1, double opacity)
+        => new()
+        {
+            PathData = M(x0, y0) + L(x1, y1),
+            Stroke = "#6677FF",
+            StrokeThickness = 2.0,
+            Opacity = opacity
+        };
+
+    // Dependency curve (quadratic approximation via two segments)
+    public static EdgeVm DependencyCurve(double x0, double y0, double x1, double y1, double opacity)
+    {
+        // gentle S-shape via mid control points
+        var mx = (x0 + x1) / 2.0;
+        var yUp = Math.Min(y0, y1) - 12.0;
+        return new EdgeVm
+        {
+            PathData = M(x0, y0) + L(mx, yUp) + L(x1, y1),
+            Stroke = "#999999",
+            StrokeThickness = 1.2,
+            Opacity = opacity
+        };
+    }
+
+    private static string M(double x, double y) => $"M {x:0.##},{y:0.##} ";
+    private static string L(double x, double y) => $"L {x:0.##},{y:0.##} ";
 }
 
 // Seed JSON DTOs
