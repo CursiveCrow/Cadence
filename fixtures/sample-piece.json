@@ -1,5 +1,6 @@
 {
   "piece": {
+    "id": "piece-1",
     "title": "Album v1",
     "startUtc": "2025-09-01T09:00:00Z",
     "deadlineUtc": "2025-09-03T17:00:00Z",
@@ -7,68 +8,24 @@
     "minutesPerBeat": 60
   },
   "measures": [
-    {
-      "index": 0,
-      "startUtc": "2025-09-01T09:00:00Z",
-      "endUtc": "2025-09-01T17:00:00Z",
-      "capacityBeats": 8
-    },
-    {
-      "index": 1,
-      "startUtc": "2025-09-02T09:00:00Z",
-      "endUtc": "2025-09-02T17:00:00Z",
-      "capacityBeats": 8
-    },
-    {
-      "index": 2,
-      "startUtc": "2025-09-03T09:00:00Z",
-      "endUtc": "2025-09-03T17:00:00Z",
-      "capacityBeats": 8
-    }
+    {"index":0,"startUtc":"2025-09-01T09:00:00Z","endUtc":"2025-09-01T17:00:00Z","capacityBeats":8},
+    {"index":1,"startUtc":"2025-09-02T09:00:00Z","endUtc":"2025-09-02T17:00:00Z","capacityBeats":8}
   ],
   "chords": [
-    {
-      "id": "ch-A",
-      "name": "Design Theme",
-      "priority": 1,
-      "color": "#639"
-    },
-    {
-      "id": "ch-B",
-      "name": "Implementation",
-      "priority": 2,
-      "color": "#296"
-    }
+    {"id":"ch-A","name":"Design Theme","priority":1,"color":"#639"},
+    {"id":"ch-B","name":"Implementation","priority":2,"color":"#296"}
   ],
   "notes": [
-    {
-      "id": "n1",
-      "title": "Draft melody",
-      "durationBeats": 3,
-      "chordId": "ch-A"
-    },
-    {
-      "id": "n2",
-      "title": "Harmony pass",
-      "durationBeats": 5,
-      "chordId": "ch-A"
-    },
-    {
-      "id": "n3",
-      "title": "Mix pass",
-      "durationBeats": 4,
-      "earliestStartUtc": "2025-09-03T09:00:00Z",
-      "chordId": "ch-B"
-    }
+    {"id":"n1","title":"Draft melody","durationBeats":3,"chordId":"ch-A"},
+    {"id":"n2","title":"Harmony pass","durationBeats":5,"chordId":"ch-A"},
+    {"id":"n3","title":"Mix pass","durationBeats":4,"chordId":"ch-B"},
+    {"id":"n4","title":"Side Task","durationBeats":2,"chordId":"ch-B"}
   ],
-  "dependencies": [
-    {
-      "predecessorNoteId": "n1",
-      "successorNoteId": "n2"
-    },
-    {
-      "predecessorNoteId": "n2",
-      "successorNoteId": "n3"
-    }
+  "dependencies":[
+    {"id":"d1","predecessorNoteId":"n1","successorNoteId":"n2"},
+    {"id":"d2","predecessorNoteId":"n2","successorNoteId":"n3"}
+  ],
+  "buffers":[
+    {"measureIndex":1,"beats":1}
   ]
 }

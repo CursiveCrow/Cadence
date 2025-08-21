@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
-<PropertyGroup>
+  <PropertyGroup>
+    <AssemblyName>Cadence.App</AssemblyName>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -8,21 +8,14 @@
     <EnablePreviewFeatures>true</EnablePreviewFeatures>
 </PropertyGroup>
 
-<PropertyGroup>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <OutputType>WinExe</OutputType>
-</PropertyGroup>
-
-
-<ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.3.3" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.3.3" />
-    <PackageReference Include="Avalonia.ReactiveUI" Version="11.3.3" />
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
-</ItemGroup>
-
-<ItemGroup>
-  <ProjectReference Include="..\Cadence.Domain\Cadence.Domain.csproj" />
-</ItemGroup>
-
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.0.0-preview.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.0.0-preview.1" />
+    <PackageReference Include="Avalonia.ReactiveUI" Version="11.0.0-preview.1" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.0.0-preview.1" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="..\Cadence.Domain\Cadence.Application.csproj" />
+  </ItemGroup>
 </Project>

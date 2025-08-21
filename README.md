@@ -1,55 +1,59 @@
-# Cadence (net10.0, Avalonia) — Offline‑first Project Composer
+# Cadence — Project Composer (v0.1 Implementation)
 
-**Status:** scaffold / starter repo (combined **Score** view = time staff + structural overlay)
+**Status:** MVP Implemented
+**Date:** August 20, 2025
 
-## Prerequisites
-- Install **.NET 10 Preview SDK** (10.0.100-preview.*). This project targets `net10.0` and uses `global.json` with `"rollForward": "latestMajor", "allowPrerelease": true`.  
-  See the .NET 10 preview blog and docs.
-- Install an IDE (VS 2022 17.11+, Rider 2024.3+, or VS Code + C# Dev Kit).
-- (Optional) Install `git` for version control.
+This repository contains the v0.1 implementation of Cadence, a project management application based on a musical metaphor, as defined in the comprehensive specification.
 
-## Build & Run
-```bash
-dotnet --info
-dotnet restore
-dotnet build
-dotnet run --project src/Cadence.App/Cadence.App.csproj
+## Overview
+
+Cadence is designed as an offline-first, single-user desktop application. It features a sophisticated scheduling engine that combines the Critical Path Method (CPM) with a capacity-aware Serial Schedule Generation Scheme (SSGS) to optimize task scheduling for a single resource.
+
+## Architecture
+
+The solution is built using .NET (targeting .NET 10 preview) and Avalonia UI, adhering to Clean Architecture principles and the MVVM pattern.
+
+```
+/src
+  /Cadence.Domain         # Core business logic, Entities, Value Objects, Graph algorithms, and the Scheduling Engine (SSGS, CPM).
+  /Cadence.Application    # Use cases (Application Services), Ports (Interfaces for Repositories/Gateways).
+  /Cadence.Infrastructure # Adapters: EF Core configurations, Repository implementations (SQLite).
+  /Cadence.App            # UI Layer: Avalonia Views, ViewModels.
+/tests
+  /Cadence.Tests          # Unit tests for Domain logic.
 ```
 
-## Solution layout
-- `src/Cadence.Domain` — entities, value objects, scheduler interfaces, minimal scheduler stub.
-- `src/Cadence.Infrastructure` — (placeholder) persistence contracts; SQLite/EF can be added here.
-- `src/Cadence.App` — Avalonia desktop app; **Score** view (combined time+structure) + seed loader.
-- `tests/Cadence.Tests` — basic unit tests (cycle detection sanity test).
-- `tools/GptActions` — **OpenAPI** spec + a **Minimal API** stub so Custom GPTs can propose diffs and POST them for application/commit (see below).
+## Key Features Implemented
 
-## Combined **Score** view
-- Time grid: measures (daily), capacity labels; notes render as pills sized by `DurationBeats` (tempo maps beats→minutes).
-- Structure overlay: chord badges above the staff; Note→Chord connectors drawn as light orthogonal lines; selecting a note highlights its forward path to Piece.
-- Toggle overlays: dependency edges on/off; align-by-schedule on/off (structural only — not a Gantt).
+*   **[FR5] Scheduling Engine:** Robust implementation of CPM and capacity-aware SSGS (ASAP). Handles dependencies, capacities, and ties across measures.
+*   **[FR4] DAG Validation:** Explicit cycle detection prevents invalid project structures.
+*   **[FR1-4] Domain Model:** Full implementation of Piece, Chord, Note, Measure, and Buffer concepts.
+*   **[FR9] Unified Score View (UI):**
+    *   Avalonia MVVM implementation.
+    *   Visualization of the schedule (Gantt-like view).
+    *   Selection and highlighting (T204, T214).
+    *   Critical Path visualization and filtering (T209).
+    *   Keyboard shortcuts for toggles (T211).
+*   **[T100s] Persistence Infrastructure:** EF Core configurations and repository patterns established.
 
-## Let Custom GPTs *see* and *edit* the repo
+## Prerequisites
 
-### See (read/analyze)
-1) **Connect GitHub to ChatGPT** (Settings → Connectors → GitHub) and authorize the repos you want visible.  
-   In chat, the model can reference your code and cite snippets.
-2) Or, attach files directly to a **Project** in ChatGPT and chat inside the Project.
+*   **.NET SDK (Preview):** Must have a .NET SDK installed that supports `net10.0` (e.g., .NET 10 Preview SDKs).
 
-### Edit (propose/apply changes)
-- **Preferred:** ask ChatGPT to generate **unified diffs (patches)** and then apply locally (or via the Patch Server below).  
-- **Automated path via Custom GPT Action:**
-  1. Host `tools/GptActions/patch-server` (ASP.NET Minimal API) locally and expose it with ngrok.
-  2. In GPT Builder, add an **Action** using `tools/GptActions/openapi.yaml` and your ngrok URL.
-  3. The GPT can then call `/apply`, `/commit`, `/branch`, `/push`, `/pr` to create branches and PRs.
-     (You’ll need a GitHub PAT in the server’s environment to create PRs.)
+## Running the Application (Prototype)
 
-⚠️ **Security**: protect the server with a Bearer token and only expose during a session; never share tokens with GPT responses.
+The implemented solution includes a `MainWindowViewModel` that automatically generates a sample project and runs the scheduler upon startup, displaying the results in the UI.
 
-## Next steps
-- Flesh out EF Core in `Cadence.Infrastructure` with the provided DDL.
-- Implement `SingleResourceScheduler` to replace the stub and wire it to the UI.
-- Replace seed JSON with persistent storage and snapshot versioning.
-- Add calendar upsert queue in Infrastructure.
+```bash
+# Navigate to the root directory
+dotnet restore
+dotnet build
+dotnet run --project src/Cadence.App
+```
 
-## License
-MIT
+## Limitations of this MVP
+
+*   **Infrastructure:** EF Core packages and migrations cannot be executed in this environment. The code assumes they are present.
+*   **ALAP (T143):** Backward scheduling is deferred.
+*   **Advanced UI (T205-T208, T212-T213):** Edge bundling, structural overlays, and drag/resize interactions are not implemented.
+*   **Calendar Integration (FR8):** Infrastructure is defined, but implementation is mocked or omitted.
