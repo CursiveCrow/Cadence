@@ -19,6 +19,7 @@
 <ItemGroup>
   <ProjectReference Include="..\..\src\Cadence.App\Cadence.App.csproj" />
   <ProjectReference Include="..\..\src\Cadence.Domain\Cadence.Domain.csproj" />
+  <ProjectReference Include="..\..\src\Cadence.Infrastructure\Cadence.Infrastructure.csproj" />
 </ItemGroup>
 
 </Project>
