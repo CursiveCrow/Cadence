@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 dark:bg-cadence-dark dark:text-cadence-light;
+  }
+}
+
+@layer components {
+  .staff-line {
+    @apply h-px bg-gray-300 dark:bg-gray-600;
+  }
+  
+  .measure-bar {
+    @apply w-px bg-gray-400 dark:bg-gray-500;
+  }
+  
+  .note-pill {
+    @apply rounded-full px-3 py-1 text-sm font-medium shadow-sm;
+  }
+}
