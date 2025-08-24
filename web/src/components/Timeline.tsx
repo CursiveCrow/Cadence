@@ -87,3 +87,4 @@ export function Timeline({ data }: { data: ScoreData }) {
 }
 
 export default Timeline;
+
