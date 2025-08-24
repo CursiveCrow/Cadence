@@ -1,0 +1,34 @@
+.timeline {
+  position: relative;
+  border: 1px solid #ccc;
+  background: #fff;
+}
+
+.measure-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #ccc;
+}
+
+.lane-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #eee;
+}
+
+.note {
+  position: absolute;
+  background: #4a90e2;
+  color: #fff;
+  border-radius: 4px;
+  padding: 4px;
+  box-sizing: border-box;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
