@@ -1,3 +1,4 @@
+
 import { Timeline } from './components/Timeline';
 import { sampleData } from './sampleData';
 import './App.css';
