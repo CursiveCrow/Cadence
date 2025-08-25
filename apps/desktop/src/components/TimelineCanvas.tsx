@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { setSelection } from '@cadence/state'
-import { TaskData, DependencyData } from '@cadence/crdt'
+import { TaskData, DependencyData, updateTask } from '@cadence/crdt'
 import { Staff } from '@cadence/core'
 import './TimelineCanvas.css'
 
@@ -15,6 +15,7 @@ interface TimelineCanvasProps {
 }
 
 export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
+  projectId,
   tasks,
   dependencies,
   selection,
@@ -27,16 +28,158 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
   const [chordNameInput, setChordNameInput] = useState('')
   const [customChordNames, setCustomChordNames] = useState<Record<string, string>>({})
   const [editPosition, setEditPosition] = useState<{x: number, y: number} | null>(null)
+  
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState(false)
+  const [draggedTask, setDraggedTask] = useState<TaskData | null>(null)
+  const [dragStartPos, setDragStartPos] = useState<{x: number, y: number} | null>(null)
+  const [dragCurrentPos, setDragCurrentPos] = useState<{x: number, y: number} | null>(null)
+  const [dragOffset, setDragOffset] = useState<{x: number, y: number}>({x: 0, y: 0})
 
   // Constants for consistent spacing
   const STAFF_LINE_SPACING = 18 // Space between lines within a staff (increased by 50%)
+
+  // Drag handling functions
+  const getDateFromX = (x: number): string => {
+    const dayWidth = 60
+    const leftMargin = 80
+    const dayIndex = Math.round((x - leftMargin) / dayWidth)
+    const projectStart = new Date('2024-01-01')
+    const newDate = new Date(projectStart)
+    newDate.setDate(projectStart.getDate() + dayIndex)
+    return newDate.toISOString().split('T')[0]
+  }
+
+  const getStaffFromY = (y: number): {staffId: string, staffLine: number} | null => {
+    const staffSpacing = 120
+    const staffStartY = 60
+
+    for (let i = 0; i < staffs.length; i++) {
+      const currentStaffY = staffStartY + i * staffSpacing
+      const staff = staffs[i]
+      const staffEndY = currentStaffY + (staff.numberOfLines - 1) * STAFF_LINE_SPACING
+
+      if (y >= currentStaffY - STAFF_LINE_SPACING && y <= staffEndY + STAFF_LINE_SPACING) {
+        // Calculate which line/space within this staff
+        const relativeY = y - currentStaffY
+        const staffLine = Math.round(relativeY / (STAFF_LINE_SPACING / 2))
+        const clampedStaffLine = Math.max(0, Math.min(staffLine, (staff.numberOfLines - 1) * 2))
+        
+        return {
+          staffId: staff.id,
+          staffLine: clampedStaffLine
+        }
+      }
+    }
+
+    return null
+  }
+
+  const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const rect = canvas.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+
+    // Check for chord name clicks first
+    const clickedChordName = findChordNameAtPosition(x, y)
+    if (clickedChordName) {
+      handleChordNameEdit(clickedChordName, x, y)
+      return
+    }
+
+    // Find clicked task
+    const clickedTask = findTaskAtPosition(x, y)
+    
+    if (clickedTask) {
+      // Cancel any chord editing
+      if (editingChord) {
+        cancelChordNameEdit()
+      }
+
+      // Calculate offset from task start to mouse position
+      const dayWidth = 60
+      const leftMargin = 80
+      const taskStartX = leftMargin + getTaskStartX(clickedTask.startDate) * dayWidth
+      const taskY = getTaskYPosition(clickedTask)
+      
+      setDragOffset({
+        x: x - taskStartX,
+        y: y - taskY
+      })
+      
+      // Start dragging
+      setDraggedTask(clickedTask)
+      setDragStartPos({x, y})
+      setDragCurrentPos({x, y})
+      setIsDragging(true)
+      
+      // Select the task
+      dispatch(setSelection([clickedTask.id]))
+    } else {
+      // Cancel any chord editing and clear selection
+      if (editingChord) {
+        cancelChordNameEdit()
+      }
+      dispatch(setSelection([]))
+    }
+  }
+
+  const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !draggedTask) return
+
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const rect = canvas.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+
+    setDragCurrentPos({x, y})
+  }
+
+  const handleMouseUp = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !draggedTask) return
+
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const rect = canvas.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+
+    // Calculate new position
+    const adjustedX = x - dragOffset.x
+    const adjustedY = y - dragOffset.y
+    
+    const newDate = getDateFromX(adjustedX)
+    const staffInfo = getStaffFromY(adjustedY)
+
+    if (staffInfo) {
+      // Update task with new position
+      updateTask(projectId, draggedTask.id, {
+        startDate: newDate,
+        staffId: staffInfo.staffId,
+        staffLine: staffInfo.staffLine
+      })
+    }
+
+    // Reset drag state
+    setIsDragging(false)
+    setDraggedTask(null)
+    setDragStartPos(null)
+    setDragCurrentPos(null)
+    setDragOffset({x: 0, y: 0})
+  }
 
   useEffect(() => {
     // Small delay to ensure container is properly sized
     setTimeout(() => {
       drawTimeline()
     }, 100)
-  }, [tasks, dependencies, selection, viewport, customChordNames, editingChord])
+  }, [tasks, dependencies, selection, viewport, customChordNames, editingChord, isDragging, dragCurrentPos])
 
   useEffect(() => {
     const handleResize = () => {
@@ -55,6 +198,51 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
       drawTimeline()
     }, 200)
   }, [])
+
+  const drawDropZoneIndicator = (ctx: CanvasRenderingContext2D) => {
+    if (!isDragging || !dragCurrentPos) return
+
+    const adjustedX = dragCurrentPos.x - dragOffset.x
+    const adjustedY = dragCurrentPos.y - dragOffset.y
+    
+    const staffInfo = getStaffFromY(adjustedY)
+    if (!staffInfo) return
+
+    const dayWidth = 60
+    const leftMargin = 80
+    
+    // Calculate snap position
+    const newDate = getDateFromX(adjustedX)
+    const snapX = leftMargin + getTaskStartX(newDate) * dayWidth
+    
+    // Find the staff Y position
+    const staffSpacing = 120
+    const staffStartY = 60
+    const staffIndex = staffs.findIndex(staff => staff.id === staffInfo.staffId)
+    if (staffIndex === -1) return
+    
+    const taskStaffStartY = staffStartY + staffIndex * staffSpacing
+    const snapY = taskStaffStartY + (staffInfo.staffLine * STAFF_LINE_SPACING / 2)
+    
+    // Draw drop zone indicator
+    ctx.strokeStyle = '#10B981' // Green color
+    ctx.lineWidth = 2
+    ctx.setLineDash([5, 5])
+    
+    // Draw a circle to indicate drop position
+    ctx.beginPath()
+    ctx.arc(snapX + 10, snapY, 8, 0, Math.PI * 2)
+    ctx.stroke()
+    
+    // Draw vertical line to show date alignment
+    ctx.beginPath()
+    ctx.moveTo(snapX, 20)
+    ctx.lineTo(snapX, ctx.canvas.height - 20)
+    ctx.stroke()
+    
+    // Reset line dash
+    ctx.setLineDash([])
+  }
 
   const drawTimeline = () => {
     const canvas = canvasRef.current
@@ -83,6 +271,9 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
 
     // Draw grid lines
     drawGrid(ctx, containerRect.width, containerRect.height)
+
+    // Draw drop zone indicator
+    drawDropZoneIndicator(ctx)
 
      // Detect and draw chord bars first (behind tasks)
      const chords = detectChords(tasks)
@@ -211,9 +402,19 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     const taskHeight = 20 // Even smaller to fit precisely on staff lines
     const leftMargin = 80
 
-    const startX = leftMargin + getTaskStartX(task.startDate) * dayWidth
+    // Check if this task is being dragged
+    const isBeingDragged = isDragging && draggedTask?.id === task.id
+    
+    let startX = leftMargin + getTaskStartX(task.startDate) * dayWidth
+    let taskCenterY = getTaskYPosition(task)
+    
+    // If being dragged, use the current drag position
+    if (isBeingDragged && dragCurrentPos) {
+      startX = dragCurrentPos.x - dragOffset.x
+      taskCenterY = dragCurrentPos.y - dragOffset.y
+    }
+    
     const taskWidth = Math.max(task.durationDays * dayWidth - 8, 120)
-    const taskCenterY = getTaskYPosition(task)
     const taskY = taskCenterY - taskHeight / 2
 
     // Task color based on status  
@@ -224,14 +425,28 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     if (task.status === 'cancelled') color = '#6B7280'
     if (task.status === 'not_started') color = '#6366F1'
 
+    // Visual feedback for dragging
+    const opacity = isBeingDragged ? 0.7 : 1.0
+    const shadowOpacity = isBeingDragged ? 0.4 : 0.2
+    const shadowOffset = isBeingDragged ? 4 : 2
+
     // Draw task shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
-    ctx.fillRect(startX + 2, taskY + 2, taskWidth, taskHeight)
+    ctx.fillStyle = `rgba(0, 0, 0, ${shadowOpacity})`
+    ctx.fillRect(startX + shadowOffset, taskY + shadowOffset, taskWidth, taskHeight)
 
     // Draw main task body with subtle note-inspired rounded left end
     const gradient = ctx.createLinearGradient(startX, taskY, startX, taskY + taskHeight)
-    gradient.addColorStop(0, isSelected ? '#F59E0B' : color)
-    gradient.addColorStop(1, isSelected ? '#D97706' : shadeColor(color, -20))
+    
+    // Apply opacity to colors for dragged tasks
+    const primaryColor = isSelected ? '#F59E0B' : color
+    const secondaryColor = isSelected ? '#D97706' : shadeColor(color, -20)
+    
+    if (isBeingDragged) {
+      ctx.globalAlpha = opacity
+    }
+    
+    gradient.addColorStop(0, primaryColor)
+    gradient.addColorStop(1, secondaryColor)
     
     ctx.fillStyle = gradient
     ctx.beginPath()
@@ -322,6 +537,11 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     }
 
     // Duration indicator removed for cleaner display
+    
+    // Reset global alpha if we changed it
+    if (isBeingDragged) {
+      ctx.globalAlpha = 1.0
+    }
   }
 
   const shadeColor = (color: string, percent: number): string => {
@@ -638,48 +858,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     setEditPosition(null)
   }
 
-  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
 
-    const rect = canvas.getBoundingClientRect()
-    const x = event.clientX - rect.left
-    const y = event.clientY - rect.top
-
-    // Check for chord name clicks first
-    const clickedChordName = findChordNameAtPosition(x, y)
-    if (clickedChordName) {
-      handleChordNameEdit(clickedChordName, x, y)
-      return
-    }
-
-    // Find clicked task
-    const clickedTask = findTaskAtPosition(x, y)
-    
-    if (clickedTask) {
-      // Cancel any chord editing
-      if (editingChord) {
-        cancelChordNameEdit()
-      }
-      
-      if (event.ctrlKey || event.metaKey) {
-        // Multi-select
-        const newSelection = selection.includes(clickedTask.id)
-          ? selection.filter(id => id !== clickedTask.id)
-          : [...selection, clickedTask.id]
-        dispatch(setSelection(newSelection))
-      } else {
-        // Single select
-        dispatch(setSelection([clickedTask.id]))
-      }
-    } else {
-      // Cancel any chord editing and clear selection
-      if (editingChord) {
-        cancelChordNameEdit()
-      }
-      dispatch(setSelection([]))
-    }
-  }
 
   const findTaskAtPosition = (x: number, y: number): TaskData | null => {
     const dayWidth = 60
@@ -716,7 +895,10 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
       <canvas
         ref={canvasRef}
         className="timeline-canvas"
-        onClick={handleCanvasClick}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
       />
       
       {/* Chord name editing input */}
