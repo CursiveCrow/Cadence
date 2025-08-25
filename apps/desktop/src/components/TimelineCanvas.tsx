@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { setSelection } from '@cadence/state'
-import { TaskData, DependencyData, updateTask } from '@cadence/crdt'
+import { TaskData, DependencyData, updateTask, createDependency } from '@cadence/crdt'
 import { Staff } from '@cadence/core'
 import './TimelineCanvas.css'
 
@@ -12,6 +12,8 @@ interface TimelineCanvasProps {
   selection: string[]
   viewport: { x: number; y: number; zoom: number }
   staffs: Staff[]
+  onDragStart?: () => void
+  onDragEnd?: () => void
 }
 
 export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
@@ -20,7 +22,9 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
   dependencies,
   selection,
   viewport,
-  staffs
+  staffs,
+  onDragStart,
+  onDragEnd
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dispatch = useDispatch()
@@ -35,9 +39,89 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
   const [dragStartPos, setDragStartPos] = useState<{x: number, y: number} | null>(null)
   const [dragCurrentPos, setDragCurrentPos] = useState<{x: number, y: number} | null>(null)
   const [dragOffset, setDragOffset] = useState<{x: number, y: number}>({x: 0, y: 0})
+  
+  // Dependency creation state (right-click drag)
+  const [isCreatingDependency, setIsCreatingDependency] = useState(false)
+  const [dependencySourceTask, setDependencySourceTask] = useState<TaskData | null>(null)
+  const [dependencyStartPos, setDependencyStartPos] = useState<{x: number, y: number} | null>(null)
+  const [dependencyCurrentPos, setDependencyCurrentPos] = useState<{x: number, y: number} | null>(null)
 
   // Constants for consistent spacing
   const STAFF_LINE_SPACING = 18 // Space between lines within a staff (increased by 50%)
+
+  // Dependency validation functions
+  const getTaskEndDate = (task: TaskData): Date => {
+    const startDate = new Date(task.startDate)
+    const endDate = new Date(startDate)
+    endDate.setDate(startDate.getDate() + task.durationDays)
+    return endDate
+  }
+
+  const validateTaskPosition = (task: TaskData, newStartDate: string): boolean => {
+    // Check if the new position would violate any dependencies
+    const newStart = new Date(newStartDate)
+    
+    // Find all tasks that this task depends on
+    const taskDependencies = Object.values(dependencies).filter(dep => dep.dstTaskId === task.id)
+    
+    for (const dependency of taskDependencies) {
+      const sourceTask = tasks[dependency.srcTaskId]
+      if (sourceTask) {
+        const sourceEndDate = getTaskEndDate(sourceTask)
+        if (newStart < sourceEndDate) {
+          return false // Cannot start before dependency completes
+        }
+      }
+    }
+    
+    return true
+  }
+
+  const createDependencyBetweenTasks = (task1: TaskData, task2: TaskData) => {
+    // Determine direction based on start dates
+    const start1 = new Date(task1.startDate)
+    const start2 = new Date(task2.startDate)
+    
+    let sourceTask: TaskData
+    let destinationTask: TaskData
+    
+    if (start1 <= start2) {
+      sourceTask = task1
+      destinationTask = task2
+    } else {
+      sourceTask = task2
+      destinationTask = task1
+    }
+
+    // Check if dependency already exists
+    const existingDep = Object.values(dependencies).find(dep => 
+      dep.srcTaskId === sourceTask.id && dep.dstTaskId === destinationTask.id
+    )
+    
+    if (existingDep) {
+      console.log('Dependency already exists')
+      return
+    }
+
+    // Create the dependency
+    const depId = `dep-${Date.now()}`
+    createDependency(projectId, {
+      id: depId,
+      srcTaskId: sourceTask.id,
+      dstTaskId: destinationTask.id,
+      type: 'finish_to_start'
+    })
+    
+    // Validate and adjust destination task position if needed
+    const sourceEndDate = getTaskEndDate(sourceTask)
+    const destStartDate = new Date(destinationTask.startDate)
+    
+    if (destStartDate < sourceEndDate) {
+      // Move destination task to start after source completes
+      const newStartDate = sourceEndDate.toISOString().split('T')[0]
+      updateTask(projectId, destinationTask.id, { startDate: newStartDate })
+    }
+  }
 
   // Drag handling functions
   const getDateFromX = (x: number): string => {
@@ -76,18 +160,23 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
   }
 
   const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    event.preventDefault() // Prevent context menu on right-click during drag
+    
     const canvas = canvasRef.current
     if (!canvas) return
 
     const rect = canvas.getBoundingClientRect()
     const x = event.clientX - rect.left
     const y = event.clientY - rect.top
+    const isRightClick = event.button === 2
 
-    // Check for chord name clicks first
-    const clickedChordName = findChordNameAtPosition(x, y)
-    if (clickedChordName) {
-      handleChordNameEdit(clickedChordName, x, y)
-      return
+    // Check for chord name clicks first (only on left-click)
+    if (!isRightClick) {
+      const clickedChordName = findChordNameAtPosition(x, y)
+      if (clickedChordName) {
+        handleChordNameEdit(clickedChordName, x, y)
+        return
+      }
     }
 
     // Find clicked task
@@ -99,27 +188,45 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
         cancelChordNameEdit()
       }
 
-      // Calculate offset from task start to mouse position
-      const dayWidth = 60
-      const leftMargin = 80
-      const taskStartX = leftMargin + getTaskStartX(clickedTask.startDate) * dayWidth
-      const taskY = getTaskYPosition(clickedTask)
-      
-      setDragOffset({
-        x: x - taskStartX,
-        y: y - taskY
-      })
-      
-      // Start dragging
-      setDraggedTask(clickedTask)
-      setDragStartPos({x, y})
-      setDragCurrentPos({x, y})
-      setIsDragging(true)
-      
-      // Select the task
-      dispatch(setSelection([clickedTask.id]))
+      if (isRightClick) {
+        // Start dependency creation
+        setDependencySourceTask(clickedTask)
+        setDependencyStartPos({x, y})
+        setDependencyCurrentPos({x, y})
+        setIsCreatingDependency(true)
+        
+        // Notify parent component that interaction started (to hide popup)
+        onDragStart?.()
+        
+        // Select the source task
+        dispatch(setSelection([clickedTask.id]))
+      } else {
+        // Left-click: Start regular dragging
+        // Calculate offset from task start to mouse position
+        const dayWidth = 60
+        const leftMargin = 80
+        const taskStartX = leftMargin + getTaskStartX(clickedTask.startDate) * dayWidth
+        const taskY = getTaskYPosition(clickedTask)
+        
+        setDragOffset({
+          x: x - taskStartX,
+          y: y - taskY
+        })
+        
+        // Start dragging
+        setDraggedTask(clickedTask)
+        setDragStartPos({x, y})
+        setDragCurrentPos({x, y})
+        setIsDragging(true)
+        
+        // Notify parent component that drag started
+        onDragStart?.()
+        
+        // Select the task
+        dispatch(setSelection([clickedTask.id]))
+      }
     } else {
-      // Cancel any chord editing and clear selection
+      // Cancel any operations and clear selection
       if (editingChord) {
         cancelChordNameEdit()
       }
@@ -128,8 +235,6 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
   }
 
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging || !draggedTask) return
-
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -137,12 +242,16 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     const x = event.clientX - rect.left
     const y = event.clientY - rect.top
 
-    setDragCurrentPos({x, y})
+    if (isDragging && draggedTask) {
+      // Regular dragging
+      setDragCurrentPos({x, y})
+    } else if (isCreatingDependency && dependencySourceTask) {
+      // Dependency creation
+      setDependencyCurrentPos({x, y})
+    }
   }
 
   const handleMouseUp = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging || !draggedTask) return
-
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -150,28 +259,58 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     const x = event.clientX - rect.left
     const y = event.clientY - rect.top
 
-    // Calculate new position
-    const adjustedX = x - dragOffset.x
-    const adjustedY = y - dragOffset.y
-    
-    const newDate = getDateFromX(adjustedX)
-    const staffInfo = getStaffFromY(adjustedY)
+    if (isDragging && draggedTask) {
+      // Handle regular drag completion
+      // Calculate new position
+      const adjustedX = x - dragOffset.x
+      const adjustedY = y - dragOffset.y
+      
+      const newDate = getDateFromX(adjustedX)
+      const staffInfo = getStaffFromY(adjustedY)
 
-    if (staffInfo) {
-      // Update task with new position
-      updateTask(projectId, draggedTask.id, {
-        startDate: newDate,
-        staffId: staffInfo.staffId,
-        staffLine: staffInfo.staffLine
-      })
+      if (staffInfo) {
+        // Validate that the new position doesn't violate dependencies
+        if (validateTaskPosition(draggedTask, newDate)) {
+          // Update task with new position
+          updateTask(projectId, draggedTask.id, {
+            startDate: newDate,
+            staffId: staffInfo.staffId,
+            staffLine: staffInfo.staffLine
+          })
+        } else {
+          // Flash red to indicate invalid position
+          console.log('Cannot place task before its dependencies complete')
+          // Could show a temporary error indicator here
+        }
+      }
+
+      // Reset drag state
+      setIsDragging(false)
+      setDraggedTask(null)
+      setDragStartPos(null)
+      setDragCurrentPos(null)
+      setDragOffset({x: 0, y: 0})
+      
+      // Notify parent component that drag ended
+      onDragEnd?.()
+    } else if (isCreatingDependency && dependencySourceTask) {
+      // Handle dependency creation completion
+      const targetTask = findTaskAtPosition(x, y)
+      
+      if (targetTask && targetTask.id !== dependencySourceTask.id) {
+        // Create dependency between source and target
+        createDependencyBetweenTasks(dependencySourceTask, targetTask)
+      }
+      
+      // Reset dependency creation state
+      setIsCreatingDependency(false)
+      setDependencySourceTask(null)
+      setDependencyStartPos(null)
+      setDependencyCurrentPos(null)
+      
+      // Notify parent component that interaction ended
+      onDragEnd?.()
     }
-
-    // Reset drag state
-    setIsDragging(false)
-    setDraggedTask(null)
-    setDragStartPos(null)
-    setDragCurrentPos(null)
-    setDragOffset({x: 0, y: 0})
   }
 
   useEffect(() => {
@@ -179,7 +318,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     setTimeout(() => {
       drawTimeline()
     }, 100)
-  }, [tasks, dependencies, selection, viewport, customChordNames, editingChord, isDragging, dragCurrentPos])
+  }, [tasks, dependencies, selection, viewport, customChordNames, editingChord, isDragging, dragCurrentPos, isCreatingDependency, dependencyCurrentPos])
 
   useEffect(() => {
     const handleResize = () => {
@@ -199,8 +338,80 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     }, 200)
   }, [])
 
+  const drawDependencyCreationLine = (ctx: CanvasRenderingContext2D) => {
+    if (!isCreatingDependency || !dependencyStartPos || !dependencyCurrentPos || !dependencySourceTask) return
+
+    // Draw a line from source task to current mouse position
+    const dayWidth = 60
+    const leftMargin = 80
+    
+    // Calculate source task position - connect from the END of the source task
+    // Use the SAME calculations as task drawing to ensure consistency
+    const sourceStartX = leftMargin + getTaskStartX(dependencySourceTask.startDate) * dayWidth
+    const sourceTaskWidth = Math.max(dependencySourceTask.durationDays * dayWidth - 8, 40)
+    const sourceEndX = sourceStartX + sourceTaskWidth
+    const sourceY = getTaskYPosition(dependencySourceTask)
+    
+    // Draw animated dependency line
+    ctx.strokeStyle = '#10B981' // Green color for new dependency
+    ctx.lineWidth = 3
+    ctx.setLineDash([8, 4])
+    
+    // Animate the dash offset for a moving effect
+    const time = Date.now() / 200
+    ctx.lineDashOffset = -time % 12
+    
+    ctx.beginPath()
+    ctx.moveTo(sourceEndX, sourceY)
+    ctx.lineTo(dependencyCurrentPos.x, dependencyCurrentPos.y)
+    ctx.stroke()
+    
+    // Draw arrowhead at mouse position
+    const angle = Math.atan2(dependencyCurrentPos.y - sourceY, dependencyCurrentPos.x - sourceEndX)
+    const arrowLength = 12
+    
+    ctx.fillStyle = '#10B981'
+    ctx.beginPath()
+    ctx.moveTo(dependencyCurrentPos.x, dependencyCurrentPos.y)
+    ctx.lineTo(
+      dependencyCurrentPos.x - arrowLength * Math.cos(angle - Math.PI / 6),
+      dependencyCurrentPos.y - arrowLength * Math.sin(angle - Math.PI / 6)
+    )
+    ctx.lineTo(
+      dependencyCurrentPos.x - arrowLength * Math.cos(angle + Math.PI / 6),
+      dependencyCurrentPos.y - arrowLength * Math.sin(angle + Math.PI / 6)
+    )
+    ctx.closePath()
+    ctx.fill()
+    
+    // Reset line dash
+    ctx.setLineDash([])
+    ctx.lineDashOffset = 0
+    
+    // Check if hovering over a valid target task
+    const targetTask = findTaskAtPosition(dependencyCurrentPos.x, dependencyCurrentPos.y)
+    if (targetTask && targetTask.id !== dependencySourceTask.id) {
+      // Highlight the target task start (where dependency connects to)
+      const targetStartX = leftMargin + getTaskStartX(targetTask.startDate) * dayWidth
+      const targetY = getTaskYPosition(targetTask)
+      const targetTaskWidth = Math.max(targetTask.durationDays * dayWidth - 8, 40)
+      
+      ctx.strokeStyle = '#10B981'
+      ctx.lineWidth = 2
+      ctx.setLineDash([4, 2])
+      ctx.strokeRect(targetStartX, targetY - 10, targetTaskWidth, 20)
+      ctx.setLineDash([])
+      
+      // Draw a small connection indicator at the start of the target task
+      ctx.fillStyle = '#10B981'
+      ctx.beginPath()
+      ctx.arc(targetStartX, targetY, 4, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+
   const drawDropZoneIndicator = (ctx: CanvasRenderingContext2D) => {
-    if (!isDragging || !dragCurrentPos) return
+    if (!isDragging || !dragCurrentPos || !draggedTask) return
 
     const adjustedX = dragCurrentPos.x - dragOffset.x
     const adjustedY = dragCurrentPos.y - dragOffset.y
@@ -224,8 +435,11 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     const taskStaffStartY = staffStartY + staffIndex * staffSpacing
     const snapY = taskStaffStartY + (staffInfo.staffLine * STAFF_LINE_SPACING / 2)
     
-    // Draw drop zone indicator
-    ctx.strokeStyle = '#10B981' // Green color
+    // Check if this position would violate dependencies
+    const isValidPosition = validateTaskPosition(draggedTask, newDate)
+    
+    // Draw drop zone indicator with appropriate color
+    ctx.strokeStyle = isValidPosition ? '#10B981' : '#EF4444' // Green for valid, red for invalid
     ctx.lineWidth = 2
     ctx.setLineDash([5, 5])
     
@@ -239,6 +453,15 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     ctx.moveTo(snapX, 20)
     ctx.lineTo(snapX, ctx.canvas.height - 20)
     ctx.stroke()
+    
+    // Draw warning text for invalid positions
+    if (!isValidPosition) {
+      ctx.fillStyle = '#EF4444'
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('⚠️ Cannot place before dependency completes', snapX, snapY + 25)
+      ctx.textAlign = 'start'
+    }
     
     // Reset line dash
     ctx.setLineDash([])
@@ -274,6 +497,9 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
 
     // Draw drop zone indicator
     drawDropZoneIndicator(ctx)
+    
+    // Draw dependency creation line
+    drawDependencyCreationLine(ctx)
 
      // Detect and draw chord bars first (behind tasks)
      const chords = detectChords(tasks)
@@ -414,8 +640,12 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
       taskCenterY = dragCurrentPos.y - dragOffset.y
     }
     
-    const taskWidth = Math.max(task.durationDays * dayWidth - 8, 120)
+    const taskWidth = Math.max(task.durationDays * dayWidth - 8, 40)
     const taskY = taskCenterY - taskHeight / 2
+    
+    // Check if this task has dependencies (for visual indicators)
+    const hasDependents = Object.values(dependencies).some(dep => dep.srcTaskId === task.id)
+    const hasDependencies = Object.values(dependencies).some(dep => dep.dstTaskId === task.id)
 
     // Task color based on status  
     let color = '#8B5CF6' // Default purple
@@ -538,6 +768,46 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
 
     // Duration indicator removed for cleaner display
     
+    // Draw dependency connection indicators
+    if (hasDependents && !isBeingDragged) {
+      // Draw small circle at the end of the task to show outgoing dependencies
+      const endX = startX + taskWidth
+      ctx.fillStyle = '#8B5CF6'
+      ctx.beginPath()
+      ctx.arc(endX, taskCenterY, 3, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Draw small outward arrow
+      ctx.strokeStyle = '#8B5CF6'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(endX + 2, taskCenterY)
+      ctx.lineTo(endX + 6, taskCenterY)
+      ctx.moveTo(endX + 4, taskCenterY - 2)
+      ctx.lineTo(endX + 6, taskCenterY)
+      ctx.lineTo(endX + 4, taskCenterY + 2)
+      ctx.stroke()
+    }
+    
+    if (hasDependencies && !isBeingDragged) {
+      // Draw small circle at the start of the task to show incoming dependencies
+      ctx.fillStyle = '#8B5CF6'
+      ctx.beginPath()
+      ctx.arc(startX, taskCenterY, 3, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Draw small inward arrow
+      ctx.strokeStyle = '#8B5CF6'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(startX - 6, taskCenterY)
+      ctx.lineTo(startX - 2, taskCenterY)
+      ctx.moveTo(startX - 4, taskCenterY - 2)
+      ctx.lineTo(startX - 2, taskCenterY)
+      ctx.lineTo(startX - 4, taskCenterY + 2)
+      ctx.stroke()
+    }
+    
     // Reset global alpha if we changed it
     if (isBeingDragged) {
       ctx.globalAlpha = 1.0
@@ -564,12 +834,16 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
      const dayWidth = 60
      const leftMargin = 80
 
-     const srcX = leftMargin + (getTaskStartX(srcTask.startDate) + srcTask.durationDays) * dayWidth
+     // Connect from the END of source task to the START of destination task
+     // Use the SAME calculations as task drawing to ensure consistency
+     const srcStartX = leftMargin + getTaskStartX(srcTask.startDate) * dayWidth
+     const srcTaskWidth = Math.max(srcTask.durationDays * dayWidth - 8, 40)
+     const srcEndX = srcStartX + srcTaskWidth
      const srcY = getTaskYPosition(srcTask)
 
-     const dstX = leftMargin + getTaskStartX(dstTask.startDate) * dayWidth
+     const dstStartX = leftMargin + getTaskStartX(dstTask.startDate) * dayWidth
      const dstY = getTaskYPosition(dstTask)
-
+     
     // Draw musical tie/slur connection
     ctx.strokeStyle = '#8B5CF6'
     ctx.lineWidth = 2.5
@@ -579,21 +853,26 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     if (srcY === dstY) {
       // Same staff - draw a slur above the notes
       const slurY = srcY - 15
-      ctx.moveTo(srcX, srcY - 5)
-      ctx.quadraticCurveTo((srcX + dstX) / 2, slurY, dstX - 15, dstY - 5)
+      ctx.moveTo(srcEndX, srcY - 5)
+      ctx.quadraticCurveTo((srcEndX + dstStartX) / 2, slurY, dstStartX, dstY - 5)
     } else {
       // Different staffs - draw flowing connection
-      const midX = (srcX + dstX) / 2
+      const midX = (srcEndX + dstStartX) / 2
       const controlY = srcY < dstY ? Math.min(srcY, dstY) - 20 : Math.max(srcY, dstY) + 20
-      ctx.moveTo(srcX, srcY)
-      ctx.bezierCurveTo(midX, controlY, midX, controlY, dstX - 15, dstY)
+      ctx.moveTo(srcEndX, srcY)
+      ctx.bezierCurveTo(midX, controlY, midX, controlY, dstStartX, dstY)
     }
     ctx.stroke()
 
-    // Draw small note symbol at the end instead of arrow
+    // Draw connection indicators
     ctx.fillStyle = '#8B5CF6'
     ctx.beginPath()
-    ctx.ellipse(dstX - 12, dstY, 3, 2, 0, 0, Math.PI * 2)
+    ctx.arc(srcEndX, srcY, 3, 0, Math.PI * 2)
+    ctx.fill()
+    
+    ctx.fillStyle = '#8B5CF6'
+    ctx.beginPath()
+    ctx.arc(dstStartX, dstY, 3, 0, Math.PI * 2)
     ctx.fill()
   }
 
@@ -702,7 +981,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
      )
      
      const startX = leftMargin + getTaskStartX(chord.startDate) * dayWidth
-     const longestTaskWidth = Math.max(longestTask.durationDays * dayWidth - 8, 120)
+     const longestTaskWidth = Math.max(longestTask.durationDays * dayWidth - 8, 40)
      const chordX = startX + longestTaskWidth + 8 // Position at the end of the longest note
      
      // Find the top and bottom tasks using the new positioning system
@@ -742,7 +1021,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
      )
      
      const startX = leftMargin + getTaskStartX(chord.startDate) * dayWidth
-     const longestTaskWidth = Math.max(longestTask.durationDays * dayWidth - 8, 120)
+     const longestTaskWidth = Math.max(longestTask.durationDays * dayWidth - 8, 40)
      const chordX = startX + longestTaskWidth + 8 // Position at the end of the longest note
      
      // Find the top task to position chord name above chord bar
@@ -800,7 +1079,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
       )
       
       const startX = leftMargin + getTaskStartX(chord.startDate) * dayWidth
-      const longestTaskWidth = Math.max(longestTask.durationDays * dayWidth - 8, 120)
+      const longestTaskWidth = Math.max(longestTask.durationDays * dayWidth - 8, 40)
       const chordX = startX + longestTaskWidth + 8
       
       // Find the top task to position chord name above chord bar
@@ -867,7 +1146,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
 
     for (const task of Object.values(tasks)) {
       const startX = leftMargin + getTaskStartX(task.startDate) * dayWidth
-      const taskWidth = Math.max(task.durationDays * dayWidth - 8, 120)
+      const taskWidth = Math.max(task.durationDays * dayWidth - 8, 40)
       const taskCenterY = getTaskYPosition(task)
       const taskY = taskCenterY - taskHeight / 2
 
@@ -898,7 +1177,14 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+        onContextMenu={(e) => e.preventDefault()} // Prevent right-click context menu
+        style={{ 
+          cursor: isDragging 
+            ? 'grabbing' 
+            : isCreatingDependency 
+            ? 'crosshair' 
+            : 'grab' 
+        }}
       />
       
       {/* Chord name editing input */}

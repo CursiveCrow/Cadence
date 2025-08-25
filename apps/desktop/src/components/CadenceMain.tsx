@@ -1,11 +1,11 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { RootState, setActiveProject, initializeDefaultStaffs } from '@cadence/state'
+import { RootState, setActiveProject, initializeDefaultStaffs, setSelection } from '@cadence/state'
 import { useProjectTasks, useProjectDependencies, createTask, createDependency } from '@cadence/crdt'
 import { TaskStatus } from '@cadence/core'
 import { TimelineCanvas } from './TimelineCanvas'
 import { ProjectHeader } from './ProjectHeader'
-import { TaskPanel } from './TaskPanel'
+import { TaskPopup } from './TaskPopup'
 import './CadenceMain.css'
 
 export const CadenceMain: React.FC = () => {
@@ -17,6 +17,66 @@ export const CadenceMain: React.FC = () => {
   const tasks = useProjectTasks(demoProjectId)
   const dependencies = useProjectDependencies(demoProjectId)
   const [isInitialized, setIsInitialized] = React.useState(false)
+  const [popupPosition, setPopupPosition] = useState<{x: number, y: number} | null>(null)
+  const [isDragInProgress, setIsDragInProgress] = useState(false)
+
+  // Calculate popup position based on selected task
+  const calculatePopupPosition = useCallback((taskId: string) => {
+    const task = tasks[taskId]
+    if (!task) return null
+
+    // Calculate task position on screen
+    const dayWidth = 60
+    const leftMargin = 80
+    const staffSpacing = 120
+    const staffStartY = 60
+
+    // Find staff index
+    const staffIndex = staffs.findIndex(staff => staff.id === task.staffId)
+    if (staffIndex === -1) return null
+
+    // Calculate X position (based on start date)
+    const projectStart = new Date('2024-01-01')
+    const taskStart = new Date(task.startDate)
+    const dayIndex = Math.floor((taskStart.getTime() - projectStart.getTime()) / (1000 * 60 * 60 * 24))
+    const taskX = leftMargin + dayIndex * dayWidth
+
+    // Calculate Y position (based on staff and line)
+    const staffY = staffStartY + staffIndex * staffSpacing
+    const STAFF_LINE_SPACING = 18
+    const taskY = staffY + (task.staffLine * STAFF_LINE_SPACING / 2)
+
+    // Convert to screen coordinates (approximate)
+    return {
+      x: taskX + 100, // Offset to avoid covering the task
+      y: taskY - 50   // Offset above the task
+    }
+  }, [tasks, staffs])
+
+  // Handle closing the popup
+  const handleClosePopup = useCallback(() => {
+    dispatch(setSelection([]))
+    setPopupPosition(null)
+  }, [dispatch])
+
+  // Handle drag start/end from TimelineCanvas
+  const handleDragStart = useCallback(() => {
+    setIsDragInProgress(true)
+  }, [])
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragInProgress(false)
+  }, [])
+
+  // Update popup position when selection changes
+  useEffect(() => {
+    if (selection.length > 0 && !isDragInProgress) {
+      const position = calculatePopupPosition(selection[0])
+      setPopupPosition(position)
+    } else {
+      setPopupPosition(null)
+    }
+  }, [selection, calculatePopupPosition, isDragInProgress])
 
   useEffect(() => {
     // Set the demo project as active on startup
@@ -221,7 +281,7 @@ export const CadenceMain: React.FC = () => {
       />
       
       <div className="cadence-content">
-        <div className="timeline-container">
+        <div className="timeline-container full-width">
           <TimelineCanvas 
             projectId={demoProjectId}
             tasks={tasks}
@@ -229,19 +289,24 @@ export const CadenceMain: React.FC = () => {
             selection={selection}
             viewport={viewport}
             staffs={staffs}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
           />
           <div className="measure-label">
             Measure Name
           </div>
         </div>
-        
-        {selection.length > 0 && (
-          <TaskPanel 
-            projectId={demoProjectId}
-            selectedTaskIds={selection}
-          />
-        )}
       </div>
+
+      {/* Task popup - shows when a note is selected */}
+      {selection.length > 0 && popupPosition && (
+        <TaskPopup 
+          projectId={demoProjectId}
+          selectedTaskIds={selection}
+          position={popupPosition}
+          onClose={handleClosePopup}
+        />
+      )}
     </div>
   )
 }
