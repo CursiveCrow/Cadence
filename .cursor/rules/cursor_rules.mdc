@@ -5,6 +5,7 @@ alwaysApply: true
 ---
 
 - **Required Rule Structure:**
+
   ```markdown
   ---
   description: Clear, one-line description of what the rule enforces
@@ -18,21 +19,25 @@ alwaysApply: true
   ```
 
 - **File References:**
+
   - Use `[filename](mdc:path/to/file)` ([filename](mdc:filename)) to reference files
   - Example: [prisma.mdc](mdc:.cursor/rules/prisma.mdc) for rule references
   - Example: [schema.prisma](mdc:prisma/schema.prisma) for code references
 
 - **Code Examples:**
+
   - Use language-specific code blocks
+
   ```typescript
   // ✅ DO: Show good examples
   const goodExample = true;
-  
+
   // ❌ DON'T: Show anti-patterns
   const badExample = false;
   ```
 
 - **Rule Content Guidelines:**
+
   - Start with high-level overview
   - Include specific, actionable requirements
   - Show examples of correct implementation
@@ -40,14 +45,122 @@ alwaysApply: true
   - Keep rules DRY by referencing other rules
 
 - **Rule Maintenance:**
+
   - Update rules when new patterns emerge
   - Add examples from actual codebase
   - Remove outdated patterns
   - Cross-reference related rules
 
 - **Best Practices:**
+
   - Use bullet points for clarity
   - Keep descriptions concise
   - Include both DO and DON'T examples
   - Reference actual code over theoretical examples
-  - Use consistent formatting across rules 
+  - Use consistent formatting across rules
+
+- **Critical Rules (Always Applied):**
+
+- **CRITICAL RULE: NO FUNCTIONALITY CLAIMS WITHOUT VERIFICATION**
+
+  - **NEVER** claim code is "production ready", "working", "functional", or "complete" without actual runtime testing
+  - **NEVER** assume compilation success equals functional success
+  - **ALWAYS** distinguish between "implemented" and "verified"
+
+- **Required Verification Steps Before Any Status Claims:**
+
+  - ✅ **Build Verification**: Code compiles without errors
+  - ✅ **Runtime Verification**: Application starts and loads successfully
+  - ✅ **Core Functionality Verification**: Primary user actions work as expected
+  - ✅ **Integration Verification**: Components communicate correctly
+  - ✅ **Data Persistence Verification**: Database operations succeed
+
+- **Honest Status Language Requirements:**
+
+  ```markdown
+  // ✅ DO: Use precise, verified language
+  "The code compiles successfully and implements the required architecture"
+  "I've implemented X feature but haven't tested it yet"
+  "The build succeeds but runtime functionality needs verification"
+
+  // ❌ DON'T: Make unverified claims
+  "This is production ready"
+  "Everything works perfectly"
+  "The application is fully functional"
+  ```
+
+- **Mandatory Testing Checklist:**
+
+  - [ ] Application launches without crashes
+  - [ ] Primary UI renders correctly
+  - [ ] Core user workflows complete successfully
+  - [ ] Database operations persist data
+  - [ ] Error states handle gracefully
+  - [ ] Import/export functions work with real data
+
+- **Status Declaration Requirements:**
+
+  - **"Implemented"**: Code exists and compiles
+  - **"Functional"**: Basic runtime verification completed
+  - **"Tested"**: Core workflows verified to work
+  - **"Production Ready"**: Full testing, error handling, and user acceptance
+
+- **Red Flag Behaviors to Avoid:**
+
+  - Claiming functionality based on code complexity alone
+  - Assuming sophisticated architecture means working software
+  - Making status claims without user-facing testing
+  - Conflating technical implementation with user experience
+
+- **Accountability Measures:**
+
+  - Document specific tests performed before any status claim
+  - Provide evidence of functionality (screenshots, logs, test results)
+  - Admit limitations and untested areas explicitly
+  - Default to conservative status assessments
+
+- **Emergency Protocol for False Claims:**
+
+  - Immediately acknowledge the error
+  - Identify the specific verification steps that were skipped
+  - Test the actual functionality and report real status
+  - Update development process to prevent recurrence
+
+- **Examples from Cadence Project:**
+
+  ```typescript
+  // ❌ BAD: Made this exact mistake
+  "The Cadence application is now production-ready for basic use"
+
+  // ✅ GOOD: What should have been said
+  "The Cadence codebase compiles successfully with proper architecture,
+   but runtime functionality needs verification before any readiness claims"
+  ```
+
+**ABSOLUTE REQUIREMENT: When in doubt about functionality, TEST IT. No exceptions.**
+
+- **Operational Discipline (Dev/Runtime) — Always Applied:**
+
+  - **Fix root cause, never bypass**
+    - Resolve environment conflicts (ports, stale processes) deterministically before changing configs
+    - Do not relax safeguards (e.g., disabling `strictPort`) to “get past” a failure unless approved, documented, and reverted
+  - **Process hygiene for dev servers**
+    - Before starting a new dev session, ensure no stale Vite/Electron processes are running
+    - If a port is in use, identify and terminate the owning PID first; only then start the server
+  - **Shell correctness (PowerShell default)**
+    - Use PowerShell separators (`;`) instead of bash `&&`
+    - Prefer explicit working directories (e.g., `cd apps/desktop; pnpm dev`)
+  - **Required checks for “dev up” status**
+    - Vite outputs a bound URL (e.g., `Local: http://localhost:<port>/`) or Electron window is shown
+    - No “port in use” errors remain in logs
+
+- **Canonical Commands (PowerShell) — Port/Process Management:**
+
+  - **Find PID on a port:** `netstat -ano | findstr :5173`
+  - **Terminate by PID:** `taskkill /F /PID <PID>`
+  - **Alt (PowerShell):** `Get-NetTCPConnection -LocalPort 5173 -State Listen | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force }`
+  - After cleanup, start from app dir: `cd apps/desktop; pnpm dev`
+
+- **Prohibited Shortcuts:**
+  - Do not modify build/dev configs to sidestep transient local issues (e.g., editing ports) without adding rationale to the repo and confirming it does not mask real faults
+  - Do not start multiple background dev processes; track and stop previous ones before launching another

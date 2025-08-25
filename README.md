@@ -1,99 +1,131 @@
-# Cadence - Musical Timeline Management
+# Cadence
 
-A sophisticated timeline and project management tool that uses musical metaphors to visualize and manage complex projects.
+**A streamlined, high-performance, offline-first project management system using Electron, TypeScript, React, PixiJS, and CRDTs.**
 
-## Overview
+## Architecture
 
-Cadence treats projects as musical "Scores" containing "Measures" (time slices), with "Chords" grouping parallel "Notes" (tasks). Dependencies align "melodies" horizontally, creating an intuitive visual representation of project flow.
+Cadence is built as a monorepo following the architecture specified in the [Design Document](docs/Design.md). The system features:
 
-## Features
-
-- **Musical Timeline Visualization**: Staff lines, measures, and notes rendered on a GPU-accelerated canvas
-- **Smart Lane Assignment**: Automatic melody alignment keeps dependency chains on the same horizontal lane
-- **Offline-First Architecture**: Full CRUD operations without network connectivity
-- **Cross-Platform**: Web, Desktop (Electron), and Mobile (React Native) support
-- **High Performance**: 60+ FPS rendering with support for 1,000+ notes and 2,000+ dependencies
-
-## Tech Stack
-
-- **Frontend**: React 18, TypeScript, PixiJS (WebGL rendering)
-- **State Management**: Zustand, Yjs CRDT for offline-first sync
-- **Build System**: pnpm, Turborepo, Vite
-- **Styling**: Tailwind CSS
-- **Backend** (planned): Node.js, GraphQL, PostgreSQL, Redis
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20+
-- pnpm
-
-### Installation
-
-```bash
-# Install dependencies
-pnpm install
-
-# Build the domain package
-pnpm --filter @cadence/domain build
-
-# Start the development server
-pnpm --filter @cadence/web dev
-```
-
-The application will open at http://localhost:3000
+- **Desktop-first** Electron application with React 18 + TypeScript
+- **High-performance rendering** via PixiJS with mandatory OffscreenCanvas
+- **Offline-first** architecture using CRDTs (Yjs) as Single Source of Truth
+- **SQLite WASM + OPFS** for persistence in the renderer process
+- **Redux Toolkit** for UI state management separate from domain data
+- **Built-in undo/redo** via Y.UndoManager
 
 ## Project Structure
 
 ```
 cadence/
 ├── apps/
-│   ├── web/          # React web application
-│   ├── desktop/      # Electron desktop wrapper (planned)
-│   └── mobile/       # React Native mobile app (planned)
+│   └── desktop/                # Electron main/preload + Renderer (Vite)
+│       ├── electron/           # Main process and preload scripts
+│       ├── src/               # React renderer process
+│       ├── dist/              # Built renderer files
+│       └── dist-electron/     # Built main process files
 ├── packages/
-│   ├── domain/       # Core business logic and algorithms
-│   ├── renderer/     # Canvas rendering logic (planned)
-│   └── crdt/         # CRDT for offline-first sync (planned)
-└── services/         # Backend services (planned)
+│   ├── core/                  # Domain types, algorithms (DAG, lanes), validation
+│   ├── state/                 # RTK Stores (UI state management)
+│   ├── crdt/                  # Yjs initialization, persistence, mutation functions, hooks
+│   ├── renderer/              # PixiJS implementation, Worker setup, OffscreenCanvas
+│   ├── platform-services/     # FS access, dialogs (Electron IPC/Web APIs)
+│   └── ui/                    # Reusable React UI components
+├── release/                   # Packaged desktop applications
+└── docs/                      # Design documentation
 ```
 
-## Core Concepts
+## Getting Started
 
-### Domain Model
+### Prerequisites
 
-- **Score**: A project timeline with start/end dates and tempo
-- **Note**: An atomic task with title, duration, and position
-- **Dependency**: A directed edge between notes
-- **Chord**: Notes that start at the same beat (parallel tasks)
-- **Measure**: Time segments in the timeline
+- Node.js 18+
+- pnpm 8+
 
-### Algorithms
+### Installation
 
-- **Quantizer**: Converts between timestamps and musical beats
-- **DAG Validator**: Ensures no circular dependencies
-- **Lane Assigner**: Places notes to minimize vertical movement in dependency chains
-- **Chord Grouper**: Groups parallel notes into chords
+```bash
+pnpm install
+```
+
+### Development
+
+Start the desktop app in development mode:
+
+```bash
+pnpm run electron:dev
+```
+
+### Building
+
+Build and package the desktop application:
+
+```bash
+# Build for current platform (Windows)
+pnpm run electron:dist
+
+# Build for all platforms
+pnpm run electron:dist-all
+```
+
+The packaged applications will be in the `release/` directory:
+
+- **Windows**: `Cadence-win32-x64/Cadence.exe`
+- **macOS**: `Cadence-darwin-x64/Cadence.app` (when built on macOS)
+- **Linux**: `Cadence-linux-x64/Cadence` (when built on Linux)
+
+## Technology Stack
+
+### Core Technologies
+
+- **Electron** - Desktop app framework
+- **React 18** - UI framework with TypeScript
+- **Vite** - Build tool and dev server
+- **pnpm + Turborepo** - Monorepo management
+
+### Planned Features (Per Design.md)
+
+- **PixiJS (WebGL2)** - High-performance timeline canvas rendering
+- **Yjs** - CRDT for offline-first data management
+- **SQLite WASM + OPFS** - Client-side persistence
+- **Redux Toolkit** - UI state management
+- **Zod** - Runtime validation
+
+## Package Overview
+
+- **`@cadence/core`** - Domain types, DAG validation, lane assignment algorithms
+- **`@cadence/state`** - Redux Toolkit slices for UI state (viewport, selection)
+- **`@cadence/crdt`** - Yjs document management, mutations, React hooks
+- **`@cadence/renderer`** - PixiJS + OffscreenCanvas implementation
+- **`@cadence/platform-services`** - Abstraction layer for Electron IPC vs Web APIs
+- **`@cadence/ui`** - Reusable React components (Button, TaskCard, TimelineCanvas)
+
+## Scripts
+
+- `pnpm dev` - Start desktop app development
+- `pnpm build` - Build all packages
+- `pnpm electron:dev` - Start Electron app with hot reload
+- `pnpm electron:dist` - Build and package desktop app
+- `pnpm lint` - Run linting across all packages
+- `pnpm test` - Run tests across all packages
 
 ## Development Status
 
-✅ Phase 1 - Foundation (MVP)
-- Monorepo setup with pnpm and Turborepo
-- Domain package with core algorithms
-- Web app with PixiJS timeline canvas
-- Basic timeline rendering and interaction
+✅ **Completed:**
 
-🚧 Phase 2 - In Progress
-- CRDT for offline-first storage
-- Desktop and mobile applications
-- Backend services with GraphQL API
+- Monorepo structure with proper workspace configuration
+- Electron + Vite + React + TypeScript setup
+- Desktop app packaging with electron-packager
+- Core domain types and validation schemas
+- Basic UI components and state management setup
+- CRDT foundation with Yjs integration
 
-📋 Phase 3 - Planned
-- Real-time collaboration
-- Advanced forecasting features
-- Portfolio multi-score view
+🚧 **In Development:**
+
+- PixiJS + OffscreenCanvas integration
+- SQLite WASM + OPFS persistence layer
+- Timeline rendering and interaction
+- Lane assignment and DAG validation algorithms
 
 ## License
 
-MIT
+Private project.

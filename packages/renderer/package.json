@@ -1,0 +1,27 @@
+{
+  "name": "@cadence/renderer",
+  "version": "0.0.1",
+  "private": true,
+  "description": "PixiJS implementation, Worker setup, OffscreenCanvas, spatial index",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "jest"
+  },
+  "dependencies": {
+    "pixi.js": "^7.3.2",
+    "@pixi/react": "^7.1.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.45",
+    "typescript": "^5.3.3",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "@cadence/core": "workspace:*"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@cadence/state",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Redux Toolkit (RTK) stores for UI state management",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@reduxjs/toolkit": "^2.0.1",
+    "react-redux": "^9.0.4"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.45",
+    "typescript": "^5.3.3",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "@cadence/core": "workspace:*"
+  }
+}

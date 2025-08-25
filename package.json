@@ -1,32 +1,31 @@
 {
   "name": "cadence",
-  "version": "0.1.0",
   "private": true,
-  "description": "A musical timeline project management tool",
-  "author": "Cadence Team",
-  "license": "MIT",
-  "packageManager": "pnpm@9.0.0",
-  "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=9.0.0"
-  },
+  "version": "1.0.0",
+  "description": "A streamlined, high-performance, offline-first project management system",
+  "main": "apps/desktop/dist-electron/main.js",
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "test": "turbo test",
-    "lint": "turbo lint",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
-    "clean": "turbo clean && rm -rf node_modules",
-    "typecheck": "turbo typecheck"
+    "dev": "pnpm --filter @cadence/desktop dev",
+    "build": "turbo run build",
+    "build:desktop": "pnpm --filter @cadence/desktop build",
+    "electron": "electron .",
+    "electron:dev": "pnpm --filter @cadence/desktop electron:dev",
+    "electron:dist": "pnpm --filter @cadence/desktop electron:dist",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
+    "electron": "^28.1.0",
+    "turbo": "^1.11.2",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
     "eslint": "^8.56.0",
-    "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.2.4",
-    "turbo": "^2.0.0",
     "typescript": "^5.3.3"
-  }
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.14.1"
 }
