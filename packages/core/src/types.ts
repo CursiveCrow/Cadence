@@ -19,7 +19,9 @@ export interface Task {
   durationDays: number
   status: TaskStatus
   assignee?: string
-  laneIndex: number
+  staffId: string // ID of the staff this task is on
+  staffLine: number // Which line on the staff (0 = bottom line, 1 = first space, etc.)
+  laneIndex: number // Backward compatibility - can be removed later
   projectId: string
   createdAt: string
   updatedAt: string
@@ -59,8 +61,20 @@ export enum DependencyType {
   START_TO_FINISH = 'start_to_finish'
 }
 
+export interface Staff {
+  id: string
+  name: string
+  numberOfLines: number
+  lineSpacing: number // pixels between staff lines
+  position: number // order in the score
+  projectId: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface UIState {
   activeProjectId: string | null
   selection: string[] // Array of selected Task IDs
   viewport: { x: number; y: number; zoom: number }
+  staffs: Staff[] // Musical staffs configuration
 }

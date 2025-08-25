@@ -66,6 +66,29 @@
   font-style: italic;
 }
 
+.staff-line-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.staff-line-controls .task-select {
+  flex: 1;
+}
+
+.staff-line-preview {
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 16px;
+  color: #c084fc;
+  font-weight: bold;
+  min-width: 40px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
 .multi-select-info {
   margin-top: 20px;
   padding: 10px;

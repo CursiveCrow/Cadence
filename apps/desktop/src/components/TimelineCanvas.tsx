@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { setSelection } from '@cadence/state'
 import { TaskData, DependencyData } from '@cadence/crdt'
+import { Staff } from '@cadence/core'
 import './TimelineCanvas.css'
 
 interface TimelineCanvasProps {
@@ -10,23 +11,32 @@ interface TimelineCanvasProps {
   dependencies: Record<string, DependencyData>
   selection: string[]
   viewport: { x: number; y: number; zoom: number }
+  staffs: Staff[]
 }
 
 export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
   tasks,
   dependencies,
   selection,
-  viewport
+  viewport,
+  staffs
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dispatch = useDispatch()
+  const [editingChord, setEditingChord] = useState<string | null>(null)
+  const [chordNameInput, setChordNameInput] = useState('')
+  const [customChordNames, setCustomChordNames] = useState<Record<string, string>>({})
+  const [editPosition, setEditPosition] = useState<{x: number, y: number} | null>(null)
+
+  // Constants for consistent spacing
+  const STAFF_LINE_SPACING = 18 // Space between lines within a staff (increased by 50%)
 
   useEffect(() => {
     // Small delay to ensure container is properly sized
     setTimeout(() => {
       drawTimeline()
     }, 100)
-  }, [tasks, dependencies, selection, viewport])
+  }, [tasks, dependencies, selection, viewport, customChordNames, editingChord])
 
   useEffect(() => {
     const handleResize = () => {
@@ -78,6 +88,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
      const chords = detectChords(tasks)
      chords.forEach(chord => {
        drawChordBar(ctx, chord, containerRect.width)
+       drawChordName(ctx, chord) // Draw chord name above first staff
      })
 
      // Draw tasks
@@ -96,10 +107,10 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
 
   const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
     const dayWidth = 60
-    const laneHeight = 80
     const leftMargin = 80
+    const staffSpacing = 120 // Space between different staffs
 
-    // Draw major vertical grid lines (weeks)
+    // Draw major vertical grid lines (measures)
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'
     ctx.lineWidth = 2
     for (let x = leftMargin; x < width; x += dayWidth * 7) {
@@ -119,44 +130,46 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
       ctx.stroke()
     }
 
-    // Draw horizontal staff lines (lanes) - make them look like musical staff
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'
-    ctx.lineWidth = 1.5
-    for (let y = 40; y < height; y += laneHeight) {
-      // Draw the main staff line
-      ctx.beginPath()
-      ctx.moveTo(0, y + laneHeight / 2)
-      ctx.lineTo(width, y + laneHeight / 2)
-      ctx.stroke()
-      
-      // Add lighter guide lines above and below
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)'
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.moveTo(leftMargin, y + laneHeight / 4)
-      ctx.lineTo(width, y + laneHeight / 4)
-      ctx.stroke()
-      
-      ctx.beginPath()
-      ctx.moveTo(leftMargin, y + (3 * laneHeight) / 4)
-      ctx.lineTo(width, y + (3 * laneHeight) / 4)
-      ctx.stroke()
-      
-      // Reset stroke for next main line
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'
-      ctx.lineWidth = 1.5
-    }
+    // Draw musical staffs
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'
+    ctx.lineWidth = 1
 
-    // Draw musical staff labels
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
-    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    ctx.textAlign = 'right'
-    const staffLabels = ['Treble', 'Alto', 'Bass', 'Percussion', 'Harmony', 'Melody']
-    for (let i = 0; i < Math.floor((height - 40) / laneHeight); i++) {
-      const y = 40 + i * laneHeight + laneHeight / 2
-      const label = staffLabels[i] || `Staff ${i + 1}`
-      ctx.fillText(label, leftMargin - 10, y)
-    }
+    let currentY = 60 // Starting Y position for first staff
+
+    staffs.forEach((staff, staffIndex) => {
+      const staffStartY = currentY
+      
+      // Draw staff lines
+      for (let line = 0; line < staff.numberOfLines; line++) {
+        const y = staffStartY + line * STAFF_LINE_SPACING
+        ctx.beginPath()
+        ctx.moveTo(leftMargin, y)
+        ctx.lineTo(width, y)
+        ctx.stroke()
+      }
+
+      // Draw staff label
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+      ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      ctx.textAlign = 'right'
+      const staffCenterY = staffStartY + ((staff.numberOfLines - 1) * STAFF_LINE_SPACING) / 2
+      ctx.fillText(staff.name, leftMargin - 15, staffCenterY + 5)
+
+      // Draw treble/bass clef (simple text representation)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+      ctx.font = 'bold 20px serif'
+      ctx.textAlign = 'center'
+      if (staff.name.toLowerCase().includes('treble')) {
+        ctx.fillText('𝄞', leftMargin + 15, staffCenterY + 7) // Treble clef
+      } else if (staff.name.toLowerCase().includes('bass')) {
+        ctx.fillText('𝄢', leftMargin + 15, staffCenterY + 7) // Bass clef
+      } else {
+        ctx.fillText('♪', leftMargin + 15, staffCenterY + 7) // Generic musical note
+      }
+
+      currentY += staffSpacing
+    })
+
     ctx.textAlign = 'start'
 
     // Draw time axis
@@ -171,15 +184,37 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     }
   }
 
+  const getTaskYPosition = (task: TaskData): number => {
+    const staffSpacing = 120
+    const staffStartY = 60
+
+    // Find the staff this task belongs to
+    const staffIndex = staffs.findIndex(staff => staff.id === task.staffId)
+    if (staffIndex === -1) {
+      // Fallback to legacy laneIndex if staff not found
+      return 40 + task.laneIndex * 80 + 40
+    }
+
+    // Calculate the Y position where this staff starts
+    const taskStaffStartY = staffStartY + staffIndex * staffSpacing
+
+    // Position on staff line/space system:
+    // staffLine 0 = bottom line, 1 = first space, 2 = second line, 3 = second space, etc.
+    // Each increment is STAFF_LINE_SPACING/2 to account for lines AND spaces
+    const noteY = taskStaffStartY + (task.staffLine * STAFF_LINE_SPACING / 2)
+
+    return noteY
+  }
+
   const drawTask = (ctx: CanvasRenderingContext2D, task: TaskData, isSelected: boolean) => {
     const dayWidth = 60
-    const laneHeight = 80
-    const taskHeight = 36
+    const taskHeight = 20 // Even smaller to fit precisely on staff lines
     const leftMargin = 80
 
     const startX = leftMargin + getTaskStartX(task.startDate) * dayWidth
     const taskWidth = Math.max(task.durationDays * dayWidth - 8, 120)
-    const taskY = 40 + task.laneIndex * laneHeight + (laneHeight - taskHeight) / 2
+    const taskCenterY = getTaskYPosition(task)
+    const taskY = taskCenterY - taskHeight / 2
 
     // Task color based on status  
     let color = '#8B5CF6' // Default purple
@@ -239,25 +274,25 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
 
     if (task.status === 'blocked') {
       ctx.fillStyle = 'white'
-      ctx.font = 'bold 18px serif'
+      ctx.font = 'bold 14px serif'
       ctx.fillText('♭', circleCenterX, circleCenterY)
     }
 
     if (task.status === 'completed') {
       ctx.fillStyle = 'white'
-      ctx.font = 'bold 16px serif'
+      ctx.font = 'bold 12px serif'
       ctx.fillText('♮', circleCenterX, circleCenterY)
     }
 
     if (task.status === 'in_progress') {
       ctx.fillStyle = 'white'
-      ctx.font = 'bold 16px serif'
+      ctx.font = 'bold 12px serif'
       ctx.fillText('♯', circleCenterX, circleCenterY)
     }
 
     if (task.status === 'cancelled') {
       ctx.fillStyle = 'white'
-      ctx.font = 'bold 24px serif'
+      ctx.font = 'bold 16px serif'
       ctx.fillText('𝄪', circleCenterX, circleCenterY)
     }
 
@@ -267,29 +302,26 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
 
     // Draw task title
     ctx.fillStyle = 'white'
-    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     ctx.textBaseline = 'middle'
     const text = task.title
     const textWidth = ctx.measureText(text).width
     
     // Center text or truncate if too long
     const maxTextWidth = taskWidth - taskHeight - 16
+    const textY = taskY + taskHeight / 2 // Perfect vertical center
     if (textWidth <= maxTextWidth) {
-      ctx.fillText(text, startX + taskHeight + 8, taskY + taskHeight / 2 - 2)
+      ctx.fillText(text, startX + taskHeight + 8, textY)
     } else {
       // Truncate with ellipsis
       let truncatedText = text
       while (ctx.measureText(truncatedText + '...').width > maxTextWidth && truncatedText.length > 0) {
         truncatedText = truncatedText.slice(0, -1)
       }
-      ctx.fillText(truncatedText + '...', startX + taskHeight + 8, taskY + taskHeight / 2 - 2)
+      ctx.fillText(truncatedText + '...', startX + taskHeight + 8, textY)
     }
 
-    // Draw duration indicator
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
-    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    ctx.textBaseline = 'bottom'
-    ctx.fillText(`${task.durationDays}d`, startX + taskHeight + 8, taskY + taskHeight - 4)
+    // Duration indicator removed for cleaner display
   }
 
   const shadeColor = (color: string, percent: number): string => {
@@ -303,21 +335,20 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
       (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1)
   }
 
-  const drawDependency = (ctx: CanvasRenderingContext2D, dependency: DependencyData, tasks: Record<string, TaskData>) => {
-    const srcTask = tasks[dependency.srcTaskId]
-    const dstTask = tasks[dependency.dstTaskId]
+     const drawDependency = (ctx: CanvasRenderingContext2D, dependency: DependencyData, tasks: Record<string, TaskData>) => {
+     const srcTask = tasks[dependency.srcTaskId]
+     const dstTask = tasks[dependency.dstTaskId]
 
-    if (!srcTask || !dstTask) return
+     if (!srcTask || !dstTask) return
 
-    const dayWidth = 60
-    const laneHeight = 80
-    const leftMargin = 80
+     const dayWidth = 60
+     const leftMargin = 80
 
-    const srcX = leftMargin + (getTaskStartX(srcTask.startDate) + srcTask.durationDays) * dayWidth
-    const srcY = 40 + srcTask.laneIndex * laneHeight + laneHeight / 2
+     const srcX = leftMargin + (getTaskStartX(srcTask.startDate) + srcTask.durationDays) * dayWidth
+     const srcY = getTaskYPosition(srcTask)
 
-    const dstX = leftMargin + getTaskStartX(dstTask.startDate) * dayWidth
-    const dstY = 40 + dstTask.laneIndex * laneHeight + laneHeight / 2
+     const dstX = leftMargin + getTaskStartX(dstTask.startDate) * dayWidth
+     const dstY = getTaskYPosition(dstTask)
 
     // Draw musical tie/slur connection
     ctx.strokeStyle = '#8B5CF6'
@@ -354,15 +385,26 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
    }
 
    interface Chord {
-     startDate: string
-     tasks: TaskData[]
-     name?: string
-   }
+  startDate: string
+  tasks: TaskData[]
+  name?: string
+  id: string // Add unique ID for chord tracking
+}
 
    const detectChords = (tasks: Record<string, TaskData>): Chord[] => {
-     // Group tasks by start date
-     const tasksByDate: Record<string, TaskData[]> = {}
+     // Group tasks by start date and staff
+     const tasksByDateAndStaff: Record<string, TaskData[]> = {}
      
+     Object.values(tasks).forEach(task => {
+       const key = `${task.startDate}-${task.staffId}`
+       if (!tasksByDateAndStaff[key]) {
+         tasksByDateAndStaff[key] = []
+       }
+       tasksByDateAndStaff[key].push(task)
+     })
+     
+     // Also group all tasks by just start date for cross-staff chords
+     const tasksByDate: Record<string, TaskData[]> = {}
      Object.values(tasks).forEach(task => {
        if (!tasksByDate[task.startDate]) {
          tasksByDate[task.startDate] = []
@@ -370,20 +412,30 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
        tasksByDate[task.startDate].push(task)
      })
      
-     // Create chords for dates with multiple tasks
+     // Create chords for dates with multiple tasks (across all staffs)
      const chords: Chord[] = []
      Object.entries(tasksByDate).forEach(([startDate, tasksAtDate]) => {
        if (tasksAtDate.length > 1) {
-         // Sort tasks by lane for consistent chord rendering
-         tasksAtDate.sort((a, b) => a.laneIndex - b.laneIndex)
+         // Sort tasks by staff and then by staff line for consistent chord rendering
+         tasksAtDate.sort((a, b) => {
+           const staffAIndex = staffs.findIndex(s => s.id === a.staffId)
+           const staffBIndex = staffs.findIndex(s => s.id === b.staffId)
+           if (staffAIndex !== staffBIndex) {
+             return staffAIndex - staffBIndex
+           }
+           return a.staffLine - b.staffLine
+         })
          
          // Generate a chord name based on the tasks
-         const chordName = generateChordName(tasksAtDate)
+         const generatedName = generateChordName(tasksAtDate)
+         const chordId = `chord-${startDate}`
+         const customName = customChordNames[chordId]
          
          chords.push({
+           id: chordId,
            startDate,
            tasks: tasksAtDate,
-           name: chordName
+           name: customName || generatedName
          })
        }
      })
@@ -422,8 +474,6 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
 
    const drawChordBar = (ctx: CanvasRenderingContext2D, chord: Chord, canvasWidth: number) => {
      const dayWidth = 60
-     const laneHeight = 80
-     const taskHeight = 36
      const leftMargin = 80
      
      // Find the longest task duration to position the chord bar at the end
@@ -435,13 +485,16 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
      const longestTaskWidth = Math.max(longestTask.durationDays * dayWidth - 8, 120)
      const chordX = startX + longestTaskWidth + 8 // Position at the end of the longest note
      
-     // Find the top and bottom tasks
-     const sortedTasks = chord.tasks.sort((a, b) => a.laneIndex - b.laneIndex)
-     const topTask = sortedTasks[0]
-     const bottomTask = sortedTasks[sortedTasks.length - 1]
+     // Find the top and bottom tasks using the new positioning system
+     const topTask = chord.tasks.reduce((highest, task) => 
+       getTaskYPosition(task) < getTaskYPosition(highest) ? task : highest
+     )
+     const bottomTask = chord.tasks.reduce((lowest, task) => 
+       getTaskYPosition(task) > getTaskYPosition(lowest) ? task : lowest
+     )
      
-     const topY = 40 + topTask.laneIndex * laneHeight + (laneHeight - taskHeight) / 2 + taskHeight / 2
-     const bottomY = 40 + bottomTask.laneIndex * laneHeight + (laneHeight - taskHeight) / 2 + taskHeight / 2
+     const topY = getTaskYPosition(topTask)
+     const bottomY = getTaskYPosition(bottomTask)
      
      // Draw chord bar (vertical line connecting the note ends)
      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
@@ -455,33 +508,135 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
      ctx.fillRect(chordX - 2, topY - 2, 8, 4)
      ctx.fillRect(chordX - 2, bottomY - 2, 8, 4)
-     
-     // Draw chord name above the chord bar
-     if (chord.name) {
-       const chordNameX = chordX
-       const chordNameY = topY - 20
-       
-       // Draw background for chord name
-       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'
-       ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-       const textMetrics = ctx.measureText(chord.name)
-       const textWidth = textMetrics.width
-       const textHeight = 16
-       
-       ctx.fillRect(chordNameX - textWidth / 2 - 4, chordNameY - textHeight / 2 - 2, 
-                    textWidth + 8, textHeight + 4)
-       
-       // Draw chord name text
-       ctx.fillStyle = 'white'
-       ctx.textAlign = 'center'
-       ctx.textBaseline = 'middle'
-       ctx.fillText(chord.name, chordNameX, chordNameY)
-       
-       // Reset text alignment
-       ctx.textAlign = 'start'
-       ctx.textBaseline = 'alphabetic'
-     }
    }
+
+   const drawChordName = (ctx: CanvasRenderingContext2D, chord: Chord) => {
+     if (!chord.name) return
+
+     const dayWidth = 60
+     const leftMargin = 80
+     
+     // Find the longest task duration to position the chord bar at the end
+     const longestTask = chord.tasks.reduce((longest, task) => 
+       task.durationDays > longest.durationDays ? task : longest
+     )
+     
+     const startX = leftMargin + getTaskStartX(chord.startDate) * dayWidth
+     const longestTaskWidth = Math.max(longestTask.durationDays * dayWidth - 8, 120)
+     const chordX = startX + longestTaskWidth + 8 // Position at the end of the longest note
+     
+     // Find the top task to position chord name above chord bar
+     const topTask = chord.tasks.reduce((highest, task) => 
+       getTaskYPosition(task) < getTaskYPosition(highest) ? task : highest
+     )
+     const topY = getTaskYPosition(topTask)
+     
+     // Position chord name above the chord bar
+     const chordNameX = chordX
+     const chordNameY = topY - 25
+     
+     // Draw chord name with interactive styling
+     const isEditing = editingChord === chord.id
+     ctx.fillStyle = isEditing ? 'rgba(139, 92, 246, 0.8)' : 'rgba(0, 0, 0, 0.6)'
+     ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+     const textMetrics = ctx.measureText(chord.name)
+     const textWidth = textMetrics.width
+     const textHeight = 16
+     
+     // Draw background (slightly larger for clickable area)
+     ctx.fillRect(chordNameX - textWidth / 2 - 4, chordNameY - textHeight / 2 - 2, 
+                  textWidth + 8, textHeight + 4)
+     
+     // Draw chord name text
+     ctx.fillStyle = isEditing ? 'white' : 'rgba(255, 255, 255, 0.95)'
+     ctx.textAlign = 'center'
+     ctx.textBaseline = 'middle'
+     ctx.fillText(chord.name, chordNameX, chordNameY)
+     
+     // Draw edit cursor hint if hovering
+     if (!isEditing) {
+       ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'
+       ctx.font = '8px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+       ctx.fillText('✏️', chordNameX + textWidth/2 + 8, chordNameY - 4)
+     }
+     
+     // Reset text alignment
+     ctx.textAlign = 'start'
+     ctx.textBaseline = 'alphabetic'
+   }
+
+  const findChordNameAtPosition = (x: number, y: number): Chord | null => {
+    const chords = detectChords(tasks)
+    
+    for (const chord of chords) {
+      if (!chord.name) continue
+      
+      const dayWidth = 60
+      const leftMargin = 80
+      
+      // Find the longest task duration to position the chord bar at the end
+      const longestTask = chord.tasks.reduce((longest, task) => 
+        task.durationDays > longest.durationDays ? task : longest
+      )
+      
+      const startX = leftMargin + getTaskStartX(chord.startDate) * dayWidth
+      const longestTaskWidth = Math.max(longestTask.durationDays * dayWidth - 8, 120)
+      const chordX = startX + longestTaskWidth + 8
+      
+      // Find the top task to position chord name above chord bar
+      const topTask = chord.tasks.reduce((highest, task) => 
+        getTaskYPosition(task) < getTaskYPosition(highest) ? task : highest
+      )
+      const topY = getTaskYPosition(topTask)
+      
+      // Position chord name above the chord bar
+      const chordNameX = chordX
+      const chordNameY = topY - 25
+      
+      // Check if click is within chord name bounds
+      const ctx = canvasRef.current?.getContext('2d')
+      if (ctx) {
+        ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        const textMetrics = ctx.measureText(chord.name)
+        const textWidth = textMetrics.width
+        const textHeight = 16
+        
+        if (x >= chordNameX - textWidth / 2 - 4 && 
+            x <= chordNameX + textWidth / 2 + 4 &&
+            y >= chordNameY - textHeight / 2 - 2 && 
+            y <= chordNameY + textHeight / 2 + 2) {
+          return chord
+        }
+      }
+    }
+    
+    return null
+  }
+
+  const handleChordNameEdit = (chord: Chord, x: number, y: number) => {
+    setEditingChord(chord.id)
+    setChordNameInput(chord.name || '')
+    setEditPosition({ x, y })
+  }
+
+  const saveChordName = () => {
+    if (editingChord && chordNameInput.trim()) {
+      setCustomChordNames(prev => ({
+        ...prev,
+        [editingChord]: chordNameInput.trim()
+      }))
+    }
+    
+    setEditingChord(null)
+    setChordNameInput('')
+    setEditPosition(null)
+  }
+
+  const cancelChordNameEdit = () => {
+    setEditingChord(null)
+    setChordNameInput('')
+    setEditPosition(null)
+  }
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
@@ -491,10 +646,22 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     const x = event.clientX - rect.left
     const y = event.clientY - rect.top
 
+    // Check for chord name clicks first
+    const clickedChordName = findChordNameAtPosition(x, y)
+    if (clickedChordName) {
+      handleChordNameEdit(clickedChordName, x, y)
+      return
+    }
+
     // Find clicked task
     const clickedTask = findTaskAtPosition(x, y)
     
     if (clickedTask) {
+      // Cancel any chord editing
+      if (editingChord) {
+        cancelChordNameEdit()
+      }
+      
       if (event.ctrlKey || event.metaKey) {
         // Multi-select
         const newSelection = selection.includes(clickedTask.id)
@@ -506,21 +673,24 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
         dispatch(setSelection([clickedTask.id]))
       }
     } else {
-      // Clear selection
+      // Cancel any chord editing and clear selection
+      if (editingChord) {
+        cancelChordNameEdit()
+      }
       dispatch(setSelection([]))
     }
   }
 
   const findTaskAtPosition = (x: number, y: number): TaskData | null => {
     const dayWidth = 60
-    const laneHeight = 80
-    const taskHeight = 36
+    const taskHeight = 20 // Match the drawing height
     const leftMargin = 80
 
     for (const task of Object.values(tasks)) {
       const startX = leftMargin + getTaskStartX(task.startDate) * dayWidth
       const taskWidth = Math.max(task.durationDays * dayWidth - 8, 120)
-      const taskY = 40 + task.laneIndex * laneHeight + (laneHeight - taskHeight) / 2
+      const taskCenterY = getTaskYPosition(task)
+      const taskY = taskCenterY - taskHeight / 2
 
       // Check if click is within the task bounds (rounded rectangle with circular left end)
       const isInMainBody = x >= startX + taskHeight / 2 && x <= startX + taskWidth && 
@@ -528,7 +698,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
 
       // Check circular left end
       const centerX = startX + taskHeight / 2
-      const centerY = taskY + taskHeight / 2
+      const centerY = taskCenterY
       const radius = taskHeight / 2
       const dx = x - centerX
       const dy = y - centerY
@@ -548,6 +718,36 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
         className="timeline-canvas"
         onClick={handleCanvasClick}
       />
+      
+      {/* Chord name editing input */}
+      {editingChord && editPosition && (
+        <input
+          type="text"
+          value={chordNameInput}
+          onChange={(e) => setChordNameInput(e.target.value)}
+          onBlur={saveChordName}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') saveChordName()
+            if (e.key === 'Escape') cancelChordNameEdit()
+          }}
+          autoFocus
+          style={{
+            position: 'absolute',
+            left: editPosition.x - 40,
+            top: editPosition.y - 10,
+            width: '80px',
+            padding: '4px 8px',
+            border: '2px solid #8B5CF6',
+            borderRadius: '4px',
+            background: '#333',
+            color: 'white',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            zIndex: 1000,
+          }}
+        />
+      )}
     </div>
   )
 }

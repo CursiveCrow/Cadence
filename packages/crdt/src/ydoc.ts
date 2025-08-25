@@ -12,7 +12,9 @@ export interface TaskData {
   durationDays: number
   status: string
   assignee?: string
-  laneIndex: number
+  staffId: string // ID of the staff this task is on
+  staffLine: number // Which line on the staff (0 = bottom line, 1 = first space, etc.)
+  laneIndex: number // Backward compatibility - can be removed later
 }
 
 export interface DependencyData {

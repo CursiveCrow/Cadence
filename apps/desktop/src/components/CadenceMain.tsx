@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { RootState, setActiveProject } from '@cadence/state'
+import { RootState, setActiveProject, initializeDefaultStaffs } from '@cadence/state'
 import { useProjectTasks, useProjectDependencies, createTask, createDependency } from '@cadence/crdt'
 import { TaskStatus } from '@cadence/core'
 import { TimelineCanvas } from './TimelineCanvas'
@@ -10,7 +10,7 @@ import './CadenceMain.css'
 
 export const CadenceMain: React.FC = () => {
   const dispatch = useDispatch()
-  const { activeProjectId, selection, viewport } = useSelector((state: RootState) => state.ui)
+  const { activeProjectId, selection, viewport, staffs } = useSelector((state: RootState) => state.ui)
   
   // For now, create a demo project
   const demoProjectId = 'demo-project'
@@ -22,6 +22,7 @@ export const CadenceMain: React.FC = () => {
     // Set the demo project as active on startup
     if (!activeProjectId) {
       dispatch(setActiveProject(demoProjectId))
+      dispatch(initializeDefaultStaffs(demoProjectId))
     }
   }, [activeProjectId, dispatch])
 
@@ -43,7 +44,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-01',
       durationDays: 3,
       status: TaskStatus.IN_PROGRESS.toString(),
-      laneIndex: 0,
+      staffId: 'staff-treble',
+      staffLine: 4, // Middle line of treble staff (3rd line)
+      laneIndex: 0, // Backward compatibility
     })
 
     createTask(demoProjectId, {
@@ -52,7 +55,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-03',
       durationDays: 4,
       status: TaskStatus.NOT_STARTED.toString(),
-      laneIndex: 0,
+      staffId: 'staff-treble',
+      staffLine: 8, // Top line of treble staff (5th line)
+      laneIndex: 0, // Backward compatibility
     })
 
     createTask(demoProjectId, {
@@ -61,7 +66,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-02',
       durationDays: 3,
       status: TaskStatus.IN_PROGRESS.toString(),
-      laneIndex: 1,
+      staffId: 'staff-bass',
+      staffLine: 0, // Bottom line of bass staff
+      laneIndex: 1, // Backward compatibility
     })
 
     createTask(demoProjectId, {
@@ -70,7 +77,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-05',
       durationDays: 2,
       status: TaskStatus.NOT_STARTED.toString(),
-      laneIndex: 1,
+      staffId: 'staff-bass',
+      staffLine: 4, // Middle line of bass staff (3rd line)
+      laneIndex: 1, // Backward compatibility
     })
 
     createTask(demoProjectId, {
@@ -79,7 +88,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-04',
       durationDays: 2,
       status: TaskStatus.COMPLETED.toString(),
-      laneIndex: 2,
+      staffId: 'staff-treble',
+      staffLine: 2, // Second line of treble staff
+      laneIndex: 2, // Backward compatibility
     })
 
     createTask(demoProjectId, {
@@ -88,7 +99,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-07',
       durationDays: 3,
       status: TaskStatus.BLOCKED.toString(),
-      laneIndex: 0,
+      staffId: 'staff-treble',
+      staffLine: 6, // Space above middle line (treble staff)
+      laneIndex: 0, // Backward compatibility
     })
 
     // Create a chord (multiple notes starting at same time)
@@ -98,7 +111,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-10',
       durationDays: 2,
       status: TaskStatus.IN_PROGRESS.toString(),
-      laneIndex: 0,
+      staffId: 'staff-treble',
+      staffLine: 6, // Space above middle line (treble staff)
+      laneIndex: 0, // Backward compatibility
     })
 
     createTask(demoProjectId, {
@@ -107,7 +122,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-10',
       durationDays: 2,
       status: TaskStatus.IN_PROGRESS.toString(),
-      laneIndex: 1,
+      staffId: 'staff-treble',
+      staffLine: 2, // Second line of treble staff
+      laneIndex: 1, // Backward compatibility
     })
 
     createTask(demoProjectId, {
@@ -116,7 +133,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-10',
       durationDays: 2,
       status: TaskStatus.COMPLETED.toString(),
-      laneIndex: 2,
+      staffId: 'staff-bass',
+      staffLine: 4, // Middle line of bass staff (3rd line)
+      laneIndex: 2, // Backward compatibility
     })
 
     // Create another chord (blocked tasks)
@@ -126,7 +145,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-13',
       durationDays: 1,
       status: TaskStatus.BLOCKED.toString(),
-      laneIndex: 0,
+      staffId: 'staff-treble',
+      staffLine: 8, // Top line of treble staff (5th line)
+      laneIndex: 0, // Backward compatibility
     })
 
     createTask(demoProjectId, {
@@ -135,7 +156,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-13',
       durationDays: 1,
       status: TaskStatus.BLOCKED.toString(),
-      laneIndex: 2,
+      staffId: 'staff-bass',
+      staffLine: 0, // Bottom line of bass staff
+      laneIndex: 2, // Backward compatibility
     })
 
     // Create a cancelled task
@@ -145,7 +168,9 @@ export const CadenceMain: React.FC = () => {
       startDate: '2024-01-06',
       durationDays: 1,
       status: 'cancelled', // Using string directly since TaskStatus.CANCELLED might not exist
-      laneIndex: 1,
+      staffId: 'staff-bass',
+      staffLine: 2, // Second line of bass staff
+      laneIndex: 1, // Backward compatibility
     })
 
     // Add some dependencies
@@ -168,13 +193,20 @@ export const CadenceMain: React.FC = () => {
 
   const addNewTask = () => {
     const taskId = `task-${Date.now()}`
+    
+    // Choose a random staff and line
+    const randomStaff = staffs[Math.floor(Math.random() * staffs.length)] || staffs[0]
+    const randomLine = Math.floor(Math.random() * (randomStaff?.numberOfLines * 2 - 1 || 9)) // Lines and spaces
+    
     const newTask = {
       id: taskId,
       title: 'New Note',
       startDate: '2024-01-08',
       durationDays: 2,
       status: TaskStatus.NOT_STARTED.toString(),
-      laneIndex: Math.floor(Math.random() * 3), // Random lane 0-2
+      staffId: randomStaff?.id || 'staff-treble',
+      staffLine: randomLine,
+      laneIndex: Math.floor(Math.random() * 3), // Random lane 0-2 (backward compatibility)
     }
     
     console.log('Creating new task:', newTask)
@@ -196,6 +228,7 @@ export const CadenceMain: React.FC = () => {
             dependencies={dependencies}
             selection={selection}
             viewport={viewport}
+            staffs={staffs}
           />
           <div className="measure-label">
             Measure Name
