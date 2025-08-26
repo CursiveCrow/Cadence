@@ -3,8 +3,8 @@
  * Provides reusable, testable functions for Cadence timeline rendering.
  */
 
-// PixiJS v8 uses modular exports. In desktop bundler mode, global classes are still available on default import.
-import { Container, Graphics, Text } from 'pixi.js'
+import { Container, Graphics, Text, Application, Rectangle } from 'pixi.js'
+import { STATUS_TO_ACCIDENTAL } from './config'
 
 export interface TimelineConfig {
   LEFT_MARGIN: number
@@ -51,6 +51,13 @@ export interface TaskLayout {
   topY: number
   width: number
   radius: number
+}
+
+export interface TaskAnchors {
+  leftCenterX: number
+  leftCenterY: number
+  rightCenterX: number
+  rightCenterY: number
 }
 
 export function computeTaskLayout(
@@ -177,18 +184,22 @@ export function drawTaskNote(
 
   const graphics = new Graphics()
 
-  graphics.roundRect(layout.startX + 2, layout.topY + 2, layout.width, config.TASK_HEIGHT, 4)
+  // Container will be positioned at (layout.startX, layout.topY)
+  // Draw relative to (0,0)
+  graphics.roundRect(2, 2, layout.width, config.TASK_HEIGHT, 4)
   graphics.fill({ color: 0x000000, alpha: 0.2 })
 
+  const centerYLocal = config.TASK_HEIGHT / 2
+  const r = layout.radius
+
   graphics.beginPath()
-  graphics.moveTo(layout.startX + layout.radius, layout.topY)
-  graphics.lineTo(layout.startX + layout.width - 4, layout.topY)
-  graphics.quadraticCurveTo(layout.startX + layout.width, layout.topY, layout.startX + layout.width, layout.topY + 4)
-  graphics.lineTo(layout.startX + layout.width, layout.topY + config.TASK_HEIGHT - 4)
-  graphics.quadraticCurveTo(layout.startX + layout.width, layout.topY + config.TASK_HEIGHT,
-                            layout.startX + layout.width - 4, layout.topY + config.TASK_HEIGHT)
-  graphics.lineTo(layout.startX + layout.radius, layout.topY + config.TASK_HEIGHT)
-  graphics.arc(layout.startX + layout.radius, layout.centerY, layout.radius, Math.PI / 2, -Math.PI / 2, false)
+  graphics.moveTo(r, 0)
+  graphics.lineTo(layout.width - 4, 0)
+  graphics.quadraticCurveTo(layout.width, 0, layout.width, 4)
+  graphics.lineTo(layout.width, config.TASK_HEIGHT - 4)
+  graphics.quadraticCurveTo(layout.width, config.TASK_HEIGHT, layout.width - 4, config.TASK_HEIGHT)
+  graphics.lineTo(r, config.TASK_HEIGHT)
+  graphics.arc(r, centerYLocal, r, Math.PI / 2, -Math.PI / 2, false)
   graphics.closePath()
 
   const statusKey = (status || 'default')
@@ -196,14 +207,10 @@ export function drawTaskNote(
   graphics.fill({ color: fillColor, alpha: 0.9 })
   graphics.stroke({ width: isSelected ? 2 : 1, color: isSelected ? 0xFCD34D : 0xffffff, alpha: 0.3 })
 
-  graphics.circle(layout.startX + layout.radius, layout.centerY, layout.radius - 2)
+  graphics.circle(r, centerYLocal, r - 2)
   graphics.fill({ color: 0xffffff, alpha: 0.2 })
 
-  let accidental = ''
-  if (status === 'blocked') accidental = '♭'
-  else if (status === 'completed') accidental = '♮'
-  else if (status === 'in_progress' || status === 'inProgress') accidental = '♯'
-  else if (status === 'cancelled') accidental = '𝄪'
+  const accidental = status ? (STATUS_TO_ACCIDENTAL[status] || '') : ''
 
   if (accidental) {
     const accidentalText = new Text({
@@ -216,8 +223,8 @@ export function drawTaskNote(
         align: 'center'
       }
     })
-    accidentalText.x = layout.startX + layout.radius - accidentalText.width / 2
-    accidentalText.y = layout.centerY - accidentalText.height / 2
+    accidentalText.x = r - accidentalText.width / 2
+    accidentalText.y = centerYLocal - accidentalText.height / 2
     container.addChild(accidentalText)
   }
 
@@ -234,9 +241,9 @@ export function drawTaskNote(
       }
     })
 
-    const textX = layout.startX + config.TASK_HEIGHT + 8
+    const textX = config.TASK_HEIGHT + 8
     text.x = textX
-    text.y = layout.centerY - text.height / 2
+    text.y = centerYLocal - text.height / 2
 
     const maxTextWidth = layout.width - config.TASK_HEIGHT - 16
     if (text.width > maxTextWidth) {
@@ -251,6 +258,29 @@ export function drawTaskNote(
   }
 
   container.addChildAt(graphics, 0)
+}
+
+/**
+ * Draws the task note body path at absolute coordinates into the provided Graphics.
+ * This mirrors the rounded-rectangle-with-left-circle shape used for tasks.
+ */
+export function drawNoteBodyPathAbsolute(
+  graphics: Graphics,
+  x: number,
+  topY: number,
+  width: number,
+  height: number
+): void {
+  const radius = height / 2
+  graphics.beginPath()
+  graphics.moveTo(x + radius, topY)
+  graphics.lineTo(x + width - 4, topY)
+  graphics.quadraticCurveTo(x + width, topY, x + width, topY + 4)
+  graphics.lineTo(x + width, topY + height - 4)
+  graphics.quadraticCurveTo(x + width, topY + height, x + width - 4, topY + height)
+  graphics.lineTo(x + radius, topY + height)
+  graphics.arc(x + radius, topY + radius, radius, Math.PI / 2, -Math.PI / 2, false)
+  graphics.closePath()
 }
 
 export function drawDependencyArrow(
@@ -285,6 +315,238 @@ export function drawDependencyArrow(
   )
   graphics.closePath()
   graphics.fill({ color, alpha: 0.6 })
+}
+
+/**
+ * Draw a selection highlight around a task note shape. Returns the created Graphics.
+ */
+export function drawSelectionHighlight(
+  container: Container,
+  config: TimelineConfig,
+  layout: TaskLayout
+): Graphics {
+  const selectionGraphics = new Graphics()
+  const selectionPadding = 3
+
+  selectionGraphics.beginPath()
+  const selectionRadius = layout.radius + selectionPadding
+  selectionGraphics.moveTo(layout.startX + layout.radius, layout.topY - selectionPadding)
+  selectionGraphics.lineTo(layout.startX + layout.width - 4, layout.topY - selectionPadding)
+  selectionGraphics.quadraticCurveTo(
+    layout.startX + layout.width + selectionPadding, layout.topY - selectionPadding,
+    layout.startX + layout.width + selectionPadding, layout.topY + 4
+  )
+  selectionGraphics.lineTo(layout.startX + layout.width + selectionPadding, layout.topY + config.TASK_HEIGHT - 4)
+  selectionGraphics.quadraticCurveTo(
+    layout.startX + layout.width + selectionPadding, layout.topY + config.TASK_HEIGHT + selectionPadding,
+    layout.startX + layout.width - 4, layout.topY + config.TASK_HEIGHT + selectionPadding
+  )
+  selectionGraphics.lineTo(layout.startX + layout.radius, layout.topY + config.TASK_HEIGHT + selectionPadding)
+  selectionGraphics.arc(
+    layout.startX + layout.radius, layout.centerY,
+    selectionRadius,
+    Math.PI / 2, -Math.PI / 2,
+    false
+  )
+  selectionGraphics.closePath()
+  selectionGraphics.stroke({ width: 2, color: config.SELECTION_COLOR, alpha: 1 })
+  container.addChild(selectionGraphics)
+  return selectionGraphics
+}
+
+/**
+ * Draw a dependency preview arrow between two points into the given container.
+ */
+export function drawDependencyPreview(
+  container: Container,
+  srcX: number,
+  srcY: number,
+  dstX: number,
+  dstY: number,
+  color: number = 0x10B981
+): Graphics {
+  const preview = new Graphics()
+  preview.moveTo(srcX, srcY)
+  preview.lineTo(dstX, dstY)
+  preview.stroke({ width: 2, color, alpha: 0.9 })
+
+  const angle = Math.atan2(dstY - srcY, dstX - srcX)
+  const arrow = 8
+  preview.beginPath()
+  preview.moveTo(dstX, dstY)
+  preview.lineTo(dstX - arrow * Math.cos(angle - Math.PI / 6), dstY - arrow * Math.sin(angle - Math.PI / 6))
+  preview.lineTo(dstX - arrow * Math.cos(angle + Math.PI / 6), dstY - arrow * Math.sin(angle + Math.PI / 6))
+  preview.closePath()
+  preview.fill({ color, alpha: 0.8 })
+  container.addChild(preview)
+  return preview
+}
+
+/**
+ * Build timeline layers (viewport/background/dependencies/tasks/selection/drag).
+ */
+export function createTimelineLayers(app: Application): {
+  viewport: Container
+  background: Container
+  dependencies: Container
+  tasks: Container
+  selection: Container
+  dragLayer: Container
+} {
+  const viewport = new Container()
+  app.stage.addChild(viewport)
+
+  const background = new Container()
+  const dependencies = new Container()
+  const tasksLayer = new Container()
+  const selectionLayer = new Container()
+  const dragLayer = new Container()
+
+  viewport.addChild(background)
+  viewport.addChild(dependencies)
+  viewport.addChild(tasksLayer)
+  viewport.addChild(selectionLayer)
+  viewport.addChild(dragLayer)
+
+  // Event routing: ensure stage routes events; only task containers should receive pointer events
+  app.stage.eventMode = 'static'
+  viewport.eventMode = 'passive'
+  background.eventMode = 'none'
+  dependencies.eventMode = 'none'
+  selectionLayer.eventMode = 'none'
+  dragLayer.eventMode = 'none'
+  tasksLayer.eventMode = 'static'
+
+  return {
+    viewport,
+    background,
+    dependencies,
+    tasks: tasksLayer,
+    selection: selectionLayer,
+    dragLayer,
+  }
+}
+
+/**
+ * Ensure grid/staff are drawn once; avoids re-building per frame.
+ */
+export function ensureGridAndStaff(
+  container: Container,
+  config: TimelineConfig,
+  staffs: StaffLike[],
+  projectStartDate: Date,
+  screenWidth: number,
+  screenHeight: number
+): void {
+  const key = '__grid_meta__'
+  const meta: any = (container as any)[key] || {}
+  if (container.children.length > 0 && meta.w === screenWidth && meta.h === screenHeight) return
+  container.removeChildren()
+  drawGridAndStaff(container, config, staffs, projectStartDate, screenWidth, screenHeight)
+  ;(container as any)[key] = { w: screenWidth, h: screenHeight }
+}
+
+/**
+ * Simple scene manager to own layers and task/display mappings with anchor/layout caches.
+ */
+export class TimelineSceneManager {
+  layers: { viewport: Container; background: Container; dependencies: Container; tasks: Container; selection: Container; dragLayer: Container }
+  taskContainers: Map<string, Container>
+  dependencyGraphics: Map<string, Graphics>
+  taskLayouts: Map<string, TaskLayout>
+  taskAnchors: Map<string, TaskAnchors>
+
+  constructor(layers: { viewport: Container; background: Container; dependencies: Container; tasks: Container; selection: Container; dragLayer: Container }) {
+    this.layers = layers
+    this.taskContainers = new Map()
+    this.dependencyGraphics = new Map()
+    this.taskLayouts = new Map()
+    this.taskAnchors = new Map()
+  }
+
+  /**
+   * Create or update a task container and draw its note. Returns the container and whether it was newly created.
+   */
+  upsertTask(
+    task: TaskLike,
+    layout: TaskLayout,
+    config: TimelineConfig,
+    title?: string,
+    status?: string
+  ): { container: Container; created: boolean } {
+    let container = this.taskContainers.get(task.id)
+    let created = false
+    if (!container) {
+      container = new Container()
+      container.eventMode = 'static'
+      ;(container as any).__meta = {}
+      this.layers.tasks.addChild(container)
+      this.taskContainers.set(task.id, container)
+      created = true
+    }
+
+    // Cache layout and anchors (anchors in absolute space derived from container position outside)
+    this.taskLayouts.set(task.id, layout)
+    // Anchor points at the centers of the left and right “end circles”.
+    // Left circle center is radius from start; right circle center is radius in from the right edge.
+    this.taskAnchors.set(task.id, {
+      leftCenterX: layout.startX + layout.radius,
+      leftCenterY: layout.centerY,
+      rightCenterX: layout.startX + layout.width - layout.radius,
+      rightCenterY: layout.centerY,
+    })
+
+    // Draw note into container
+    drawTaskNote(container, config, layout, title || '', status, false)
+    ;(container as any).__meta = { startX: 0, width: layout.width, topY: 0 }
+    container.hitArea = new Rectangle(0, 0, layout.width, config.TASK_HEIGHT)
+
+    return { container, created }
+  }
+
+  removeMissingTasks(validIds: Set<string>): void {
+    for (const [id, container] of this.taskContainers.entries()) {
+      if (!validIds.has(id)) {
+        container.removeFromParent()
+        this.taskContainers.delete(id)
+        this.taskLayouts.delete(id)
+        this.taskAnchors.delete(id)
+      }
+    }
+  }
+
+  getAnchors(taskId: string): TaskAnchors | undefined {
+    return this.taskAnchors.get(taskId)
+  }
+
+  upsertDependency(id: string): Graphics {
+    let g = this.dependencyGraphics.get(id)
+    if (!g) {
+      g = new Graphics()
+      this.layers.dependencies.addChild(g)
+      this.dependencyGraphics.set(id, g)
+    }
+    return g
+  }
+
+  removeMissingDependencies(validIds: Set<string>): void {
+    for (const [id, g] of this.dependencyGraphics.entries()) {
+      if (!validIds.has(id)) {
+        g.removeFromParent()
+        this.dependencyGraphics.delete(id)
+      }
+    }
+  }
+
+  clearSelection(): void {
+    this.layers.selection.removeChildren()
+  }
+
+  drawSelection(taskId: string, config: TimelineConfig): void {
+    const layout = this.taskLayouts.get(taskId)
+    if (!layout) return
+    drawSelectionHighlight(this.layers.selection, config, layout)
+  }
 }
 
 

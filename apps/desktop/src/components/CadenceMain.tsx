@@ -2,15 +2,11 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState, setActiveProject, initializeDefaultStaffs, setSelection } from '@cadence/state'
 import { useProjectTasks, useProjectDependencies, createTask, createDependency } from '@cadence/crdt'
-import { TaskStatus } from '@cadence/core'
-import { TimelineCanvas } from './TimelineCanvas'
+import { TaskStatus, DependencyType } from '@cadence/core'
 import { TimelineRenderer } from './TimelineRenderer'
 import { ProjectHeader } from './ProjectHeader'
 import { TaskPopup } from './TaskPopup'
 import './CadenceMain.css'
-
-// Feature flag to enable WebGPU rendering (when available)
-const USE_WEBGPU = true
 
 export const CadenceMain: React.FC = () => {
   const dispatch = useDispatch()
@@ -107,7 +103,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Intro Theme',
       startDate: '2024-01-01',
       durationDays: 3,
-      status: TaskStatus.IN_PROGRESS.toString(),
+      status: TaskStatus.IN_PROGRESS,
       staffId: 'staff-treble',
       staffLine: 4, // Middle line of treble staff (3rd line)
       laneIndex: 0, // Backward compatibility
@@ -118,7 +114,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Main Melody',
       startDate: '2024-01-03',
       durationDays: 4,
-      status: TaskStatus.NOT_STARTED.toString(),
+      status: TaskStatus.NOT_STARTED,
       staffId: 'staff-treble',
       staffLine: 8, // Top line of treble staff (5th line)
       laneIndex: 0, // Backward compatibility
@@ -129,7 +125,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Bass Line', 
       startDate: '2024-01-02',
       durationDays: 3,
-      status: TaskStatus.IN_PROGRESS.toString(),
+      status: TaskStatus.IN_PROGRESS,
       staffId: 'staff-bass',
       staffLine: 0, // Bottom line of bass staff
       laneIndex: 1, // Backward compatibility
@@ -140,7 +136,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Harmony Section', 
       startDate: '2024-01-05',
       durationDays: 2,
-      status: TaskStatus.NOT_STARTED.toString(),
+      status: TaskStatus.NOT_STARTED,
       staffId: 'staff-bass',
       staffLine: 4, // Middle line of bass staff (3rd line)
       laneIndex: 1, // Backward compatibility
@@ -151,7 +147,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Bridge', 
       startDate: '2024-01-04',
       durationDays: 2,
-      status: TaskStatus.COMPLETED.toString(),
+      status: TaskStatus.COMPLETED,
       staffId: 'staff-treble',
       staffLine: 2, // Second line of treble staff
       laneIndex: 2, // Backward compatibility
@@ -162,7 +158,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Solo Section', 
       startDate: '2024-01-07',
       durationDays: 3,
-      status: TaskStatus.BLOCKED.toString(),
+      status: TaskStatus.BLOCKED,
       staffId: 'staff-treble',
       staffLine: 6, // Space above middle line (treble staff)
       laneIndex: 0, // Backward compatibility
@@ -174,7 +170,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Harmony Part A', 
       startDate: '2024-01-10',
       durationDays: 2,
-      status: TaskStatus.IN_PROGRESS.toString(),
+      status: TaskStatus.IN_PROGRESS,
       staffId: 'staff-treble',
       staffLine: 6, // Space above middle line (treble staff)
       laneIndex: 0, // Backward compatibility
@@ -185,7 +181,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Harmony Part B', 
       startDate: '2024-01-10',
       durationDays: 2,
-      status: TaskStatus.IN_PROGRESS.toString(),
+      status: TaskStatus.IN_PROGRESS,
       staffId: 'staff-treble',
       staffLine: 2, // Second line of treble staff
       laneIndex: 1, // Backward compatibility
@@ -196,7 +192,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Harmony Part C', 
       startDate: '2024-01-10',
       durationDays: 2,
-      status: TaskStatus.COMPLETED.toString(),
+      status: TaskStatus.COMPLETED,
       staffId: 'staff-bass',
       staffLine: 4, // Middle line of bass staff (3rd line)
       laneIndex: 2, // Backward compatibility
@@ -208,7 +204,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Finale Upper', 
       startDate: '2024-01-13',
       durationDays: 1,
-      status: TaskStatus.BLOCKED.toString(),
+      status: TaskStatus.BLOCKED,
       staffId: 'staff-treble',
       staffLine: 8, // Top line of treble staff (5th line)
       laneIndex: 0, // Backward compatibility
@@ -219,7 +215,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Finale Lower', 
       startDate: '2024-01-13',
       durationDays: 1,
-      status: TaskStatus.BLOCKED.toString(),
+      status: TaskStatus.BLOCKED,
       staffId: 'staff-bass',
       staffLine: 0, // Bottom line of bass staff
       laneIndex: 2, // Backward compatibility
@@ -231,7 +227,7 @@ export const CadenceMain: React.FC = () => {
       title: 'Dropped Feature', 
       startDate: '2024-01-06',
       durationDays: 1,
-      status: 'cancelled', // Using string directly since TaskStatus.CANCELLED might not exist
+      status: TaskStatus.CANCELLED,
       staffId: 'staff-bass',
       staffLine: 2, // Second line of bass staff
       laneIndex: 1, // Backward compatibility
@@ -243,14 +239,14 @@ export const CadenceMain: React.FC = () => {
         id: 'dep-1',
         srcTaskId: 'task-1',
         dstTaskId: 'task-2',
-        type: 'finish_to_start'
+        type: DependencyType.FINISH_TO_START
       })
 
       createDependency(demoProjectId, {
         id: 'dep-2', 
         srcTaskId: 'task-3',
         dstTaskId: 'task-4',
-        type: 'finish_to_start'
+        type: DependencyType.FINISH_TO_START
       })
     }, 200)
   }
@@ -267,7 +263,7 @@ export const CadenceMain: React.FC = () => {
       title: 'New Note',
       startDate: '2024-01-08',
       durationDays: 2,
-      status: TaskStatus.NOT_STARTED.toString(),
+      status: TaskStatus.NOT_STARTED,
       staffId: randomStaff?.id || 'staff-treble',
       staffLine: randomLine,
       laneIndex: Math.floor(Math.random() * 3), // Random lane 0-2 (backward compatibility)
@@ -286,29 +282,16 @@ export const CadenceMain: React.FC = () => {
       
       <div className="cadence-content">
         <div className="timeline-container full-width">
-          {USE_WEBGPU ? (
-            <TimelineRenderer 
-              projectId={demoProjectId}
-              tasks={tasks}
-              dependencies={dependencies}
-              selection={selection}
-              viewport={viewport}
-              staffs={staffs}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            />
-          ) : (
-            <TimelineCanvas 
-              projectId={demoProjectId}
-              tasks={tasks}
-              dependencies={dependencies}
-              selection={selection}
-              viewport={viewport}
-              staffs={staffs}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            />
-          )}
+          <TimelineRenderer 
+            projectId={demoProjectId}
+            tasks={tasks}
+            dependencies={dependencies}
+            selection={selection}
+            viewport={viewport}
+            staffs={staffs}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          />
           <div className="measure-label">
             Measure Name
           </div>

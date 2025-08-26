@@ -4,4 +4,3 @@
 
 export * from './Button'
 export * from './TaskCard'
-export * from './TimelineCanvas'

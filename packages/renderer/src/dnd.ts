@@ -1,0 +1,600 @@
+import { Application, Container, Graphics, Rectangle } from 'pixi.js'
+import { TimelineConfig, TaskLike, TaskLayout, TimelineSceneManager, drawNoteBodyPathAbsolute } from './scene'
+
+type StaffLike = any
+
+interface Layers {
+  viewport: Container
+  background: Container
+  dependencies: Container
+  tasks: Container
+  selection: Container
+  dragLayer: Container
+}
+
+interface Utils {
+  getProjectStartDate: () => Date
+  findNearestStaffLine: (y: number) => { staff: StaffLike; staffLine: number; centerY: number } | null
+  snapXToDay: (x: number) => { snappedX: number; dayIndex: number }
+  dayIndexToIsoDate: (dayIndex: number) => string
+}
+
+interface DataProviders {
+  getTasks: () => Record<string, TaskLike & { id: string; startDate: string; durationDays: number; staffId: string; staffLine: number }>
+  getStaffs: () => StaffLike[]
+  getDependencies: () => Record<string, any>
+}
+
+interface Callbacks {
+  select: (ids: string[]) => void
+  onDragStart?: () => void
+  onDragEnd?: () => void
+  updateTask: (projectId: string, taskId: string, updates: Partial<any>) => void
+  createDependency: (projectId: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: string }) => void
+}
+
+interface DnDOptions {
+  app: Application
+  layers: Layers
+  scene: TimelineSceneManager
+  config: TimelineConfig
+  projectId: string
+  utils: Utils
+  data: DataProviders
+  callbacks: Callbacks
+}
+
+export class TimelineDnDController {
+  private app: Application
+  private layers: Layers
+  private scene: TimelineSceneManager
+  private config: TimelineConfig
+  private projectId: string
+  private utils: Utils
+  private data: DataProviders
+  private callbacks: Callbacks
+
+  private dragPreview: Graphics | null = null
+  private dependencyPreview: Graphics | null = null
+  private backgroundHitRect: Graphics | null = null
+
+  private state: {
+    isDragging: boolean
+    isResizing: boolean
+    isCreatingDependency: boolean
+    dragPending: boolean
+    stageDownOnEmpty?: boolean
+    draggedTaskId: string | null
+    draggedTask: TaskLike | null
+    dragStartX: number
+    dragStartY: number
+    offsetX: number
+    offsetY: number
+    clickLocalX?: number
+    clickLocalY?: number
+    initialDuration: number
+    snapDayIndex?: number
+    snapStaffId?: string
+    snapStaffLine?: number
+    snapSnappedX?: number
+    dropProcessed?: boolean
+    dependencySourceTaskId?: string | null
+    dependencyHoverTargetId?: string | null
+  }
+
+  constructor(opts: DnDOptions) {
+    this.app = opts.app
+    this.layers = opts.layers
+    this.scene = opts.scene
+    this.config = opts.config
+    this.projectId = opts.projectId
+    this.utils = opts.utils
+    this.data = opts.data
+    this.callbacks = opts.callbacks
+
+    this.state = {
+      isDragging: false,
+      isResizing: false,
+      isCreatingDependency: false,
+      dragPending: false,
+      stageDownOnEmpty: false,
+      draggedTaskId: null,
+      draggedTask: null,
+      dragStartX: 0,
+      dragStartY: 0,
+      offsetX: 0,
+      offsetY: 0,
+      clickLocalX: undefined,
+      clickLocalY: undefined,
+      initialDuration: 0,
+      snapDayIndex: undefined,
+      snapStaffId: undefined,
+      snapStaffLine: undefined,
+      snapSnappedX: undefined,
+      dropProcessed: false,
+      dependencySourceTaskId: null,
+      dependencyHoverTargetId: null
+    }
+
+    this.attach()
+  }
+
+  destroy(): void {
+    this.app.stage.off('globalpointermove', this.onMove)
+    this.app.stage.off('globalpointerup', this.onUp)
+    this.app.stage.off('pointerup', this.onUp)
+    this.app.stage.off('pointerupoutside', this.onUp)
+    this.app.stage.off('rightup', this.onUp)
+    this.app.stage.off('rightupoutside', this.onUp)
+    this.app.stage.off('pointerdown', this.onStageDown)
+    this.layers.viewport.off('pointerdown', this.onStageDown as any)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pointerup', this.onUpWindow as any, true)
+      window.removeEventListener('mouseup', this.onUpWindow as any, true)
+    }
+    if (this.app.view) {
+      (this.app.view as HTMLCanvasElement).removeEventListener('contextmenu', this.onContextMenu as any, true)
+    }
+  }
+
+  registerTask(task: TaskLike, container: Container, layout: TaskLayout): void {
+    container.eventMode = 'static'
+    container.cursor = 'pointer'
+    container.hitArea = new Rectangle(0, 0, layout.width, this.config.TASK_HEIGHT)
+
+    if (!(container as any).__wired) {
+      container.on('pointermove', (event) => {
+        const localPos = container.toLocal((event as any).global)
+        const relativeX = localPos.x
+        const isNearRightEdge = relativeX > layout.width - 10 && relativeX >= 0
+        container.cursor = isNearRightEdge ? 'ew-resize' : 'grab'
+      })
+      container.on('pointerout', () => {
+        if (!this.state.isDragging && !this.state.isResizing) container.cursor = 'pointer'
+      })
+      container.on('rightclick', (e) => { ;(e as any).preventDefault?.() })
+      container.on('contextmenu', (e) => { ;(e as any).preventDefault?.() })
+      container.on('pointerdown', (event) => this.onDownTask(event as any, task, container, layout))
+      container.on('rightdown', () => {
+        this.state.isCreatingDependency = true
+        this.state.dependencySourceTaskId = (task as any).id
+        this.callbacks.onDragStart && this.callbacks.onDragStart()
+      })
+      ;(container as any).__wired = true
+    }
+  }
+
+  private attach(): void {
+    this.app.stage.eventMode = 'static'
+    this.app.stage.off('globalpointermove', this.onMove)
+    this.app.stage.off('globalpointerup', this.onUp)
+    this.app.stage.off('pointerup', this.onUp)
+    this.app.stage.off('pointerupoutside', this.onUp)
+    this.app.stage.off('rightup', this.onUp)
+    this.app.stage.off('rightupoutside', this.onUp)
+    this.app.stage.on('globalpointermove', this.onMove)
+    this.app.stage.on('globalpointerup', this.onUp)
+    this.app.stage.on('pointerup', this.onUp)
+    this.app.stage.on('pointerupoutside', this.onUp)
+    this.app.stage.on('rightup', this.onUp)
+    this.app.stage.on('rightupoutside', this.onUp)
+    this.app.stage.on('pointerdown', this.onStageDown)
+    this.layers.viewport.on('pointerdown', this.onStageDown as any)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pointerup', this.onUpWindow as any, true)
+      window.addEventListener('mouseup', this.onUpWindow as any, true)
+    }
+    if (this.app.view) {
+      (this.app.view as HTMLCanvasElement).addEventListener('contextmenu', this.onContextMenu as any, true)
+    }
+    // Ensure a large, passive hit rectangle sits behind tasks to capture empty-space clicks reliably
+    this.ensureBackgroundHitRect()
+  }
+
+  private ensureBackgroundHitRect(): void {
+    if (!this.backgroundHitRect) {
+      this.backgroundHitRect = new Graphics()
+      // Transparent fill just to maintain a drawable; events use hitArea below
+      this.backgroundHitRect.alpha = 0
+      ;(this.backgroundHitRect as any).eventMode = 'static'
+      this.backgroundHitRect.on('pointerdown', this.onStageDown)
+      this.layers.background.addChildAt(this.backgroundHitRect, 0)
+    }
+    // Cover a very large area in viewport space so panning/zooming still finds empty clicks
+    const w = Math.max(this.app.screen.width * 4, 10000)
+    const h = Math.max(this.app.screen.height * 4, 10000)
+    const x = -w / 2
+    const y = -h / 2
+    this.backgroundHitRect.clear()
+    this.backgroundHitRect.rect(x, y, w, h)
+    this.backgroundHitRect.fill({ color: 0x000000, alpha: 0 })
+    this.backgroundHitRect.hitArea = new Rectangle(x, y, w, h)
+  }
+
+  private onDownTask = (event: any, task: TaskLike, container: Container, layout: TaskLayout) => {
+    const globalPos = event.global
+    const viewportPos = this.layers.viewport ? this.layers.viewport.toLocal(globalPos) : globalPos
+    const localPos = container.toLocal(globalPos)
+    const isRightButton = event.button === 2
+    if (isRightButton) {
+      this.state.isCreatingDependency = true
+      this.state.dependencySourceTaskId = (task as any).id
+      this.callbacks.onDragStart && this.callbacks.onDragStart()
+      return
+    }
+
+    this.callbacks.select([(task as any).id])
+    const isNearRightEdge = localPos.x > layout.width - 10 && localPos.x >= 0
+    if (isNearRightEdge) {
+      this.state = {
+        ...this.state,
+        isDragging: false,
+        isResizing: true,
+        isCreatingDependency: false,
+        dragPending: false,
+        draggedTaskId: (task as any).id,
+        draggedTask: task,
+        dragStartX: globalPos.x,
+        dragStartY: globalPos.y,
+        offsetX: 0,
+        offsetY: 0,
+        clickLocalX: localPos.x,
+        clickLocalY: localPos.y,
+        dragPreview: null,
+        dependencyPreview: null,
+        initialDuration: (task as any).durationDays,
+        dropProcessed: false
+      } as any
+      container.cursor = 'ew-resize'
+      if (this.app.view) { (this.app.view as HTMLCanvasElement).style.cursor = 'ew-resize' }
+      this.callbacks.onDragStart && this.callbacks.onDragStart()
+    } else {
+      const taskY = layout.centerY - this.config.TASK_HEIGHT / 2
+      this.state = {
+        ...this.state,
+        isDragging: false,
+        isResizing: false,
+        isCreatingDependency: false,
+        dragPending: true,
+        draggedTaskId: (task as any).id,
+        draggedTask: task,
+        dragStartX: globalPos.x,
+        dragStartY: globalPos.y,
+        offsetX: viewportPos.x - layout.startX,
+        offsetY: viewportPos.y - taskY,
+        clickLocalX: localPos.x,
+        clickLocalY: localPos.y,
+        dragPreview: null,
+        dependencyPreview: null,
+        initialDuration: 0,
+        dropProcessed: false
+      } as any
+      // Do not change cursors or call onDragStart until threshold exceeded
+    }
+  }
+
+  private onMove = (event: any) => {
+    const globalPos = event.global
+    const localPos = this.layers.viewport ? this.layers.viewport.toLocal(globalPos) : globalPos
+
+    // Promote pending left-click into a drag once threshold exceeded
+    if (this.state.dragPending && !this.state.isDragging) {
+      const dx = globalPos.x - this.state.dragStartX
+      const dy = globalPos.y - this.state.dragStartY
+      const distanceSq = dx * dx + dy * dy
+      const thresholdSq = 4 * 4 // 4px movement threshold
+      if (distanceSq >= thresholdSq) {
+        this.state.isDragging = true
+        this.state.dragPending = false
+        if (this.app.view) { (this.app.view as HTMLCanvasElement).style.cursor = 'grabbing' }
+        this.callbacks.onDragStart && this.callbacks.onDragStart()
+      }
+    }
+
+    // Dependency preview
+    if (this.state.isCreatingDependency && this.state.dependencySourceTaskId) {
+      if (this.dependencyPreview && this.layers.dragLayer.children.includes(this.dependencyPreview)) {
+        this.layers.dragLayer.removeChild(this.dependencyPreview)
+        this.dependencyPreview.destroy()
+        this.dependencyPreview = null
+      }
+      const srcA = this.scene.getAnchors(this.state.dependencySourceTaskId)
+      if (!srcA) return
+      // Determine hover target via renderer hitTest first, then precise local hit check
+      let hoverId: string | null = null
+      let dstX = localPos.x
+      let dstY = localPos.y
+      const hit = (this.app.renderer as any).events?.hitTest?.(globalPos, this.app.stage)
+      if (hit) {
+        const matchedId = this.resolveTaskIdFromHit(hit as any)
+        if (matchedId && matchedId !== this.state.dependencySourceTaskId) {
+          hoverId = matchedId
+          const a = this.scene.getAnchors(matchedId)
+          if (a) { dstX = a.leftCenterX; dstY = a.leftCenterY }
+        }
+      }
+      if (!hoverId) {
+        const found = this.findTaskAtGlobal(globalPos, this.state.dependencySourceTaskId || undefined)
+        if (found) {
+          hoverId = found
+          const a = this.scene.getAnchors(found)
+          if (a) { dstX = a.leftCenterX; dstY = a.leftCenterY }
+        }
+      }
+      this.state.dependencyHoverTargetId = hoverId
+      const g = new Graphics()
+      // During drag, start at the source note's circle center (left side) for visual consistency
+      g.moveTo(srcA.leftCenterX, srcA.leftCenterY)
+      g.lineTo(dstX, dstY)
+      g.stroke({ width: 2, color: 0x10B981, alpha: 0.9 })
+      const angle = Math.atan2(dstY - srcA.rightCenterY, dstX - srcA.rightCenterX)
+      const arrow = 8
+      g.beginPath()
+      g.moveTo(dstX, dstY)
+      g.lineTo(dstX - arrow * Math.cos(angle - Math.PI / 6), dstY - arrow * Math.sin(angle - Math.PI / 6))
+      g.lineTo(dstX - arrow * Math.cos(angle + Math.PI / 6), dstY - arrow * Math.sin(angle + Math.PI / 6))
+      g.closePath()
+      g.fill({ color: 0x10B981, alpha: 0.8 })
+      ;(g as any).eventMode = 'none'
+      this.layers.dragLayer.addChild(g)
+      this.dependencyPreview = g
+      return
+    }
+
+    // Resize preview
+    if (this.state.isResizing && this.state.draggedTask) {
+      if (this.dragPreview && this.layers.dragLayer.children.includes(this.dragPreview)) {
+        this.layers.dragLayer.removeChild(this.dragPreview)
+        this.dragPreview.destroy()
+        this.dragPreview = null
+      }
+      const taskStart = new Date((this.state.draggedTask as any).startDate)
+      const projectStartDate = this.utils.getProjectStartDate()
+      const dayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
+      const startX = this.config.LEFT_MARGIN + dayIndex * this.config.DAY_WIDTH
+      const newWidth = Math.max(this.config.DAY_WIDTH, localPos.x - startX)
+      const preview = new Graphics()
+      const taskY = this.scene.taskLayouts.get((this.state.draggedTask as any).id)?.topY ?? 0
+      drawNoteBodyPathAbsolute(preview, startX, taskY, newWidth, this.config.TASK_HEIGHT)
+      preview.fill({ color: 0x10B981, alpha: 0.5 })
+      preview.stroke({ width: 2, color: 0x10B981, alpha: 1 })
+      this.layers.dragLayer.addChild(preview)
+      this.dragPreview = preview
+      return
+    }
+
+    // Drag preview (ghost)
+    if (this.state.isDragging && this.state.draggedTask) {
+      if (this.dragPreview && this.layers.dragLayer.children.includes(this.dragPreview)) {
+        this.layers.dragLayer.removeChild(this.dragPreview)
+      }
+      const preview = new Graphics()
+      // Draw preview so that the point originally clicked stays under the cursor
+      const localClickX = this.state.clickLocalX ?? 0
+      const localClickY = this.state.clickLocalY ?? 0
+      const dragX = localPos.x - localClickX
+      const dragY = localPos.y - localClickY
+      const taskWidth = (this.state.draggedTask as any).durationDays * this.config.DAY_WIDTH
+      const radius = this.config.TASK_HEIGHT / 2
+      const nearest = this.utils.findNearestStaffLine(dragY + radius)
+      if (nearest) {
+        const targetLineY = nearest.centerY
+        const snappedTopY = targetLineY - radius
+        const { snappedX, dayIndex } = this.utils.snapXToDay(dragX)
+        this.state.snapDayIndex = dayIndex
+        this.state.snapStaffId = (nearest.staff as any).id
+        this.state.snapStaffLine = nearest.staffLine
+        this.state.snapSnappedX = snappedX
+        const drawX = this.state.snapSnappedX ?? snappedX
+        drawNoteBodyPathAbsolute(preview, drawX, snappedTopY, taskWidth, this.config.TASK_HEIGHT)
+        preview.fill({ color: 0x8B5CF6, alpha: 0.5 })
+        preview.stroke({ width: 2, color: 0xFCD34D, alpha: 1 })
+      }
+      ;(preview as any).eventMode = 'none'
+      this.layers.dragLayer.addChild(preview)
+      this.dragPreview = preview
+    }
+  }
+
+  private onUp = (event: any) => {
+    const globalPos = event.global
+    const localPos = this.layers.viewport ? this.layers.viewport.toLocal(globalPos) : globalPos
+
+    // Clear previews
+    if (this.dragPreview && this.layers.dragLayer.children.includes(this.dragPreview)) {
+      this.layers.dragLayer.removeChild(this.dragPreview)
+      this.dragPreview.destroy()
+      this.dragPreview = null
+    }
+    if (this.dependencyPreview && this.layers.dragLayer.children.includes(this.dependencyPreview)) {
+      this.layers.dragLayer.removeChild(this.dependencyPreview)
+      this.dependencyPreview.destroy()
+      this.dependencyPreview = null
+    }
+
+    // Dependency finalize
+    if (this.state.isCreatingDependency && this.state.dependencySourceTaskId) {
+      let targetTaskId: string | null = this.state.dependencyHoverTargetId || null
+      if (!targetTaskId) {
+        // Prefer renderer hitTest, then precise local hit check
+        const hit = (this.app.renderer as any).events?.hitTest?.(globalPos, this.app.stage)
+        if (hit) {
+          const matchedId = this.resolveTaskIdFromHit(hit as any)
+          if (matchedId && matchedId !== this.state.dependencySourceTaskId) targetTaskId = matchedId
+        }
+        if (!targetTaskId) {
+          targetTaskId = this.findTaskAtGlobal(globalPos, this.state.dependencySourceTaskId || undefined)
+        }
+      }
+      if (targetTaskId && targetTaskId !== this.state.dependencySourceTaskId) {
+        const sourceTask = this.data.getTasks()[this.state.dependencySourceTaskId]
+        const destTask = this.data.getTasks()[targetTaskId]
+        if (sourceTask && destTask) {
+          const src = new Date(sourceTask.startDate) <= new Date(destTask.startDate) ? sourceTask : destTask
+          const dst = src === sourceTask ? destTask : sourceTask
+          const id = `dep-${Date.now()}`
+          this.callbacks.createDependency(this.projectId, { id, srcTaskId: (src as any).id, dstTaskId: (dst as any).id, type: 'finish_to_start' })
+        }
+      }
+      this.state.isCreatingDependency = false
+      this.state.dependencySourceTaskId = null
+      this.state.dependencyHoverTargetId = null
+      this.callbacks.onDragEnd && this.callbacks.onDragEnd()
+      this.resetCursor()
+      return
+    }
+
+    // Resize finalize
+    if (this.state.isResizing && this.state.draggedTask && this.state.draggedTaskId) {
+      const taskStart = new Date((this.state.draggedTask as any).startDate)
+      const projectStartDate = this.utils.getProjectStartDate()
+      const dayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
+      const startX = this.config.LEFT_MARGIN + dayIndex * this.config.DAY_WIDTH
+      const newWidth = Math.max(this.config.DAY_WIDTH, localPos.x - startX)
+      const newDuration = Math.max(1, Math.round(newWidth / this.config.DAY_WIDTH))
+      this.callbacks.updateTask(this.projectId, this.state.draggedTaskId, { durationDays: newDuration })
+      this.resetState()
+      this.callbacks.onDragEnd && this.callbacks.onDragEnd()
+      this.resetCursor()
+      return
+    }
+
+    // Drag finalize
+    if (this.state.isDragging && this.state.draggedTask && this.state.draggedTaskId) {
+      const radius = this.config.TASK_HEIGHT / 2
+      // Use the same local anchor convention as the ghost: cursor over the original click point
+      const localClickX = this.state.clickLocalX ?? 0
+      const localClickY = this.state.clickLocalY ?? 0
+      const dropX = localPos.x - localClickX
+      const dropY = localPos.y - localClickY
+      const nearest = this.utils.findNearestStaffLine(dropY + radius)
+      const dayIndex = this.state.snapDayIndex !== undefined
+        ? this.state.snapDayIndex
+        : (this.state.snapSnappedX !== undefined
+            ? Math.round((this.state.snapSnappedX - this.config.LEFT_MARGIN) / this.config.DAY_WIDTH)
+            : this.utils.snapXToDay(dropX).dayIndex)
+      const startDate = this.utils.dayIndexToIsoDate(dayIndex)
+      const updates: any = { startDate }
+      if (this.state.snapStaffId !== undefined && this.state.snapStaffLine !== undefined) {
+        updates.staffId = this.state.snapStaffId
+        updates.staffLine = this.state.snapStaffLine
+      } else if (nearest) {
+        updates.staffId = (nearest.staff as any).id
+        updates.staffLine = nearest.staffLine
+      }
+      this.callbacks.updateTask(this.projectId, this.state.draggedTaskId, updates)
+      this.resetState()
+      this.callbacks.onDragEnd && this.callbacks.onDragEnd()
+      this.resetCursor()
+    }
+
+    // If no drag/resize/dependency occurred, treat as pure click; reset pending
+    if (this.state.dragPending) {
+      this.state.dragPending = false
+      this.resetCursor()
+    }
+
+    // Empty-space click finalize: if pointer down began on empty and no interaction occurred
+    if (!this.state.isDragging && !this.state.isResizing && !this.state.isCreatingDependency && !this.state.dragPending) {
+      if (this.state.stageDownOnEmpty) {
+        // Ensure we didn't release over a task
+        const hit = (this.app.renderer as any).events?.hitTest?.(globalPos, this.layers.tasks) ||
+                    (this.app.renderer as any).events?.hitTest?.(globalPos, this.app.stage)
+        if (!hit || !this.resolveTaskIdFromHit(hit)) {
+          this.callbacks.select([])
+        }
+      }
+    }
+    this.state.stageDownOnEmpty = false
+  }
+
+  // Fallback for pointer releases outside the canvas/browser window
+  private onUpWindow = (e: PointerEvent | MouseEvent) => {
+    // Only act if we are in a drag/resize/dependency interaction
+    if (!this.state.isDragging && !this.state.isResizing && !this.state.isCreatingDependency) return
+    const view = this.app.view as HTMLCanvasElement
+    const rect = view.getBoundingClientRect()
+    const x = (e.clientX - rect.left) * (view.width / rect.width)
+    const y = (e.clientY - rect.top) * (view.height / rect.height)
+    const global = { x: x, y: y }
+    this.onUp({ global } as any)
+  }
+
+  private resolveTaskIdFromHit(hit: any): string | null {
+    // Walk up the parent chain and see which task container contains this hit
+    let current: any = hit
+    while (current) {
+      for (const [taskId, cont] of this.scene.taskContainers.entries()) {
+        if (current === cont) return taskId
+      }
+      current = current.parent
+    }
+    return null
+  }
+
+  // More precise: convert global to each container's local and check hitArea.contains
+  private findTaskAtGlobal(global: { x: number; y: number }, excludeId?: string): string | null {
+    for (const [taskId, cont] of this.scene.taskContainers.entries()) {
+      if (excludeId && taskId === excludeId) continue
+      const local = cont.toLocal(global as any)
+      const hitArea = (cont as any).hitArea as Rectangle | undefined
+      if (hitArea && hitArea.contains(local.x, local.y)) {
+        return taskId
+      }
+    }
+    return null
+  }
+
+  private onContextMenu = (e: Event) => {
+    e.preventDefault()
+  }
+
+  // Clear selection when clicking empty space (left-click only)
+  private onStageDown = (event: any) => {
+    if (event?.button === 2) return // ignore right-click
+    // If currently interacting, don't clear
+    if (this.state.isDragging || this.state.isResizing || this.state.isCreatingDependency || this.state.dragPending) return
+    const globalPos = event.global
+    // Hit test against tasks layer first; if nothing, also check entire stage
+    const hit = (this.app.renderer as any).events?.hitTest?.(globalPos, this.layers.tasks) ||
+                (this.app.renderer as any).events?.hitTest?.(globalPos, this.app.stage)
+    if (hit) {
+      const matchedId = this.resolveTaskIdFromHit(hit)
+      if (matchedId) {
+        this.state.stageDownOnEmpty = false
+        return // clicked on a task → don't clear now
+      }
+    }
+    // Defer clearing until pointerup to avoid conflicts with other handlers
+    this.state.stageDownOnEmpty = true
+  }
+
+  private resetState(): void {
+    this.state = {
+      isDragging: false,
+      isResizing: false,
+      isCreatingDependency: false,
+      dragPending: false,
+      draggedTaskId: null,
+      draggedTask: null,
+      dragStartX: 0,
+      dragStartY: 0,
+      offsetX: 0,
+      offsetY: 0,
+      initialDuration: 0,
+      snapDayIndex: undefined,
+      snapStaffId: undefined,
+      snapStaffLine: undefined,
+      snapSnappedX: undefined,
+      dropProcessed: false,
+      dependencySourceTaskId: null,
+      dependencyHoverTargetId: null
+    }
+  }
+
+  private resetCursor(): void {
+    if (this.app.view) { (this.app.view as HTMLCanvasElement).style.cursor = 'default' }
+  }
+}
+
+

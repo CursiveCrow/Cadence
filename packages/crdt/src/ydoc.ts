@@ -3,6 +3,7 @@
  */
 
 import * as Y from 'yjs'
+import { TaskStatus, DependencyType } from '@cadence/core'
 
 
 export interface TaskData {
@@ -10,7 +11,7 @@ export interface TaskData {
   title: string
   startDate: string
   durationDays: number
-  status: string
+  status: TaskStatus
   assignee?: string
   staffId: string // ID of the staff this task is on
   staffLine: number // Which line on the staff (0 = bottom line, 1 = first space, etc.)
@@ -21,7 +22,7 @@ export interface DependencyData {
   id: string
   srcTaskId: string
   dstTaskId: string
-  type: string
+  type: DependencyType
 }
 
 /**
