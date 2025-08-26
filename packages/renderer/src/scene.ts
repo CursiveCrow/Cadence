@@ -21,6 +21,10 @@ export interface TimelineConfig {
   TASK_COLORS: Record<string, number>
   DEPENDENCY_COLOR: number
   SELECTION_COLOR: number
+  /** When false, suppress staff name/clef labels from the Pixi scene (for external sidebar labels) */
+  DRAW_STAFF_LABELS?: boolean
+  /** Horizontal padding after each date/grid line before a note body starts */
+  NOTE_START_PADDING?: number
 }
 
 export interface StaffLike {
@@ -68,7 +72,7 @@ export function computeTaskLayout(
 ): TaskLayout {
   const taskStart = new Date(task.startDate)
   const dayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
-  const startX = config.LEFT_MARGIN + dayIndex * config.DAY_WIDTH
+  const startX = config.LEFT_MARGIN + dayIndex * config.DAY_WIDTH + (config.NOTE_START_PADDING || 0)
   const width = Math.max(task.durationDays * config.DAY_WIDTH - 8, 40)
 
   const staffIndex = staffs.findIndex(s => s.id === task.staffId)
@@ -118,55 +122,59 @@ export function drawGridAndStaff(
       graphics.stroke({ width: 1, color: config.STAFF_LINE_COLOR, alpha: 0.6 })
     }
 
-    const labelText = new Text({
-      text: staff.name,
-      style: {
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        fontSize: 14,
-        fontWeight: 'bold',
-        fill: 0xffffff,
-        align: 'right'
-      }
-    })
-    const staffCenterY = currentY + ((staff.numberOfLines - 1) * config.STAFF_LINE_SPACING) / 2
-    labelText.x = config.LEFT_MARGIN - 15 - labelText.width
-    labelText.y = staffCenterY - labelText.height / 2
-    container.addChild(labelText)
+    if ((config as any).DRAW_STAFF_LABELS !== false) {
+      const labelText = new Text({
+        text: staff.name,
+        style: {
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fontSize: 14,
+          fontWeight: 'bold',
+          fill: 0xffffff,
+          align: 'right'
+        }
+      })
+      const staffCenterY = currentY + ((staff.numberOfLines - 1) * config.STAFF_LINE_SPACING) / 2
+      labelText.x = config.LEFT_MARGIN - 15 - labelText.width
+      labelText.y = staffCenterY - labelText.height / 2
+      container.addChild(labelText)
 
-    const clefSymbol = staff.name.toLowerCase().includes('treble') ? '𝄞' :
-                       staff.name.toLowerCase().includes('bass') ? '𝄢' : '♪'
-    const clefText = new Text({
-      text: clefSymbol,
-      style: {
-        fontFamily: 'serif',
-        fontSize: 20,
-        fontWeight: 'bold',
-        fill: 0xffffff
-      }
-    })
-    clefText.x = config.LEFT_MARGIN + 15 - clefText.width / 2
-    clefText.y = staffCenterY - clefText.height / 2
-    container.addChild(clefText)
+      const clefSymbol = staff.name.toLowerCase().includes('treble') ? '𝄞' :
+                         staff.name.toLowerCase().includes('bass') ? '𝄢' : '♪'
+      const clefText = new Text({
+        text: clefSymbol,
+        style: {
+          fontFamily: 'serif',
+          fontSize: 20,
+          fontWeight: 'bold',
+          fill: 0xffffff
+        }
+      })
+      clefText.x = config.LEFT_MARGIN + 15 - clefText.width / 2
+      clefText.y = staffCenterY - clefText.height / 2
+      container.addChild(clefText)
+    }
 
     currentY += config.STAFF_SPACING
   })
 
-  const maxDays = Math.floor((extendedWidth - config.LEFT_MARGIN) / config.DAY_WIDTH)
-  for (let i = 0; i < maxDays; i++) {
-    const x = config.LEFT_MARGIN + i * config.DAY_WIDTH
-    const date = new Date(projectStartDate)
-    date.setDate(date.getDate() + i)
-    const dateText = new Text({
-      text: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      style: {
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        fontSize: 11,
-        fill: 0xffffff
-      }
-    })
-    dateText.x = x + 5
-    dateText.y = 25 - dateText.height / 2
-    container.addChild(dateText)
+  if ((config as any).DRAW_STAFF_LABELS !== false) {
+    const maxDays = Math.floor((extendedWidth - config.LEFT_MARGIN) / config.DAY_WIDTH)
+    for (let i = 0; i < maxDays; i++) {
+      const x = config.LEFT_MARGIN + i * config.DAY_WIDTH
+      const date = new Date(projectStartDate)
+      date.setDate(date.getDate() + i)
+      const dateText = new Text({
+        text: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        style: {
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fontSize: 11,
+          fill: 0xffffff
+        }
+      })
+      dateText.x = x + 5
+      dateText.y = 25 - dateText.height / 2
+      container.addChild(dateText)
+    }
   }
 
   container.addChildAt(graphics, 0)

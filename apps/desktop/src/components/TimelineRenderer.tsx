@@ -461,6 +461,13 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
     const layers = layersRef.current
     if (!app || !isRendererInitialized || !layers.viewport) return
 
+    // Clamp viewport so world origin (0,0) never moves out from under the side panels
+    const clampViewport = (x: number, y: number, zoom: number) => {
+      const clampedX = Math.max(0, x)
+      const clampedY = Math.max(0, y)
+      return { x: clampedX, y: clampedY, zoom }
+    }
+
     // Zoom centered at cursor position
     const onWheel = (e: any) => {
       try {
@@ -483,7 +490,8 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
         const worldY = current.y + sy / zoom0
         const newX = worldX - sx / zoom1
         const newY = worldY - sy / zoom1
-        dispatch(updateViewport({ x: newX, y: newY, zoom: zoom1 }))
+        const clamped = clampViewport(newX, newY, zoom1)
+        dispatch(updateViewport(clamped))
       } catch (err) {
         console.warn('Wheel zoom handler error', err)
       }
@@ -525,7 +533,8 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
       const z = current.zoom || 1
       const newX = current.x - dx / z
       const newY = current.y - dy / z
-      dispatch(updateViewport({ x: newX, y: newY }))
+      const clamped = clampViewport(newX, newY, current.zoom)
+      dispatch(updateViewport(clamped))
     }
 
     const endPan = () => {

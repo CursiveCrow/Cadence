@@ -4,6 +4,8 @@ import { RootState, setActiveProject, initializeDefaultStaffs, setSelection } fr
 import { useProjectTasks, useProjectDependencies, createTask, createDependency } from '@cadence/crdt'
 import { TaskStatus, DependencyType } from '@cadence/core'
 import { TimelineRenderer } from './TimelineRenderer'
+import { StaffSidebar } from './StaffSidebar'
+import { DateHeader } from './DateHeader'
 import { TIMELINE_CONFIG } from '@cadence/renderer'
 import { ProjectHeader } from './ProjectHeader'
 import { TaskPopup } from './TaskPopup'
@@ -20,6 +22,37 @@ export const CadenceMain: React.FC = () => {
   const [isInitialized, setIsInitialized] = React.useState(false)
   const [popupPosition, setPopupPosition] = useState<{x: number, y: number} | null>(null)
   const [isDragInProgress, setIsDragInProgress] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(120)
+  const resizerRef = React.useRef<HTMLDivElement | null>(null)
+  const resizingRef = React.useRef<boolean>(false)
+  const startXRef = React.useRef<number>(0)
+  const startWidthRef = React.useRef<number>(120)
+
+  const clampSidebarWidth = useCallback((w: number) => Math.max(80, Math.min(260, w)), [])
+
+  const onMouseMoveResize = useCallback((e: MouseEvent) => {
+    if (!resizingRef.current) return
+    const dx = e.clientX - startXRef.current
+    setSidebarWidth(clampSidebarWidth(startWidthRef.current + dx))
+  }, [clampSidebarWidth])
+
+  const endResize = useCallback(() => {
+    if (!resizingRef.current) return
+    resizingRef.current = false
+    window.removeEventListener('mousemove', onMouseMoveResize, true)
+    window.removeEventListener('mouseup', endResize, true)
+    try { document.body.style.cursor = '' } catch {}
+  }, [onMouseMoveResize])
+
+  const beginResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    resizingRef.current = true
+    startXRef.current = e.clientX
+    startWidthRef.current = sidebarWidth
+    window.addEventListener('mousemove', onMouseMoveResize, true)
+    window.addEventListener('mouseup', endResize, true)
+    try { document.body.style.cursor = 'col-resize' } catch {}
+  }, [sidebarWidth, onMouseMoveResize, endResize])
 
   // Calculate popup position based on selected task
   const calculatePopupPosition = useCallback((taskId: string) => {
@@ -282,17 +315,42 @@ export const CadenceMain: React.FC = () => {
       />
       
       <div className="cadence-content">
-        <div className="timeline-container full-width">
-          <TimelineRenderer 
-            projectId={demoProjectId}
-            tasks={tasks}
-            dependencies={dependencies}
-            selection={selection}
-            viewport={viewport}
+        {/* Left resizable staff sidebar */}
+        <div className="staff-sidebar" style={{ width: `${sidebarWidth}px` }}>
+          <StaffSidebar
             staffs={staffs}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
+            viewport={viewport}
+            width={sidebarWidth}
+            onAddNote={addNewTask}
+            onOpenMenu={() => {
+              // Reuse header menu by showing a lightweight alert for now; could elevate to a shared menu later
+              const el = document.querySelector('.menu-btn') as HTMLButtonElement | null
+              if (el) el.click()
+            }}
           />
+        </div>
+        {/* Vertical resizer */}
+        <div
+          className="vertical-resizer"
+          ref={resizerRef}
+          onMouseDown={beginResize}
+          onDoubleClick={() => setSidebarWidth(120)}
+        />
+        {/* Right main column: date header + timeline */}
+        <div className="main-column">
+          <DateHeader viewport={viewport} />
+          <div className="timeline-container full-width">
+            <TimelineRenderer 
+              projectId={demoProjectId}
+              tasks={tasks}
+              dependencies={dependencies}
+              selection={selection}
+              viewport={viewport}
+              staffs={staffs}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            />
+          </div>
         </div>
       </div>
 

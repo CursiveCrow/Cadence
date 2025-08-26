@@ -5,7 +5,7 @@
 import { TimelineConfig } from './scene'
 
 export const TIMELINE_CONFIG: TimelineConfig = {
-  LEFT_MARGIN: 80,
+  LEFT_MARGIN: 0,
   TOP_MARGIN: 60,
   DAY_WIDTH: 60,
   STAFF_SPACING: 120,
@@ -25,7 +25,9 @@ export const TIMELINE_CONFIG: TimelineConfig = {
     cancelled: 0x6B7280
   },
   DEPENDENCY_COLOR: 0x666666,
-  SELECTION_COLOR: 0xF59E0B
+  SELECTION_COLOR: 0xF59E0B,
+  DRAW_STAFF_LABELS: false,
+  NOTE_START_PADDING: 2
 }
 
 // Mapping from task status to accidental symbol used in UI
