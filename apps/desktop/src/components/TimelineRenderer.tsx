@@ -172,6 +172,7 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
         }
         
         appRef.current = app
+        try { (app.renderer as any).roundPixels = true } catch {}
         
         // Create rendering layers via helper
         const layers = createTimelineLayers(app)
@@ -361,7 +362,16 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
     }
     
     // Ensure background drawn once and clear only selection each frame
-    ensureGridAndStaff(layers.background!, TIMELINE_CONFIG as unknown as TimelineConfig, staffs, PROJECT_START_DATE, app.screen.width, app.screen.height)
+    const currentZoom = layers.viewport?.scale.x || 1
+    ensureGridAndStaff(
+      layers.background!,
+      TIMELINE_CONFIG as unknown as TimelineConfig,
+      staffs,
+      PROJECT_START_DATE,
+      app.screen.width,
+      app.screen.height,
+      currentZoom
+    )
     
     // Get project start date
     const projectStartDate = PROJECT_START_DATE
@@ -408,6 +418,25 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
           spatialRef.current.insert({ id: task.id, x: layout.startX, y: layout.topY, width: layout.width, height: TIMELINE_CONFIG.TASK_HEIGHT, type: 'task' })
         }
       }
+
+      // Improve text crispness: re-bake Text at higher resolution when zoom changes
+      try {
+        const rendererRes = ((app.renderer as any).resolution || window.devicePixelRatio || 1)
+        const desiredTextRes = Math.min(4, rendererRes * (layers.viewport!.scale.x || 1))
+        for (const cont of (scene as any).taskContainers?.values?.() || []) {
+          for (const child of (cont as any).children || []) {
+            const isTextLike = child && typeof (child as any).text !== 'undefined' && (typeof (child as any).updateText === 'function' || 'resolution' in (child as any))
+            if (isTextLike) {
+              const t = child as any
+              const cur = t.resolution ?? 1
+              if (Math.abs(cur - desiredTextRes) / desiredTextRes > 0.1) {
+                t.resolution = desiredTextRes
+                if (typeof t.updateText === 'function') t.updateText()
+              }
+            }
+          }
+        }
+      } catch {}
 
       // Selection overlay layer: draw only for selected ids
       // no-op here; selection handled above
@@ -461,6 +490,13 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
     const layers = layersRef.current
     if (!app || !isRendererInitialized || !layers.viewport) return
 
+    // Clamp viewport so world origin (0,0) never moves out from under the side panels
+    const clampViewport = (x: number, y: number, zoom: number) => {
+      const clampedX = Math.max(0, x)
+      const clampedY = Math.max(0, y)
+      return { x: clampedX, y: clampedY, zoom }
+    }
+
     // Zoom centered at cursor position
     const onWheel = (e: any) => {
       try {
@@ -483,7 +519,8 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
         const worldY = current.y + sy / zoom0
         const newX = worldX - sx / zoom1
         const newY = worldY - sy / zoom1
-        dispatch(updateViewport({ x: newX, y: newY, zoom: zoom1 }))
+        const clamped = clampViewport(newX, newY, zoom1)
+        dispatch(updateViewport(clamped))
       } catch (err) {
         console.warn('Wheel zoom handler error', err)
       }
@@ -525,7 +562,8 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
       const z = current.zoom || 1
       const newX = current.x - dx / z
       const newY = current.y - dy / z
-      dispatch(updateViewport({ x: newX, y: newY }))
+      const clamped = clampViewport(newX, newY, current.zoom)
+      dispatch(updateViewport(clamped))
     }
 
     const endPan = () => {

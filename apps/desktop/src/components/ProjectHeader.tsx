@@ -5,11 +5,13 @@ import './ProjectHeader.css'
 interface ProjectHeaderProps {
   projectName: string
   onAddTask: () => void
+  showControls?: boolean
 }
 
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   projectName,
-  onAddTask
+  onAddTask,
+  showControls = true
 }) => {
   const [showMenu, setShowMenu] = useState(false)
   const [showStaffManager, setShowStaffManager] = useState(false)
@@ -70,37 +72,39 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
         <div className="project-title">
           {projectName}
         </div>
-        <div className="project-controls">
-          <button className="add-task-btn" onClick={handleAddTask}>
-            + Add Note
-          </button>
-          <div className="menu-container" ref={menuRef}>
-            <button className="menu-btn" onClick={handleMenuClick}>
-              ⋮
+        {showControls && (
+          <div className="project-controls">
+            <button className="add-task-btn" onClick={handleAddTask}>
+              + Add Note
             </button>
-            {showMenu && (
-              <div className="menu-dropdown">
-                <button onClick={() => handleMenuAction('staffs')}>
-                  🎼 Manage Staffs
-                </button>
-                <div className="menu-divider"></div>
-                <button onClick={() => handleMenuAction('settings')}>
-                  Project Settings
-                </button>
-                <button onClick={() => handleMenuAction('export')}>
-                  Export Project
-                </button>
-                <button onClick={() => handleMenuAction('import')}>
-                  Import Project
-                </button>
-                <div className="menu-divider"></div>
-                <button onClick={() => handleMenuAction('about')}>
-                  About Cadence
-                </button>
-              </div>
-            )}
+            <div className="menu-container" ref={menuRef}>
+              <button className="menu-btn" onClick={handleMenuClick}>
+                ⋮
+              </button>
+              {showMenu && (
+                <div className="menu-dropdown">
+                  <button onClick={() => handleMenuAction('staffs')}>
+                    🎼 Manage Staffs
+                  </button>
+                  <div className="menu-divider"></div>
+                  <button onClick={() => handleMenuAction('settings')}>
+                    Project Settings
+                  </button>
+                  <button onClick={() => handleMenuAction('export')}>
+                    Export Project
+                  </button>
+                  <button onClick={() => handleMenuAction('import')}>
+                    Import Project
+                  </button>
+                  <div className="menu-divider"></div>
+                  <button onClick={() => handleMenuAction('about')}>
+                    About Cadence
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </header>
       
       <StaffManager 
