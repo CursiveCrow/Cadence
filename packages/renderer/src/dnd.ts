@@ -80,6 +80,8 @@ export class TimelineDnDController {
     dropProcessed?: boolean
     dependencySourceTaskId?: string | null
     dependencyHoverTargetId?: string | null
+    minAllowedDayIndex?: number
+    pointerDownOnStage?: boolean
   }
 
   constructor(opts: DnDOptions) {
@@ -113,7 +115,9 @@ export class TimelineDnDController {
       snapSnappedX: undefined,
       dropProcessed: false,
       dependencySourceTaskId: null,
-      dependencyHoverTargetId: null
+      dependencyHoverTargetId: null,
+      minAllowedDayIndex: undefined,
+      pointerDownOnStage: false
     }
 
     this.attach()
@@ -124,6 +128,7 @@ export class TimelineDnDController {
     this.app.stage.off('globalpointerup', this.onUp)
     this.app.stage.off('pointerup', this.onUp)
     this.app.stage.off('pointerupoutside', this.onUp)
+    this.app.stage.off('pointertap', this.onTap)
     this.app.stage.off('rightup', this.onUp)
     this.app.stage.off('rightupoutside', this.onUp)
     this.app.stage.off('pointerdown', this.onStageDown)
@@ -152,8 +157,8 @@ export class TimelineDnDController {
       container.on('pointerout', () => {
         if (!this.state.isDragging && !this.state.isResizing) container.cursor = 'pointer'
       })
-      container.on('rightclick', (e) => { ;(e as any).preventDefault?.() })
-      container.on('contextmenu', (e) => { ;(e as any).preventDefault?.() })
+      container.on('rightclick', (e) => { (e as any).preventDefault?.() })
+      container.on('contextmenu', (e) => { (e as any).preventDefault?.() })
       container.on('pointerdown', (event) => this.onDownTask(event as any, task, container, layout))
       container.on('rightdown', () => {
         this.state.isCreatingDependency = true
@@ -176,6 +181,7 @@ export class TimelineDnDController {
     this.app.stage.on('globalpointerup', this.onUp)
     this.app.stage.on('pointerup', this.onUp)
     this.app.stage.on('pointerupoutside', this.onUp)
+    this.app.stage.on('pointertap', this.onTap)
     this.app.stage.on('rightup', this.onUp)
     this.app.stage.on('rightupoutside', this.onUp)
     this.app.stage.on('pointerdown', this.onStageDown)
@@ -196,8 +202,7 @@ export class TimelineDnDController {
       this.backgroundHitRect = new Graphics()
       // Transparent fill just to maintain a drawable; events use hitArea below
       this.backgroundHitRect.alpha = 0
-      ;(this.backgroundHitRect as any).eventMode = 'static'
-      this.backgroundHitRect.on('pointerdown', this.onStageDown)
+      ;(this.backgroundHitRect as any).eventMode = 'none' // no overlay handlers; stage handles default behavior
       this.layers.background.addChildAt(this.backgroundHitRect, 0)
     }
     // Cover a very large area in viewport space so panning/zooming still finds empty clicks
@@ -210,6 +215,8 @@ export class TimelineDnDController {
     this.backgroundHitRect.fill({ color: 0x000000, alpha: 0 })
     this.backgroundHitRect.hitArea = new Rectangle(x, y, w, h)
   }
+
+  // Removed overlay 'empty pointer up' logic per default-case behavior
 
   private onDownTask = (event: any, task: TaskLike, container: Container, layout: TaskLayout) => {
     const globalPos = event.global
@@ -243,10 +250,11 @@ export class TimelineDnDController {
         dragPreview: null,
         dependencyPreview: null,
         initialDuration: (task as any).durationDays,
-        dropProcessed: false
+        dropProcessed: false,
+        minAllowedDayIndex: this.computeMinAllowedDayIndex((task as any).id)
       } as any
       container.cursor = 'ew-resize'
-      if (this.app.view) { (this.app.view as HTMLCanvasElement).style.cursor = 'ew-resize' }
+      this.app.renderer?.events?.setCursor?.('ew-resize')
       this.callbacks.onDragStart && this.callbacks.onDragStart()
     } else {
       const taskY = layout.centerY - this.config.TASK_HEIGHT / 2
@@ -267,7 +275,8 @@ export class TimelineDnDController {
         dragPreview: null,
         dependencyPreview: null,
         initialDuration: 0,
-        dropProcessed: false
+        dropProcessed: false,
+        minAllowedDayIndex: this.computeMinAllowedDayIndex((task as any).id)
       } as any
       // Do not change cursors or call onDragStart until threshold exceeded
     }
@@ -286,7 +295,7 @@ export class TimelineDnDController {
       if (distanceSq >= thresholdSq) {
         this.state.isDragging = true
         this.state.dragPending = false
-        if (this.app.view) { (this.app.view as HTMLCanvasElement).style.cursor = 'grabbing' }
+        this.app.renderer?.events?.setCursor?.('grabbing')
         this.callbacks.onDragStart && this.callbacks.onDragStart()
       }
     }
@@ -304,9 +313,10 @@ export class TimelineDnDController {
       let hoverId: string | null = null
       let dstX = localPos.x
       let dstY = localPos.y
-      const hit = (this.app.renderer as any).events?.hitTest?.(globalPos, this.app.stage)
-      if (hit) {
-        const matchedId = this.resolveTaskIdFromHit(hit as any)
+      const rb = (this.app.renderer as any)?.events?.rootBoundary
+      const hitTarget = rb?.hitTest?.(globalPos.x, globalPos.y)
+      if (hitTarget) {
+        const matchedId = this.resolveTaskIdFromHit(hitTarget as any)
         if (matchedId && matchedId !== this.state.dependencySourceTaskId) {
           hoverId = matchedId
           const a = this.scene.getAnchors(matchedId)
@@ -381,11 +391,15 @@ export class TimelineDnDController {
         const targetLineY = nearest.centerY
         const snappedTopY = targetLineY - radius
         const { snappedX, dayIndex } = this.utils.snapXToDay(dragX)
-        this.state.snapDayIndex = dayIndex
+        const minIdx = this.state.minAllowedDayIndex ?? 0
+        const clampedDayIndex = Math.max(dayIndex, minIdx)
+        this.state.snapDayIndex = clampedDayIndex
         this.state.snapStaffId = (nearest.staff as any).id
         this.state.snapStaffLine = nearest.staffLine
-        this.state.snapSnappedX = snappedX
-        const drawX = this.state.snapSnappedX ?? snappedX
+        const minX = this.config.LEFT_MARGIN + (minIdx * this.config.DAY_WIDTH)
+        const clampedX = Math.max(snappedX, minX)
+        this.state.snapSnappedX = clampedX
+        const drawX = clampedX
         drawNoteBodyPathAbsolute(preview, drawX, snappedTopY, taskWidth, this.config.TASK_HEIGHT)
         preview.fill({ color: 0x8B5CF6, alpha: 0.5 })
         preview.stroke({ width: 2, color: 0xFCD34D, alpha: 1 })
@@ -417,9 +431,10 @@ export class TimelineDnDController {
       let targetTaskId: string | null = this.state.dependencyHoverTargetId || null
       if (!targetTaskId) {
         // Prefer renderer hitTest, then precise local hit check
-        const hit = (this.app.renderer as any).events?.hitTest?.(globalPos, this.app.stage)
-        if (hit) {
-          const matchedId = this.resolveTaskIdFromHit(hit as any)
+        const rb = (this.app.renderer as any)?.events?.rootBoundary
+        const hitTarget = rb?.hitTest?.(globalPos.x, globalPos.y)
+        if (hitTarget) {
+          const matchedId = this.resolveTaskIdFromHit(hitTarget as any)
           if (matchedId && matchedId !== this.state.dependencySourceTaskId) targetTaskId = matchedId
         }
         if (!targetTaskId) {
@@ -473,7 +488,8 @@ export class TimelineDnDController {
         : (this.state.snapSnappedX !== undefined
             ? Math.round((this.state.snapSnappedX - this.config.LEFT_MARGIN) / this.config.DAY_WIDTH)
             : this.utils.snapXToDay(dropX).dayIndex)
-      const startDate = this.utils.dayIndexToIsoDate(dayIndex)
+      const clampedDayIndex = Math.max(dayIndex, this.state.minAllowedDayIndex ?? 0)
+      const startDate = this.utils.dayIndexToIsoDate(clampedDayIndex)
       const updates: any = { startDate }
       if (this.state.snapStaffId !== undefined && this.state.snapStaffLine !== undefined) {
         updates.staffId = this.state.snapStaffId
@@ -494,18 +510,30 @@ export class TimelineDnDController {
       this.resetCursor()
     }
 
-    // Empty-space click finalize: if pointer down began on empty and no interaction occurred
-    if (!this.state.isDragging && !this.state.isResizing && !this.state.isCreatingDependency && !this.state.dragPending) {
-      if (this.state.stageDownOnEmpty) {
-        // Ensure we didn't release over a task
-        const hit = (this.app.renderer as any).events?.hitTest?.(globalPos, this.layers.tasks) ||
-                    (this.app.renderer as any).events?.hitTest?.(globalPos, this.app.stage)
-        if (!hit || !this.resolveTaskIdFromHit(hit)) {
-          this.callbacks.select([])
-        }
+    // Empty-space click finalize: only if pointerDown began on stage and no interaction occurred
+    if (this.state.pointerDownOnStage && !this.state.isDragging && !this.state.isResizing && !this.state.isCreatingDependency && !this.state.dragPending) {
+      // Default-case behavior: if pointer up did not end over an interactive task, clear selection
+      // Prefer FederatedPointerEvent.target which is already resolved by Pixi's EventSystem
+      const target = (event as any).target
+      const matchedIdFromTarget = target ? this.resolveTaskIdFromHit(target) : null
+      if (!matchedIdFromTarget) {
+        this.callbacks.select([])
       }
     }
     this.state.stageDownOnEmpty = false
+    this.state.pointerDownOnStage = false
+  }
+
+  // Tap fallback: if a simple click occurs and it wasn't on a task, clear selection
+  private onTap = (event: any) => {
+    if (event?.button === 2) return
+    if (this.state.isDragging || this.state.isResizing || this.state.isCreatingDependency) return
+    const target = (event as any).target
+    const matchedIdFromTarget = target ? this.resolveTaskIdFromHit(target) : null
+    if (!matchedIdFromTarget) {
+      this.callbacks.select([])
+    }
+    this.state.pointerDownOnStage = false
   }
 
   // Fallback for pointer releases outside the canvas/browser window
@@ -554,18 +582,15 @@ export class TimelineDnDController {
     if (event?.button === 2) return // ignore right-click
     // If currently interacting, don't clear
     if (this.state.isDragging || this.state.isResizing || this.state.isCreatingDependency || this.state.dragPending) return
-    const globalPos = event.global
-    // Hit test against tasks layer first; if nothing, also check entire stage
-    const hit = (this.app.renderer as any).events?.hitTest?.(globalPos, this.layers.tasks) ||
-                (this.app.renderer as any).events?.hitTest?.(globalPos, this.app.stage)
-    if (hit) {
-      const matchedId = this.resolveTaskIdFromHit(hit)
-      if (matchedId) {
-        this.state.stageDownOnEmpty = false
-        return // clicked on a task → don't clear now
-      }
+    // If the resolved target is the stage, it's an empty-space click: clear immediately
+    const target = (event as any).target
+    this.state.pointerDownOnStage = (target === this.app.stage)
+    if (target === this.app.stage) {
+      this.callbacks.select([])
+      this.state.stageDownOnEmpty = false
+      return
     }
-    // Defer clearing until pointerup to avoid conflicts with other handlers
+    // Otherwise, defer to pointerup default-case
     this.state.stageDownOnEmpty = true
   }
 
@@ -588,12 +613,40 @@ export class TimelineDnDController {
       snapSnappedX: undefined,
       dropProcessed: false,
       dependencySourceTaskId: null,
-      dependencyHoverTargetId: null
+      dependencyHoverTargetId: null,
+      minAllowedDayIndex: undefined
     }
   }
 
   private resetCursor(): void {
-    if (this.app.view) { (this.app.view as HTMLCanvasElement).style.cursor = 'default' }
+    this.app.renderer?.events?.setCursor?.(null as any)
+  }
+
+  /**
+   * Compute the minimum allowed day index for a task so that it does not start before
+   * any of its predecessors (dependencies with edges incoming to this task).
+   * Falls back to 0 if unknown.
+   */
+  private computeMinAllowedDayIndex(taskId: string): number {
+    try {
+      const deps = this.data.getDependencies()
+      const tasks = this.data.getTasks()
+      let minIdx = 0
+      for (const dep of Object.values(deps)) {
+        if (dep.dstTaskId === taskId) {
+          const src = tasks[dep.srcTaskId]
+          if (!src) continue
+          const start = new Date(src.startDate)
+          const projStart = this.utils.getProjectStartDate()
+          const srcDayIndex = Math.floor((start.getTime() - projStart.getTime()) / (1000 * 60 * 60 * 24))
+          const requiredIdx = srcDayIndex + (src as any).durationDays
+          if (requiredIdx > minIdx) minIdx = requiredIdx
+        }
+      }
+      return minIdx
+    } catch {
+      return 0
+    }
   }
 }
 

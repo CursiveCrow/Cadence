@@ -33,7 +33,7 @@ export const TaskPopup: React.FC<TaskPopupProps> = ({
     updateTask(projectId, taskId, { title: newTitle })
   }
 
-  const handleStatusChange = (newStatus: string) => {
+  const handleStatusChange = (newStatus: TaskStatus) => {
     updateTask(projectId, taskId, { status: newStatus })
   }
 
@@ -118,7 +118,7 @@ export const TaskPopup: React.FC<TaskPopupProps> = ({
             <label>Status:</label>
             <select
               value={task.status}
-              onChange={(e) => handleStatusChange(e.target.value)}
+              onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
               className="task-select"
             >
               <option value={TaskStatus.NOT_STARTED}>♪ Not Started</option>

@@ -18,13 +18,11 @@ export const TIMELINE_CONFIG: TimelineConfig = {
   STAFF_LINE_COLOR: 0xffffff,
   TASK_COLORS: {
     default: 0x8B5CF6,
-    pending: 0x8B5CF6,
+    not_started: 0x6366F1,
     in_progress: 0xC084FC,
-    inProgress: 0xC084FC,
     completed: 0x10B981,
     blocked: 0xEF4444,
-    cancelled: 0x6B7280,
-    not_started: 0x6366F1
+    cancelled: 0x6B7280
   },
   DEPENDENCY_COLOR: 0x666666,
   SELECTION_COLOR: 0xF59E0B
@@ -32,10 +30,10 @@ export const TIMELINE_CONFIG: TimelineConfig = {
 
 // Mapping from task status to accidental symbol used in UI
 export const STATUS_TO_ACCIDENTAL: Record<string, string> = {
-  blocked: '♭',
-  completed: '♮',
+  not_started: '',
   in_progress: '♯',
-  inprogress: '♯',
+  completed: '♮',
+  blocked: '♭',
   cancelled: '𝄪',
 }
 

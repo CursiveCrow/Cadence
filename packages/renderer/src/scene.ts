@@ -410,6 +410,10 @@ export function createTimelineLayers(app: Application): {
 
   // Event routing: ensure stage routes events; only task containers should receive pointer events
   app.stage.eventMode = 'static'
+  // Ensure stage is hit-testable across entire canvas for default-case empty-clicks
+  if (!(app.stage as any).hitArea) {
+    (app.stage as any).hitArea = new Rectangle(0, 0, app.screen.width, app.screen.height)
+  }
   viewport.eventMode = 'passive'
   background.eventMode = 'none'
   dependencies.eventMode = 'none'
@@ -496,9 +500,26 @@ export class TimelineSceneManager {
       rightCenterY: layout.centerY,
     })
 
-    // Draw note into container
-    drawTaskNote(container, config, layout, title || '', status, false)
-    ;(container as any).__meta = { startX: 0, width: layout.width, topY: 0 }
+    // Only redraw if something meaningful changed to reduce GC/CPU
+    const prevMeta = (container as any).__meta || {}
+    const shouldRedraw =
+      prevMeta.width !== layout.width ||
+      prevMeta.centerY !== layout.centerY ||
+      prevMeta.startX !== layout.startX ||
+      prevMeta.title !== (title || '') ||
+      prevMeta.status !== (status || '')
+
+    if (shouldRedraw) {
+      drawTaskNote(container, config, layout, title || '', status, false)
+      ;(container as any).__meta = {
+        startX: layout.startX,
+        width: layout.width,
+        topY: layout.topY,
+        centerY: layout.centerY,
+        title: title || '',
+        status: status || ''
+      }
+    }
     container.hitArea = new Rectangle(0, 0, layout.width, config.TASK_HEIGHT)
 
     return { container, created }

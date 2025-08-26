@@ -4,7 +4,7 @@
  */
 
 import { getProjectDoc, TaskData, DependencyData } from './ydoc'
-import { TaskStatus, DependencyType } from '@cadence/core'
+import { TaskStatus } from '@cadence/core'
 
 export function createTask(
   projectId: string,
@@ -87,7 +87,7 @@ export function updateTaskStatus(
   taskId: string,
   status: TaskStatus
 ): void {
-  updateTask(projectId, taskId, { status: status.toString() })
+  updateTask(projectId, taskId, { status })
 }
 
 export function updateTaskLane(

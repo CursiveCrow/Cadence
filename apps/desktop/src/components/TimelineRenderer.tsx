@@ -3,8 +3,7 @@ import { useDispatch } from 'react-redux'
 import { setSelection } from '@cadence/state'
 import { TaskData, DependencyData, updateTask, createDependency } from '@cadence/crdt'
 import { Staff } from '@cadence/core'
-import { checkWebGPUAvailability, logWebGPUStatus, computeTaskLayout, drawDependencyArrow, createTimelineLayers, ensureGridAndStaff, SpatialHash, TimelineSceneManager, TimelineDnDController, TIMELINE_CONFIG, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC, type TimelineConfig } from '@cadence/renderer'
-import { Application, Container, Rectangle, RendererType } from 'pixi.js'
+import { checkWebGPUAvailability, logWebGPUStatus, computeTaskLayout, drawDependencyArrow, createTimelineLayers, ensureGridAndStaff, SpatialHash, TimelineSceneManager, TimelineDnDController, TIMELINE_CONFIG, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC, type TimelineConfig, Application, Container, Rectangle, RendererType } from '@cadence/renderer'
 import './TimelineRenderer.css'
 
 // TIMELINE_CONFIG now shared from @cadence/renderer
@@ -33,7 +32,7 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
   onDragStart,
   onDragEnd
 }) => {
-  console.log('=== TimelineRenderer MOUNTING ===')
+  if ((import.meta as any).env?.VITE_DEBUG_RENDERER === 'true') console.log('=== TimelineRenderer MOUNTING ===')
   
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const appRef = useRef<Application | null>(null)
@@ -45,10 +44,12 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
   
   // Log props only on mount
   useEffect(() => {
-    console.log('TimelineRenderer initial props:', {
-      tasksCount: Object.keys(tasks).length,
-      staffsCount: staffs.length
-    })
+    if ((import.meta as any).env?.VITE_DEBUG_RENDERER === 'true') {
+      console.log('TimelineRenderer initial props:', {
+        tasksCount: Object.keys(tasks).length,
+        staffsCount: staffs.length
+      })
+    }
   }, [])
   
   // Drag and drop state now owned by TimelineDnDController
@@ -77,6 +78,7 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
   const sceneRef = useRef<TimelineSceneManager | null>(null)
   const spatialRef = useRef<SpatialHash | null>(null)
   const dndRef = useRef<TimelineDnDController | null>(null)
+  const tickerAddedRef = useRef(false)
 
   useEffect(() => {
     tasksRef.current = tasks
@@ -120,7 +122,7 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
         const rect = canvas.getBoundingClientRect()
         const width = Math.max(rect.width, 100) || window.innerWidth
         const height = Math.max(rect.height, 100) || window.innerHeight
-        console.log('Canvas dimensions:', width, 'x', height)
+        if ((import.meta as any).env?.VITE_DEBUG_RENDERER === 'true') console.log('Canvas dimensions:', width, 'x', height)
         
         // Canvas must have non-zero dimensions
         if (width <= 0 || height <= 0) {
@@ -181,7 +183,7 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
         layers.selection.visible = true
         layers.dragLayer.visible = true
         
-        console.log('Layers initialized:', {
+        if ((import.meta as any).env?.VITE_DEBUG_RENDERER === 'true') console.log('Layers initialized:', {
           viewport: !!layers.viewport,
           background: !!layers.background,
           deps: !!layers.dependencies,
@@ -224,18 +226,21 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
         
         if (mounted) {
         setIsRendererInitialized(true)
-        console.log('Direct PixiJS renderer initialized with', app.renderer.type === RendererType.WEBGPU ? 'WebGPU' : 'WebGL')
+        if ((import.meta as any).env?.VITE_DEBUG_RENDERER === 'true') console.log('Direct PixiJS renderer initialized with', app.renderer.type === RendererType.WEBGPU ? 'WebGPU' : 'WebGL')
           
           // Set up continuous render loop - CRITICAL for WebGPU
           // Must be AFTER setIsRendererInitialized to prevent early return spam
-          app.ticker.add(() => {
-            try {
-              renderScene()
-            } catch (error) {
-              console.error('Render error:', error)
-            }
-          })
-          console.log('Render loop started')
+          if (!tickerAddedRef.current) {
+            tickerAddedRef.current = true
+            app.ticker.add(() => {
+              try {
+                renderScene()
+              } catch (error) {
+                console.error('Render error:', error)
+              }
+            })
+            if ((import.meta as any).env?.VITE_DEBUG_RENDERER === 'true') console.log('Render loop started')
+          }
         }
       } catch (error) {
         console.error('Failed to initialize renderer:', error)
@@ -249,25 +254,30 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
     }
 
     // Initialize after a short delay to ensure canvas is ready
-    console.log('=== useEffect RUNNING - Waiting for next frame ===')
+    if ((import.meta as any).env?.VITE_DEBUG_RENDERER === 'true') console.log('=== useEffect RUNNING - Waiting for next frame ===')
     requestAnimationFrame(() => {
-      console.log('=== About to call initializeRenderer ===')
+      if ((import.meta as any).env?.VITE_DEBUG_RENDERER === 'true') console.log('=== About to call initializeRenderer ===')
       initializeRenderer().then(() => {
-        console.log('=== initializeRenderer COMPLETED ===')
+        if ((import.meta as any).env?.VITE_DEBUG_RENDERER === 'true') console.log('=== initializeRenderer COMPLETED ===')
       }).catch((err) => {
         console.error('=== initializeRenderer FAILED ===', err)
       })
     })
 
     return () => {
-      console.log('useEffect cleanup running')
+      if ((import.meta as any).env?.VITE_DEBUG_RENDERER === 'true') console.log('useEffect cleanup running')
       mounted = false
       cleanupRef.current = true
       
       // Cleanup on unmount
+      // Destroy DnD controller listeners first
+      if (dndRef.current) {
+        try { dndRef.current.destroy() } catch (e) { console.warn('DnD destroy failed', e) }
+        dndRef.current = null
+      }
       const app = appRef.current || localApp
       if (app) {
-        console.log('Cleaning up PixiJS application')
+        if ((import.meta as any).env?.VITE_DEBUG_RENDERER === 'true') console.log('Cleaning up PixiJS application')
         
         // Stop the ticker first to prevent any further rendering
         app.ticker.stop()
@@ -346,14 +356,6 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
     
     // Ensure background drawn once and clear only selection each frame
     ensureGridAndStaff(layers.background!, TIMELINE_CONFIG as unknown as TimelineConfig, staffs, PROJECT_START_DATE, app.screen.width, app.screen.height)
-    // Selection diffing: only redraw when selection actually changes
-    const prevSelection = (scene as any).__prevSelection as string[] | undefined
-    if (!prevSelection || prevSelection.length !== selection.length || prevSelection.some((id, i) => id !== selection[i])) {
-      scene.clearSelection()
-      const cfgSel = TIMELINE_CONFIG as unknown as TimelineConfig
-      for (const id of selection) scene.drawSelection(id, cfgSel)
-      ;(scene as any).__prevSelection = [...selection]
-    }
     
     // Get project start date
     const projectStartDate = PROJECT_START_DATE
@@ -366,8 +368,26 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
       // Rebuild spatial index
       if (spatialRef.current) spatialRef.current.clear()
 
+      // Compute viewport bounds in world space for culling
+      const viewX = -layers.viewport!.x / (layers.viewport!.scale.x || 1)
+      const viewY = -layers.viewport!.y / (layers.viewport!.scale.y || 1)
+      const viewW = app.screen.width / (layers.viewport!.scale.x || 1)
+      const viewH = app.screen.height / (layers.viewport!.scale.y || 1)
+      const buffer = 200 // px buffer around viewport
+
       for (const task of Object.values(tasks)) {
         const layout = computeTaskLayout(cfg, task as any, projectStartDate, staffs as any)
+        // Cull tasks outside the viewport + buffer
+        const taskRight = layout.startX + layout.width
+        const taskBottom = layout.topY + TIMELINE_CONFIG.TASK_HEIGHT
+        const inView =
+          taskRight >= viewX - buffer &&
+          layout.startX <= viewX + viewW + buffer &&
+          taskBottom >= viewY - buffer &&
+          layout.topY <= viewY + viewH + buffer
+        if (!inView) {
+          continue
+        }
         const { container } = scene.upsertTask(task as any, layout, cfg, task.title, task.status as any)
         // Position container so its local (0,0) maps to layout.startX/topY
         container.position.set(layout.startX, layout.topY)
@@ -402,6 +422,12 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
       }
       scene.removeMissingDependencies(currentDepIds)
     }
+
+    // Always redraw selection AFTER tasks/dependencies so it follows latest layouts
+    scene.clearSelection()
+    const cfgSel = TIMELINE_CONFIG as unknown as TimelineConfig
+    for (const id of selection) scene.drawSelection(id, cfgSel)
+    ;(scene as any).__prevSelection = [...selection]
   }
 
   // Render whenever data changes

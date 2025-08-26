@@ -3,7 +3,7 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/test-setup.ts'],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@cadence/core$': '<rootDir>/packages/core/src',
     '^@cadence/state$': '<rootDir>/packages/state/src', 
     '^@cadence/crdt$': '<rootDir>/packages/crdt/src',
@@ -35,6 +35,7 @@ module.exports = {
   transform: {
     '^.+\\.(ts|tsx)$': 'ts-jest'
   },
+  transformIgnorePatterns: ['/node_modules/'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   testTimeout: 10000,
   maxWorkers: '50%'

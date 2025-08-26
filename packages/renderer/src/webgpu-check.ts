@@ -26,7 +26,7 @@ export async function checkWebGPUAvailability(): Promise<WebGPUStatus> {
     }
 
     // Try to get GPU adapter
-    const adapter = await (navigator as any).gpu.requestAdapter()
+    const adapter = await (navigator as unknown as { gpu: { requestAdapter: () => Promise<unknown> } }).gpu.requestAdapter()
     if (!adapter) {
       return {
         available: false,

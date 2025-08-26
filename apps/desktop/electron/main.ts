@@ -31,6 +31,7 @@ async function createWindow() {
       preload,
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
     },
   })
 

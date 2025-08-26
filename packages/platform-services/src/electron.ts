@@ -9,7 +9,9 @@ import { PlatformServices, FileDialogOptions, FileHandle, MessageBoxOptions, Mes
  * Communicates with main process via contextBridge API
  */
 export class ElectronPlatformServices implements PlatformServices {
-  private ipc: any
+  private ipc: {
+    invoke: (channel: string, ...args: unknown[]) => Promise<any>
+  }
 
   constructor() {
     // Access the contextBridge API exposed by preload script

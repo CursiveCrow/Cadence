@@ -4,6 +4,7 @@ import { RootState, setActiveProject, initializeDefaultStaffs, setSelection } fr
 import { useProjectTasks, useProjectDependencies, createTask, createDependency } from '@cadence/crdt'
 import { TaskStatus, DependencyType } from '@cadence/core'
 import { TimelineRenderer } from './TimelineRenderer'
+import { TIMELINE_CONFIG } from '@cadence/renderer'
 import { ProjectHeader } from './ProjectHeader'
 import { TaskPopup } from './TaskPopup'
 import './CadenceMain.css'
@@ -25,11 +26,11 @@ export const CadenceMain: React.FC = () => {
     const task = tasks[taskId]
     if (!task) return null
 
-    // Calculate task position on screen
-    const dayWidth = 60
-    const leftMargin = 80
-    const staffSpacing = 120
-    const staffStartY = 60
+    // Calculate task position on screen using shared TIMELINE_CONFIG
+    const dayWidth = TIMELINE_CONFIG.DAY_WIDTH
+    const leftMargin = TIMELINE_CONFIG.LEFT_MARGIN
+    const staffSpacing = TIMELINE_CONFIG.STAFF_SPACING
+    const staffStartY = TIMELINE_CONFIG.TOP_MARGIN
 
     // Find staff index
     const staffIndex = staffs.findIndex(staff => staff.id === task.staffId)
@@ -43,7 +44,7 @@ export const CadenceMain: React.FC = () => {
 
     // Calculate Y position (based on staff and line)
     const staffY = staffStartY + staffIndex * staffSpacing
-    const STAFF_LINE_SPACING = 18
+    const STAFF_LINE_SPACING = TIMELINE_CONFIG.STAFF_LINE_SPACING
     const taskY = staffY + (task.staffLine * STAFF_LINE_SPACING / 2)
 
     // Convert to screen coordinates (approximate)
@@ -292,9 +293,6 @@ export const CadenceMain: React.FC = () => {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           />
-          <div className="measure-label">
-            Measure Name
-          </div>
         </div>
       </div>
 

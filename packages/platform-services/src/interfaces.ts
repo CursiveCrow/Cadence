@@ -46,13 +46,13 @@ export interface MessageBoxResult {
 }
 
 // Export validation schemas for IPC
-export interface IPCRequest<T = any> {
+export interface IPCRequest<T = unknown> {
   id: string
   channel: string
   payload: T
 }
 
-export interface IPCResponse<T = any> {
+export interface IPCResponse<T = unknown> {
   id: string
   success: boolean
   data?: T

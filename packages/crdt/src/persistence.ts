@@ -22,8 +22,8 @@ export interface PersistenceProvider {
  * - crdt_snapshots table for optimized loading
  */
 export class SQLiteOPFSProvider implements PersistenceProvider {
-  // @ts-ignore - will be used in future implementation
-  private _db: any = null
+  // @ts-expect-error will be used in future implementation
+  private _db: unknown = null
 
   async init(): Promise<void> {
     // TODO: Initialize SQLite WASM with OPFS
