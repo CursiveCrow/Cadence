@@ -36,7 +36,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
   // Drag and drop state
   const [isDragging, setIsDragging] = useState(false)
   const [draggedTask, setDraggedTask] = useState<TaskData | null>(null)
-  const [dragStartPos, setDragStartPos] = useState<{x: number, y: number} | null>(null)
+  const [, setDragStartPos] = useState<{x: number, y: number} | null>(null)
   const [dragCurrentPos, setDragCurrentPos] = useState<{x: number, y: number} | null>(null)
   const [dragOffset, setDragOffset] = useState<{x: number, y: number}>({x: 0, y: 0})
   
@@ -128,10 +128,9 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     const dayWidth = 60
     const leftMargin = 80
     const dayIndex = Math.round((x - leftMargin) / dayWidth)
-    const projectStart = new Date('2024-01-01')
-    const newDate = new Date(projectStart)
-    newDate.setDate(projectStart.getDate() + dayIndex)
-    return newDate.toISOString().split('T')[0]
+    // Use UTC arithmetic to avoid timezone-induced off-by-one
+    const utcDate = new Date(Date.UTC(2024, 0, 1 + dayIndex))
+    return utcDate.toISOString().split('T')[0]
   }
 
   const getStaffFromY = (y: number): {staffId: string, staffLine: number} | null => {
@@ -504,7 +503,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
      // Detect and draw chord bars first (behind tasks)
      const chords = detectChords(tasks)
      chords.forEach(chord => {
-       drawChordBar(ctx, chord, containerRect.width)
+       drawChordBar(ctx, chord)
        drawChordName(ctx, chord) // Draw chord name above first staff
      })
 
@@ -553,7 +552,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
 
     let currentY = 60 // Starting Y position for first staff
 
-    staffs.forEach((staff, staffIndex) => {
+    staffs.forEach((staff) => {
       const staffStartY = currentY
       
       // Draw staff lines
@@ -971,7 +970,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
      return chordName
    }
 
-   const drawChordBar = (ctx: CanvasRenderingContext2D, chord: Chord, canvasWidth: number) => {
+   const drawChordBar = (ctx: CanvasRenderingContext2D, chord: Chord) => {
      const dayWidth = 60
      const leftMargin = 80
      

@@ -22,6 +22,7 @@ export interface PersistenceProvider {
  * - crdt_snapshots table for optimized loading
  */
 export class SQLiteOPFSProvider implements PersistenceProvider {
+  // @ts-ignore - will be used in future implementation
   private _db: any = null
 
   async init(): Promise<void> {

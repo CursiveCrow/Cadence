@@ -2,7 +2,7 @@
  * TaskCard component for displaying task information
  */
 
-import React from 'react'
+// React import not needed with JSX runtime
 import { Task, TaskStatus } from '@cadence/core'
 
 export interface TaskCardProps {
@@ -20,7 +20,7 @@ export function TaskCard({
   selected = false,
   className = '',
 }: TaskCardProps) {
-  const statusColors = {
+  const statusColors: Record<TaskStatus, string> = {
     [TaskStatus.NOT_STARTED]: 'bg-gray-100 text-gray-800',
     [TaskStatus.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
     [TaskStatus.COMPLETED]: 'bg-green-100 text-green-800',

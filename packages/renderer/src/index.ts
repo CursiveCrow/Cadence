@@ -1,8 +1,7 @@
 /**
- * PixiJS implementation, Worker setup, OffscreenCanvas, spatial index
- * Based on Design.md specification
+ * PixiJS v8 WebGPU renderer utilities
+ * WebGPU detection and spatial indexing support
  */
 
-export * from './canvas'
-export * from './worker'
 export * from './spatial'
+export * from './webgpu-check'

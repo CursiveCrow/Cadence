@@ -3,7 +3,8 @@
   "version": "0.0.1",
   "private": true,
   "description": "Domain types, algorithms (DAG, lanes), validation",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "lint": "eslint src --ext .ts,.tsx",

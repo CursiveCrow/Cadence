@@ -4,9 +4,13 @@ import { RootState, setActiveProject, initializeDefaultStaffs, setSelection } fr
 import { useProjectTasks, useProjectDependencies, createTask, createDependency } from '@cadence/crdt'
 import { TaskStatus } from '@cadence/core'
 import { TimelineCanvas } from './TimelineCanvas'
+import { TimelineRenderer } from './TimelineRenderer'
 import { ProjectHeader } from './ProjectHeader'
 import { TaskPopup } from './TaskPopup'
 import './CadenceMain.css'
+
+// Feature flag to enable WebGPU rendering (when available)
+const USE_WEBGPU = true
 
 export const CadenceMain: React.FC = () => {
   const dispatch = useDispatch()
@@ -282,16 +286,29 @@ export const CadenceMain: React.FC = () => {
       
       <div className="cadence-content">
         <div className="timeline-container full-width">
-          <TimelineCanvas 
-            projectId={demoProjectId}
-            tasks={tasks}
-            dependencies={dependencies}
-            selection={selection}
-            viewport={viewport}
-            staffs={staffs}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          />
+          {USE_WEBGPU ? (
+            <TimelineRenderer 
+              projectId={demoProjectId}
+              tasks={tasks}
+              dependencies={dependencies}
+              selection={selection}
+              viewport={viewport}
+              staffs={staffs}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            />
+          ) : (
+            <TimelineCanvas 
+              projectId={demoProjectId}
+              tasks={tasks}
+              dependencies={dependencies}
+              selection={selection}
+              viewport={viewport}
+              staffs={staffs}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            />
+          )}
           <div className="measure-label">
             Measure Name
           </div>

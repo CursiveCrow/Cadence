@@ -32,12 +32,6 @@ export class SpatialHash {
     this.cells = new Map()
   }
 
-  private getCellKey(x: number, y: number): string {
-    const cellX = Math.floor(x / this.cellSize)
-    const cellY = Math.floor(y / this.cellSize)
-    return `${cellX},${cellY}`
-  }
-
   private getCellsForBounds(x: number, y: number, width: number, height: number): string[] {
     const keys: string[] = []
     const startX = Math.floor(x / this.cellSize)

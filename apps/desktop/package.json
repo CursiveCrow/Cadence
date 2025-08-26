@@ -22,16 +22,13 @@
     "@cadence/renderer": "workspace:*",
     "@cadence/state": "workspace:*",
     "@cadence/ui": "workspace:*",
-    "js-tokens": "^9.0.1",
-    "loose-envify": "^1.4.0",
-    "object-assign": "^4.1.1",
+
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-redux": "^9.1.0",
     "@reduxjs/toolkit": "^2.0.1",
     "yjs": "^13.6.10",
-    "pixi.js": "^8.0.0",
-    "@pixi/react": "^7.1.2",
+    "pixi.js": "^8.6.0",
     "scheduler": "^0.26.0"
   },
   "devDependencies": {
