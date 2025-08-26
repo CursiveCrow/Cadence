@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { useDispatch } from 'react-redux'
-import { setSelection } from '@cadence/state'
+import { setSelection, updateViewport } from '@cadence/state'
 import { TaskData, DependencyData, updateTask, createDependency } from '@cadence/crdt'
 import { Staff } from '@cadence/core'
 import { checkWebGPUAvailability, logWebGPUStatus, computeTaskLayout, drawDependencyArrow, createTimelineLayers, ensureGridAndStaff, SpatialHash, TimelineSceneManager, TimelineDnDController, TIMELINE_CONFIG, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC, type TimelineConfig, Application, Container, Rectangle, RendererType } from '@cadence/renderer'
@@ -79,6 +79,12 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
   const spatialRef = useRef<SpatialHash | null>(null)
   const dndRef = useRef<TimelineDnDController | null>(null)
   const tickerAddedRef = useRef(false)
+
+  // Keep latest viewport available to event handlers
+  const viewportRef = useRef(viewport)
+  useEffect(() => { viewportRef.current = viewport }, [viewport])
+  // Panning state
+  const panStateRef = useRef<{ active: boolean; lastX: number; lastY: number; isSpaceHeld: boolean }>({ active: false, lastX: 0, lastY: 0, isSpaceHeld: false })
 
   useEffect(() => {
     tasksRef.current = tasks
@@ -448,6 +454,124 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
     layers.viewport.y = -viewport.y * viewport.zoom
     layers.viewport.scale.set(viewport.zoom)
   }, [viewport, isRendererInitialized])
+
+  // Wheel zoom and middle/space-drag panning
+  useEffect(() => {
+    const app = appRef.current
+    const layers = layersRef.current
+    if (!app || !isRendererInitialized || !layers.viewport) return
+
+    // Zoom centered at cursor position
+    const onWheel = (e: any) => {
+      try {
+        // Prevent outer scroll
+        e?.preventDefault?.()
+        const current = viewportRef.current
+        const zoom0 = current.zoom || 1
+        const sx = (e as any)?.global?.x ?? 0
+        const sy = (e as any)?.global?.y ?? 0
+        // Smaller per-notch zoom: ~2% per wheel notch (deltaY≈±100)
+        const notches = (e?.deltaY ?? 0) / 100
+        const stepPerNotch = 0.02
+        const factor = Math.pow(1 + stepPerNotch, -notches)
+        const minZ = 0.1
+        const maxZ = 10
+        const zoom1 = Math.max(minZ, Math.min(maxZ, zoom0 * factor))
+        if (zoom1 === zoom0) return
+        // World point under cursor should stay fixed
+        const worldX = current.x + sx / zoom0
+        const worldY = current.y + sy / zoom0
+        const newX = worldX - sx / zoom1
+        const newY = worldY - sy / zoom1
+        dispatch(updateViewport({ x: newX, y: newY, zoom: zoom1 }))
+      } catch (err) {
+        console.warn('Wheel zoom handler error', err)
+      }
+    }
+
+    // Panning helpers (use DOM pointer events to avoid interfering with task DnD)
+    const viewEl = app.view as HTMLCanvasElement | null
+    const toViewCoords = (ev: PointerEvent) => {
+      const view = app.view as HTMLCanvasElement
+      const rect = view.getBoundingClientRect()
+      const x = (ev.clientX - rect.left) * (view.width / rect.width)
+      const y = (ev.clientY - rect.top) * (view.height / rect.height)
+      return { x, y }
+    }
+
+    const onPointerDownDom = (ev: PointerEvent) => {
+      if (!viewEl) return
+      const isMiddle = ev.button === 1
+      const useSpacePan = panStateRef.current.isSpaceHeld
+      if (!isMiddle && !useSpacePan) return
+      const pos = toViewCoords(ev)
+      panStateRef.current.active = true
+      panStateRef.current.lastX = pos.x
+      panStateRef.current.lastY = pos.y
+      // Block other handlers (like selection) when initiating pan
+      ev.preventDefault()
+      ev.stopPropagation()
+      ;(app.renderer as any)?.events?.setCursor?.('grabbing')
+    }
+
+    const onPointerMoveWin = (ev: PointerEvent) => {
+      if (!panStateRef.current.active || !viewEl) return
+      const pos = toViewCoords(ev)
+      const dx = pos.x - panStateRef.current.lastX
+      const dy = pos.y - panStateRef.current.lastY
+      panStateRef.current.lastX = pos.x
+      panStateRef.current.lastY = pos.y
+      const current = viewportRef.current
+      const z = current.zoom || 1
+      const newX = current.x - dx / z
+      const newY = current.y - dy / z
+      dispatch(updateViewport({ x: newX, y: newY }))
+    }
+
+    const endPan = () => {
+      if (!panStateRef.current.active) return
+      panStateRef.current.active = false
+      ;(app.renderer as any)?.events?.setCursor?.(null as any)
+    }
+
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.code === 'Space') {
+        panStateRef.current.isSpaceHeld = true
+        if (!panStateRef.current.active) {
+          ;(app.renderer as any)?.events?.setCursor?.('grab')
+        }
+        // Prevent page scroll on space
+        ev.preventDefault()
+      }
+    }
+    const onKeyUp = (ev: KeyboardEvent) => {
+      if (ev.code === 'Space') {
+        panStateRef.current.isSpaceHeld = false
+        if (!panStateRef.current.active) {
+          ;(app.renderer as any)?.events?.setCursor?.(null as any)
+        }
+      }
+    }
+
+    // Attach listeners
+    app.stage.on('wheel', onWheel as any)
+    viewEl?.addEventListener('pointerdown', onPointerDownDom as any, { capture: true })
+    window.addEventListener('pointermove', onPointerMoveWin as any, true)
+    window.addEventListener('pointerup', endPan as any, true)
+    window.addEventListener('blur', endPan as any, true)
+    window.addEventListener('keydown', onKeyDown as any, true)
+    window.addEventListener('keyup', onKeyUp as any, true)
+
+    return () => {
+      try { app.stage.off('wheel', onWheel as any) } catch {}
+      try { viewEl?.removeEventListener('pointerdown', onPointerDownDom as any, { capture: true } as any) } catch {}
+      try { window.removeEventListener('pointermove', onPointerMoveWin as any, true) } catch {}
+      try { window.removeEventListener('pointerup', endPan as any, true) } catch {}
+      try { window.removeEventListener('blur', endPan as any, true) } catch {}
+      try { window.removeEventListener('keydown', onKeyDown as any, true) } catch {}
+      try { window.removeEventListener('keyup', onKeyUp as any, true) } catch {}
+    }
+  }, [isRendererInitialized])
 
   // Show loading or error state
   if (renderError) {
