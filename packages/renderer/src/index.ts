@@ -5,3 +5,4 @@
 
 export * from './spatial'
 export * from './webgpu-check'
+export * from './scene'

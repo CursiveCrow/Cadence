@@ -3,7 +3,7 @@ import { useDispatch } from 'react-redux'
 import { setSelection } from '@cadence/state'
 import { TaskData, DependencyData, updateTask, createDependency } from '@cadence/crdt'
 import { Staff } from '@cadence/core'
-import { checkWebGPUAvailability, logWebGPUStatus } from '@cadence/renderer'
+import { checkWebGPUAvailability, logWebGPUStatus, computeTaskLayout, drawGridAndStaff, drawTaskNote, drawDependencyArrow, type TimelineConfig } from '@cadence/renderer'
 import * as PIXI from 'pixi.js'
 import './TimelineCanvas.css'
 
@@ -140,6 +140,7 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
   })
   
   const taskSpritesRef = useRef<Map<string, PIXI.Container>>(new Map())
+  const dependencyGraphicsRef = useRef<Map<string, PIXI.Graphics>>(new Map())
   const tasksRef = useRef<Record<string, TaskData>>({})
   const dependenciesRef = useRef<Record<string, DependencyData>>({})
   const staffsRef = useRef<Staff[]>([])
@@ -209,6 +210,8 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
           clearBeforeRender: true,
           preserveDrawingBuffer: false,
           powerPreference: 'high-performance',
+          // Delegate resize to Pixi's ResizePlugin
+          resizeTo: (canvas.parentElement || window) as any,
           // Ensure global pointer tracking so drag snapping works even when leaving objects
           eventFeatures: {
             move: true,
@@ -667,37 +670,6 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
 
         // Remove duplicate pointer-up handlers; globalpointerup is the single source of truth now
         
-        // Set up resize handler for WebGPU
-        const handleResize = (): void => {
-          const rect = canvas.getBoundingClientRect()
-          const width = rect.width || window.innerWidth
-          const height = rect.height || window.innerHeight
-          
-          if (app && app.renderer) {
-            console.log('Resizing renderer to:', width, 'x', height)
-            app.renderer.resize(width, height)
-          }
-        }
-        
-        // Add resize listener - handle Electron environment
-        try {
-          if (typeof window !== 'undefined') {
-            const resizeHandler = (_e: UIEvent) => { handleResize() }
-            window.addEventListener('resize', resizeHandler)
-            
-            // Store cleanup function on the app for later
-            ;(app as any).cleanupResize = (): void => {
-              if (typeof window !== 'undefined') {
-                window.removeEventListener('resize', resizeHandler)
-              }
-            }
-          } else {
-            console.warn('Window resize listener not available in this environment')
-          }
-        } catch (e) {
-          console.warn('Could not add resize listener:', e)
-        }
-        
         if (mounted) {
         setIsRendererInitialized(true)
         console.log('Direct PixiJS renderer initialized with', app.renderer.type === PIXI.RendererType.WEBGPU ? 'WebGPU' : 'WebGL')
@@ -792,29 +764,7 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
     }
   }, [])
 
-  // Handle window resizing
-  useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current
-      const app = appRef.current
-      if (!canvas || !app) return
-
-      const container = canvas.parentElement
-      if (!container) return
-
-      const width = container.clientWidth
-      const height = container.clientHeight
-
-      app.renderer.resize(width, height)
-    }
-
-    window.addEventListener('resize', handleResize)
-    
-    // Initial resize
-    handleResize()
-    
-    return () => window.removeEventListener('resize', handleResize)
-  }, [isRendererInitialized])
+  // Resize handled by Pixi's resizeTo option during init
 
   // Helper function to get task position (matching original)
   const getTaskYPosition = (task: TaskData): number => {
@@ -897,352 +847,137 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
       return
     }
     
-    // Clear all layers (keep dragLayer so ghost/preview persists between frames)
+    // Clear background and selection layers only; reuse tasks and dependencies
     layers.background?.removeChildren()
-    layers.dependencies?.removeChildren()
-    layers.tasks?.removeChildren()
     layers.selection?.removeChildren()
-    taskSpritesRef.current.clear()
     
     // Get project start date
     const projectStartDate = PROJECT_START_DATE
     
     // Render background (grid and staff lines)
     if (layers.background) {
-      const graphics = new PIXI.Graphics()
-      // Extend far beyond screen for "infinite" scrolling (365 days worth horizontally, and vertically)
-      const extendedWidth = Math.max(app.screen.width, TIMELINE_CONFIG.DAY_WIDTH * 365)
-      const extendedHeight = Math.max(app.screen.height * 3, 2000) // Extend vertically as well
-      
-      // Draw major vertical grid lines (measures) - extend infinitely downward
-      for (let x = TIMELINE_CONFIG.LEFT_MARGIN; x < extendedWidth; x += TIMELINE_CONFIG.DAY_WIDTH * 7) {
-        graphics.moveTo(x, 0)
-        graphics.lineTo(x, extendedHeight)
-        graphics.stroke({ width: 2, color: TIMELINE_CONFIG.GRID_COLOR_MAJOR, alpha: 0.1 })
-      }
-
-      // Draw minor vertical grid lines (days) - extend infinitely downward
-      for (let x = TIMELINE_CONFIG.LEFT_MARGIN; x < extendedWidth; x += TIMELINE_CONFIG.DAY_WIDTH) {
-        graphics.moveTo(x, 0)
-        graphics.lineTo(x, extendedHeight)
-        graphics.stroke({ width: 1, color: TIMELINE_CONFIG.GRID_COLOR_MINOR, alpha: 0.05 })
-      }
-
-      // Draw musical staffs
-      let currentY = TIMELINE_CONFIG.TOP_MARGIN
-
-      staffs.forEach((staff) => {
-        const staffStartY = currentY
-        
-        // Draw staff lines - extend far to the right
-        for (let line = 0; line < staff.numberOfLines; line++) {
-          const y = staffStartY + line * TIMELINE_CONFIG.STAFF_LINE_SPACING
-          graphics.moveTo(TIMELINE_CONFIG.LEFT_MARGIN, y)
-          graphics.lineTo(extendedWidth, y)
-          graphics.stroke({ width: 1, color: TIMELINE_CONFIG.STAFF_LINE_COLOR, alpha: 0.6 })
-        }
-
-        // Draw staff label
-        const labelText = new PIXI.Text({
-          text: staff.name,
-          style: {
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            fontSize: 14,
-            fontWeight: 'bold',
-            fill: 0xffffff,
-            align: 'right'
-          }
-        })
-        const staffCenterY = staffStartY + ((staff.numberOfLines - 1) * TIMELINE_CONFIG.STAFF_LINE_SPACING) / 2
-        labelText.x = TIMELINE_CONFIG.LEFT_MARGIN - 15 - labelText.width
-        labelText.y = staffCenterY - labelText.height / 2
-        layers.background?.addChild(labelText)
-
-        // Draw treble/bass clef
-        const clefSymbol = staff.name.toLowerCase().includes('treble') ? '𝄞' : 
-                          staff.name.toLowerCase().includes('bass') ? '𝄢' : '♪'
-        const clefText = new PIXI.Text({
-          text: clefSymbol,
-          style: {
-            fontFamily: 'serif',
-            fontSize: 20,
-            fontWeight: 'bold',
-            fill: 0xffffff
-          }
-        })
-        clefText.x = TIMELINE_CONFIG.LEFT_MARGIN + 15 - clefText.width / 2
-        clefText.y = staffCenterY - clefText.height / 2
-        layers.background?.addChild(clefText)
-
-        currentY += TIMELINE_CONFIG.STAFF_SPACING
-      })
-
-      // Draw time axis labels - extend across full timeline
-      const maxDays = Math.floor((extendedWidth - TIMELINE_CONFIG.LEFT_MARGIN) / TIMELINE_CONFIG.DAY_WIDTH)
-      for (let i = 0; i < maxDays; i++) {
-        const x = TIMELINE_CONFIG.LEFT_MARGIN + i * TIMELINE_CONFIG.DAY_WIDTH
-        const date = new Date(projectStartDate)
-        date.setDate(date.getDate() + i)
-        const dateText = new PIXI.Text({
-          text: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          style: {
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            fontSize: 11,
-            fill: 0xffffff
-          }
-        })
-        dateText.x = x + 5
-        dateText.y = 25 - dateText.height / 2
-        layers.background?.addChild(dateText)
-      }
-      
-      // Ensure grid renders behind labels and date text
-      layers.background?.addChildAt(graphics, 0)
+      const cfg = TIMELINE_CONFIG as unknown as TimelineConfig
+      drawGridAndStaff(layers.background, cfg, staffs, projectStartDate, app.screen.width, app.screen.height)
     }
     
     // Render tasks with proper musical note styling
     if (layers.tasks) {
+      const cfg = TIMELINE_CONFIG as unknown as TimelineConfig
+      const currentIds = new Set(Object.keys(tasks))
+
       for (const task of Object.values(tasks)) {
-        const staff = staffs.find(s => s.id === task.staffId)
-        if (!staff) continue
-        
-        // Calculate position
-        const taskStart = new Date(task.startDate)
-        const dayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
-        
-        const startX = TIMELINE_CONFIG.LEFT_MARGIN + dayIndex * TIMELINE_CONFIG.DAY_WIDTH
-        const taskWidth = Math.max(task.durationDays * TIMELINE_CONFIG.DAY_WIDTH - 8, 40)
-        
-        // Get proper Y position using the same logic as original canvas
-        const taskCenterY = getTaskYPosition(task)
-        const taskY = taskCenterY - TIMELINE_CONFIG.TASK_HEIGHT / 2
-        
-        // Create a container to hold graphics and text
-        const taskContainer = new PIXI.Container()
-        const graphics = new PIXI.Graphics()
-        
-        // Determine color based on status
-        const statusKey = (task.status || 'default') as keyof typeof TIMELINE_CONFIG.TASK_COLORS
-        const color = TIMELINE_CONFIG.TASK_COLORS[statusKey] || TIMELINE_CONFIG.TASK_COLORS.default
-        
-        // Draw shadow
-        graphics.roundRect(startX + 2, taskY + 2, taskWidth, TIMELINE_CONFIG.TASK_HEIGHT, 4)
-        graphics.fill({ color: 0x000000, alpha: 0.2 })
-        
-        // Draw main task body with rounded left end (note-inspired)
-        graphics.beginPath()
-        // Start with a circular left end (note head)
-        const radius = TIMELINE_CONFIG.TASK_HEIGHT / 2
-        
-        // Draw the main rounded rectangle shape manually to create the note-like shape
-        graphics.moveTo(startX + radius, taskY)
-        graphics.lineTo(startX + taskWidth - 4, taskY)
-        graphics.quadraticCurveTo(startX + taskWidth, taskY, startX + taskWidth, taskY + 4)
-        graphics.lineTo(startX + taskWidth, taskY + TIMELINE_CONFIG.TASK_HEIGHT - 4)
-        graphics.quadraticCurveTo(startX + taskWidth, taskY + TIMELINE_CONFIG.TASK_HEIGHT, 
-                                  startX + taskWidth - 4, taskY + TIMELINE_CONFIG.TASK_HEIGHT)
-        graphics.lineTo(startX + radius, taskY + TIMELINE_CONFIG.TASK_HEIGHT)
-        graphics.arc(startX + radius, taskCenterY, radius, Math.PI / 2, -Math.PI / 2, false)
-        graphics.closePath()
-        
-        // Apply gradient fill
-        const fillColor = selection.includes(task.id) ? TIMELINE_CONFIG.SELECTION_COLOR : color
-        graphics.fill({ color: fillColor, alpha: 0.9 })
-        
-        // Draw border
-        graphics.stroke({ width: selection.includes(task.id) ? 2 : 1, 
-                         color: selection.includes(task.id) ? 0xFCD34D : 0xffffff, 
-                         alpha: 0.3 })
-        
-        // Draw subtle note-inspired accent on the left (like a note head inner circle)
-        graphics.circle(startX + radius, taskCenterY, radius - 2)
-        graphics.fill({ color: 0xffffff, alpha: 0.2 })
-        
-        // Add accidentals in the center of the circular left end
-        let accidental = ''
-        if (task.status === 'blocked') accidental = '♭'
-        else if (task.status === 'completed') accidental = '♮'
-        else if (task.status === 'in_progress' || task.status === 'inProgress') accidental = '♯'
-        else if (task.status === 'cancelled') accidental = '𝄪'
-        
-        if (accidental) {
-          const accidentalText = new PIXI.Text({
-            text: accidental,
-            style: {
-              fontFamily: 'serif',
-              fontSize: task.status === 'cancelled' ? 16 : 14,
-              fontWeight: 'bold',
-              fill: 0xffffff,
-              align: 'center'
+        const layout = computeTaskLayout(cfg, task as any, projectStartDate, staffs as any)
+
+        let taskContainer = taskSpritesRef.current.get(task.id)
+        if (!taskContainer) {
+          taskContainer = new PIXI.Container()
+          taskContainer.eventMode = 'static'
+          taskContainer.cursor = 'pointer'
+          ;(taskContainer as any).__meta = { startX: layout.startX, width: layout.width, topY: layout.topY }
+
+          // Hover handlers using live meta
+          taskContainer.on('pointermove', (event) => {
+            const meta = (taskContainer as any).__meta
+            const localPos = taskContainer!.toLocal(event.global)
+            const relativeX = localPos.x - meta.startX
+            const isNearRightEdge = relativeX > meta.width - 10 && relativeX >= 0
+            taskContainer!.cursor = isNearRightEdge ? 'ew-resize' : 'grab'
+          })
+
+          taskContainer.on('pointerout', () => {
+            if (!dragStateRef.current.isDragging && !dragStateRef.current.isResizing) {
+              taskContainer!.cursor = 'pointer'
             }
           })
-          accidentalText.x = startX + radius - accidentalText.width / 2
-          accidentalText.y = taskCenterY - accidentalText.height / 2
-          taskContainer.addChild(accidentalText)
-        }
-        
-        // Add task title text
-        if (taskWidth > 30) {
-          const titleText = task.title || `Task ${task.id}`
-          const text = new PIXI.Text({
-            text: titleText,
-            style: {
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-              fontSize: 11,
-              fontWeight: 'bold',
-              fill: 0xffffff,
-              align: 'left'
+
+          taskContainer.on('rightclick', (e) => {
+            ;(e as any).preventDefault?.()
+          })
+
+          taskContainer.on('pointerdown', (event) => {
+            const meta = (taskContainer as any).__meta
+            const localPos = taskContainer!.toLocal(event.global)
+            const relativeX = localPos.x - meta.startX
+            const isNearRightEdge = relativeX > meta.width - 10 && relativeX >= 0
+
+            // Right-click starts dependency creation
+            if ((event as any).button === 2) {
+              dragStateRef.current.isCreatingDependency = true
+              dragStateRef.current.dependencySourceTaskId = task.id
+              if (onDragStart) onDragStart()
+              return
+            }
+
+            // Select the task
+            dispatch(setSelection([task.id]))
+
+            const globalPos = event.global
+            const viewportPos = layers.viewport ? layers.viewport.toLocal(globalPos) : globalPos
+
+            if (isNearRightEdge) {
+              dragStateRef.current = {
+                isDragging: false,
+                isResizing: true,
+                isCreatingDependency: false,
+                draggedTaskId: task.id,
+                draggedTask: task,
+                dragStartX: globalPos.x,
+                dragStartY: globalPos.y,
+                offsetX: 0,
+                offsetY: 0,
+                dragPreview: null,
+                dependencyPreview: null,
+                initialDuration: task.durationDays,
+                snapDayIndex: dragStateRef.current.snapDayIndex,
+                snapStaffId: dragStateRef.current.snapStaffId,
+                snapStaffLine: dragStateRef.current.snapStaffLine,
+                snapSnappedX: dragStateRef.current.snapSnappedX,
+                dropProcessed: false,
+                dependencySourceTaskId: null
+              }
+              taskContainer!.cursor = 'ew-resize'
+              if (app && app.view) {
+                (app.view as HTMLCanvasElement).style.cursor = 'ew-resize'
+              }
+              if (onDragStart) onDragStart()
+            } else {
+              const taskY = layout.centerY - TIMELINE_CONFIG.TASK_HEIGHT / 2
+              dragStateRef.current = {
+                isDragging: true,
+                isResizing: false,
+                isCreatingDependency: false,
+                draggedTaskId: task.id,
+                draggedTask: task,
+                dragStartX: globalPos.x,
+                dragStartY: globalPos.y,
+                offsetX: viewportPos.x - layout.startX,
+                offsetY: viewportPos.y - taskY,
+                dragPreview: null,
+                dependencyPreview: null,
+                initialDuration: 0,
+                snapDayIndex: dragStateRef.current.snapDayIndex,
+                snapStaffId: dragStateRef.current.snapStaffId,
+                snapStaffLine: dragStateRef.current.snapStaffLine,
+                snapSnappedX: dragStateRef.current.snapSnappedX,
+                dropProcessed: false,
+                dependencySourceTaskId: null
+              }
+              if (onDragStart) onDragStart()
+              taskContainer!.cursor = 'grabbing'
+              if (app && app.view) {
+                (app.view as HTMLCanvasElement).style.cursor = 'grabbing'
+              }
             }
           })
-          
-          // Position text after the circular note head
-          const textX = startX + TIMELINE_CONFIG.TASK_HEIGHT + 8
-          text.x = textX
-          text.y = taskCenterY - text.height / 2
-          
-          // Clip text if too long
-          const maxTextWidth = taskWidth - TIMELINE_CONFIG.TASK_HEIGHT - 16
-          if (text.width > maxTextWidth) {
-            // Truncate with ellipsis
-            let truncatedText = titleText
-            while (text.width > maxTextWidth && truncatedText.length > 0) {
-              truncatedText = truncatedText.slice(0, -1)
-              text.text = truncatedText + '...'
-            }
-          }
-          
-          taskContainer.addChild(text)
+
+          taskSpritesRef.current.set(task.id, taskContainer)
+          layers.tasks.addChild(taskContainer)
         }
-        
-        // Add graphics to container at the bottom so text renders on top
-        taskContainer.addChildAt(graphics, 0)
-        
-        // Make interactive
-        taskContainer.eventMode = 'static'
-        taskContainer.cursor = 'pointer'
-        taskContainer.hitArea = new PIXI.Rectangle(startX, taskY, taskWidth, TIMELINE_CONFIG.TASK_HEIGHT)
-        
-        // Add hover handlers for cursor changes
-        taskContainer.on('pointermove', (event) => {
-          const localPos = taskContainer.toLocal(event.global)
-          // Determine proximity to the right edge within the task's own bounds
-          const relativeX = localPos.x - startX
-          const isNearRightEdge = relativeX > taskWidth - 10 && relativeX >= 0
-          
-          // Change cursor based on hover position
-          if (isNearRightEdge) {
-            taskContainer.cursor = 'ew-resize'
-          } else {
-            taskContainer.cursor = 'grab'
-          }
-        })
-        
-        taskContainer.on('pointerout', () => {
-          if (!dragStateRef.current.isDragging && !dragStateRef.current.isResizing) {
-            taskContainer.cursor = 'pointer'
-          }
-        })
 
-        // Prevent native context menu on right-click over tasks
-        taskContainer.on('rightclick', (e) => {
-          e.preventDefault?.()
-        })
-        
-        // Add drag and drop handlers
-        taskContainer.on('pointerdown', (event) => {
-          // Right-click starts dependency creation
-          if ((event as any).button === 2) {
-            dragStateRef.current.isCreatingDependency = true
-            dragStateRef.current.dependencySourceTaskId = task.id
-            // Hide popup during dependency drag
-            if (onDragStart) onDragStart()
-            return
-          }
+        ;(taskContainer as any).__meta = { startX: layout.startX, width: layout.width, topY: layout.topY }
+        drawTaskNote(taskContainer, cfg, layout, task.title || `Task ${task.id}`, task.status, selection.includes(task.id))
 
-          const localPos = taskContainer.toLocal(event.global)
-          // Compute x relative to the left of this note to detect resize handle
-          const relativeX = localPos.x - startX
-          const isNearRightEdge = relativeX > taskWidth - 10 && relativeX >= 0
-          
-          // Select the task
-          dispatch(setSelection([task.id]))
-          
-          const globalPos = event.global
-          // Convert global to local viewport coordinates for proper offset calculation
-          const viewportPos = layers.viewport ? layers.viewport.toLocal(globalPos) : globalPos
-          
-          if (isNearRightEdge) {
-            // Start resizing
-            dragStateRef.current = {
-              isDragging: false,
-              isResizing: true,
-              isCreatingDependency: false,
-              draggedTaskId: task.id,
-              draggedTask: task,
-              dragStartX: globalPos.x,
-              dragStartY: globalPos.y,
-              offsetX: 0,
-              offsetY: 0,
-              dragPreview: null,
-              dependencyPreview: null,
-              initialDuration: task.durationDays,
-              snapDayIndex: dragStateRef.current.snapDayIndex,
-              snapStaffId: dragStateRef.current.snapStaffId,
-              snapStaffLine: dragStateRef.current.snapStaffLine,
-              snapSnappedX: dragStateRef.current.snapSnappedX,
-              dropProcessed: false,
-              dependencySourceTaskId: null
-            }
-            
-            // Change cursor to resizing
-            taskContainer.cursor = 'ew-resize'
-            if (app && app.view) {
-              (app.view as HTMLCanvasElement).style.cursor = 'ew-resize'
-            }
-            // Notify drag start for UI (hide popup)
-            if (onDragStart) {
-              onDragStart()
-            }
-          } else {
-            // Start dragging - calculate offset in viewport space
-            dragStateRef.current = {
-              isDragging: true,
-              isResizing: false,
-              isCreatingDependency: false,
-              draggedTaskId: task.id,
-              draggedTask: task,
-              dragStartX: globalPos.x,
-              dragStartY: globalPos.y,
-              offsetX: viewportPos.x - startX,
-              offsetY: viewportPos.y - taskY,
-              dragPreview: null,
-              dependencyPreview: null,
-              initialDuration: 0,
-              snapDayIndex: dragStateRef.current.snapDayIndex,
-              snapStaffId: dragStateRef.current.snapStaffId,
-              snapStaffLine: dragStateRef.current.snapStaffLine,
-              snapSnappedX: dragStateRef.current.snapSnappedX,
-              dropProcessed: false,
-              dependencySourceTaskId: null
-            }
-            
-            // Call drag start callback if provided
-            if (onDragStart) {
-              onDragStart()
-            }
-            
-            // Change cursor to grabbing
-            taskContainer.cursor = 'grabbing'
-            if (app && app.view) {
-              (app.view as HTMLCanvasElement).style.cursor = 'grabbing'
-            }
-          }
-        })
-        
-        taskSpritesRef.current.set(task.id, taskContainer)
-        layers.tasks.addChild(taskContainer)
-        
-        // Draw selection highlight - conforming to note shape
+        // Selection overlay
         if (selection.includes(task.id) && layers.selection) {
           const selectionGraphics = new PIXI.Graphics()
           const selectionPadding = 3
@@ -1251,33 +986,33 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
           selectionGraphics.beginPath()
           
           // Start with circular left end (note head) with padding
-          const selectionRadius = radius + selectionPadding
-          selectionGraphics.moveTo(startX + radius, taskY - selectionPadding)
+          const selectionRadius = layout.radius + selectionPadding
+          selectionGraphics.moveTo(layout.startX + layout.radius, layout.topY - selectionPadding)
           
           // Top line
-          selectionGraphics.lineTo(startX + taskWidth - 4, taskY - selectionPadding)
+          selectionGraphics.lineTo(layout.startX + layout.width - 4, layout.topY - selectionPadding)
           
           // Top-right corner
           selectionGraphics.quadraticCurveTo(
-            startX + taskWidth + selectionPadding, taskY - selectionPadding,
-            startX + taskWidth + selectionPadding, taskY + 4
+            layout.startX + layout.width + selectionPadding, layout.topY - selectionPadding,
+            layout.startX + layout.width + selectionPadding, layout.topY + 4
           )
           
           // Right side
-          selectionGraphics.lineTo(startX + taskWidth + selectionPadding, taskY + TIMELINE_CONFIG.TASK_HEIGHT - 4)
+          selectionGraphics.lineTo(layout.startX + layout.width + selectionPadding, layout.topY + TIMELINE_CONFIG.TASK_HEIGHT - 4)
           
           // Bottom-right corner
           selectionGraphics.quadraticCurveTo(
-            startX + taskWidth + selectionPadding, taskY + TIMELINE_CONFIG.TASK_HEIGHT + selectionPadding,
-            startX + taskWidth - 4, taskY + TIMELINE_CONFIG.TASK_HEIGHT + selectionPadding
+            layout.startX + layout.width + selectionPadding, layout.topY + TIMELINE_CONFIG.TASK_HEIGHT + selectionPadding,
+            layout.startX + layout.width - 4, layout.topY + TIMELINE_CONFIG.TASK_HEIGHT + selectionPadding
           )
           
           // Bottom line back to circle
-          selectionGraphics.lineTo(startX + radius, taskY + TIMELINE_CONFIG.TASK_HEIGHT + selectionPadding)
+          selectionGraphics.lineTo(layout.startX + layout.radius, layout.topY + TIMELINE_CONFIG.TASK_HEIGHT + selectionPadding)
           
           // Circular left end
           selectionGraphics.arc(
-            startX + radius, taskCenterY, 
+            layout.startX + layout.radius, layout.centerY, 
             selectionRadius, 
             Math.PI / 2, -Math.PI / 2, 
             false
@@ -1288,10 +1023,19 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
           layers.selection.addChild(selectionGraphics)
         }
       }
+
+      // Remove containers for tasks that no longer exist
+      for (const [taskId, container] of taskSpritesRef.current.entries()) {
+        if (!currentIds.has(taskId)) {
+          container.removeFromParent()
+          taskSpritesRef.current.delete(taskId)
+        }
+      }
     }
     
     // Render dependencies
     if (layers.dependencies) {
+      const currentDepIds = new Set(Object.keys(dependencies))
       for (const dependency of Object.values(dependencies)) {
         const srcTask = tasks[dependency.srcTaskId]
         const dstTask = tasks[dependency.dstTaskId]
@@ -1336,41 +1080,23 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
           dstY = getTaskYPosition(dstTask)
         }
         
-        const graphics = new PIXI.Graphics()
-        
-        // Draw bezier curve for dependency
-        graphics.moveTo(srcX, srcY)
-        const controlOffset = Math.abs(dstX - srcX) * 0.3
-        graphics.bezierCurveTo(
-          srcX + controlOffset, srcY,
-          dstX - controlOffset, dstY,
-          dstX, dstY
-        )
-        graphics.stroke({ width: 2, color: TIMELINE_CONFIG.DEPENDENCY_COLOR, alpha: 0.6 })
-        
-        // Draw arrowhead
-        const angle = Math.atan2(dstY - srcY, dstX - srcX)
-        const arrowSize = 8
-        
-        graphics.beginPath()
-        graphics.moveTo(dstX, dstY)
-        graphics.lineTo(
-          dstX - arrowSize * Math.cos(angle - Math.PI / 6),
-          dstY - arrowSize * Math.sin(angle - Math.PI / 6)
-        )
-        graphics.lineTo(
-          dstX - arrowSize * Math.cos(angle + Math.PI / 6),
-          dstY - arrowSize * Math.sin(angle + Math.PI / 6)
-        )
-        graphics.closePath()
-        graphics.fill({ color: TIMELINE_CONFIG.DEPENDENCY_COLOR, alpha: 0.6 })
-        
-        layers.dependencies.addChild(graphics)
+        let graphics = dependencyGraphicsRef.current.get(dependency.id)
+        if (!graphics) {
+          graphics = new PIXI.Graphics()
+          dependencyGraphicsRef.current.set(dependency.id, graphics)
+          layers.dependencies.addChild(graphics)
+        }
+        drawDependencyArrow(graphics, srcX, srcY, dstX, dstY, TIMELINE_CONFIG.DEPENDENCY_COLOR)
+      }
+
+      // Remove dependency graphics that no longer exist
+      for (const [depId, g] of dependencyGraphicsRef.current.entries()) {
+        if (!currentDepIds.has(depId)) {
+          g.removeFromParent()
+          dependencyGraphicsRef.current.delete(depId)
+        }
       }
     }
-    
-    // Force render
-    app.render()
   }
 
   // Render whenever data changes
@@ -1380,7 +1106,7 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
     }
   }, [tasks, dependencies, selection, staffs, isRendererInitialized])
 
-  // Update viewport
+  // Update viewport (rendering handled by ticker)
   useEffect(() => {
     const app = appRef.current
     const layers = layersRef.current
@@ -1390,8 +1116,6 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
     layers.viewport.x = -viewport.x * viewport.zoom
     layers.viewport.y = -viewport.y * viewport.zoom
     layers.viewport.scale.set(viewport.zoom)
-    
-    app.render()
   }, [viewport, isRendererInitialized])
 
   // Show loading or error state

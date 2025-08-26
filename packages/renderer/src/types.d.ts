@@ -1,18 +1,11 @@
 /**
- * Type declarations for PixiJS OffscreenCanvas integration
+ * Type declarations for PixiJS OffscreenCanvas integration (v8)
  */
 
 declare module 'pixi.js' {
-  namespace PIXI {
-    interface ApplicationOptions {
-      canvas?: HTMLCanvasElement | OffscreenCanvas;
-    }
+  interface ApplicationOptions {
+    canvas?: HTMLCanvasElement | OffscreenCanvas
   }
 }
 
-// Extend global types for Web Workers
-declare global {
-  interface Worker {
-    postMessage(message: any, transfer?: Transferable[]): void;
-  }
-}
+export {}

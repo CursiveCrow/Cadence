@@ -10,7 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "pixi.js": "^8.6.0"
+    "pixi.js": "^8.12.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.45",
