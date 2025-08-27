@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Application, TimelineRendererEngine, TIMELINE_CONFIG, PROJECT_START_DATE, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC } from '@cadence/renderer'
+import { Application, TimelineRendererEngine, TIMELINE_CONFIG, PROJECT_START_DATE, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC, StatusGlyphPlugin } from '@cadence/renderer'
 
 export interface RendererReactProps {
     projectId: string
@@ -63,6 +63,7 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
                     canvas,
                     projectId,
                     config: TIMELINE_CONFIG as any,
+                    plugins: [StatusGlyphPlugin],
                     utils: {
                         getProjectStartDate: () => PROJECT_START_DATE,
                         findNearestStaffLine: (y: number) => findNearestStaffLineAt(y, staffsRef.current as any, TIMELINE_CONFIG as any),

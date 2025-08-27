@@ -67,7 +67,7 @@ export class PanZoomController {
             const stepPerNotch = 0.02
             const factor = Math.pow(1 + stepPerNotch, -notches)
             const minZ = 0.1
-            const maxZ = 20
+            const maxZ = 30
             const zoom1 = Math.max(minZ, Math.min(maxZ, Math.round((zoom0 * factor) * 100) / 100))
             if (zoom1 === zoom0) return
             // Anchor zoom at cursor by converting screen X to world using base pixels-per-day
@@ -152,7 +152,7 @@ export class PanZoomController {
         const startZ = this.zoomDrag.startZoom
         const factorX = Math.pow(1.01, dx)
         const minZ = 0.1
-        const maxZ = 20
+        const maxZ = 30
         const nextZ = Math.max(minZ, Math.min(maxZ, Math.round((startZ * factorX) * 100) / 100))
         const basePPD = this.callbacks.getPixelsPerDayBase?.() ?? 60
         const ppd0 = basePPD * (current.zoom || 1)

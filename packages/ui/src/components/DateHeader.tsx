@@ -48,19 +48,28 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
         const leftMostDays = Math.floor((viewport.x - (leftMargin / Math.max(effectiveDayWidth, 0.0001))))
 
         if (scale === 'hour') {
+            // Dynamic density: 4h → 2h → 1h as you zoom in
+            const hourWidth = Math.max(1, effectiveDayWidth / 24)
+            let step = 4
+            if (hourWidth >= 40) step = 1
+            else if (hourWidth >= 20) step = 2
+
             const totalHours = visibleDays * 24
             const startHour = Math.max(0, leftMostDays * 24)
-            for (let i = -12; i < totalHours + 12; i++) {
-                const h = startHour + i
-                const d = Math.floor(h / 24)
+            // start a little before, snapped to step
+            const firstHour = Math.max(0, Math.floor((startHour - step * 2) / step) * step)
+            const endHour = startHour + totalHours + step * 2
+
+            for (let h = firstHour; h <= endHour; h += step) {
                 const hourInDay = h % 24
-                const date = new Date(base.getTime())
-                date.setUTCDate(date.getUTCDate() + d)
-                date.setUTCHours(hourInDay, 0, 0, 0)
-                const text = date.toLocaleTimeString('en-US', { hour: '2-digit' })
+                let hour12 = hourInDay % 12
+                if (hour12 === 0) hour12 = 12
+                const ap = hourInDay < 12 ? 'a' : 'p'
+                const text = `${hour12}${ap}`
                 const xWorld = leftMargin + (h / 24) * effectiveDayWidth
                 const xScreen = worldToScreen(xWorld)
-                labels.push({ x: xScreen + 4, text })
+                // center label on tick
+                labels.push({ x: xScreen, text })
             }
         } else if (scale === 'day') {
             const startDay = Math.max(0, leftMostDays)
@@ -132,7 +141,8 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
         const currentLocalX = e.clientX - rect.left
         const dx = currentLocalX - dragRef.current.originLocalX
         const factor = Math.pow(1.01, dx)
-        const next = Math.max(0.1, Math.min(10, Math.round(start * factor * 100) / 100))
+        // Increase max zoom ceiling to allow tighter hour spacing
+        const next = Math.max(0.1, Math.min(20, Math.round(start * factor * 100) / 100))
         onZoomChange(next, dragRef.current.originLocalX)
     }
     const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -145,7 +155,7 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
     return (
         <div style={containerStyle} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerLeave}>
             {labels.map((d, i) => (
-                <div key={i} style={{ position: 'absolute', top: '50%', left: `${d.x}px`, transform: 'translateY(-50%)', fontSize: 11, whiteSpace: 'nowrap' }}>
+                <div key={i} style={{ position: 'absolute', top: '50%', left: `${d.x}px`, transform: 'translateY(-50%)', fontSize: 9, whiteSpace: 'nowrap' }}>
                     {d.text}
                 </div>
             ))}
