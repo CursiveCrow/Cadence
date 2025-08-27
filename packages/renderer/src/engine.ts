@@ -123,6 +123,21 @@ export class TimelineRendererEngine {
                     getDependencies: () => (this.currentData.dependencies as any),
                 },
                 callbacks: this.opts.callbacks,
+                getDayWidth: () => {
+                    const z2 = this.getViewport().zoom || 1
+                    return Math.max(this.opts.config.DAY_WIDTH * z2, 3)
+                },
+                getTaskHeight: () => {
+                    const cfg = this.opts.config
+                    // Mirror render's vertical scaling/clamp
+                    return Math.max(14, Math.round(cfg.TASK_HEIGHT * this.getVerticalScale()))
+                },
+                // Vertical snapping uses scaled config from the current render
+                getScaledConfig: () => ({
+                    TOP_MARGIN: Math.round(this.opts.config.TOP_MARGIN * this.getVerticalScale()),
+                    STAFF_SPACING: Math.max(20, Math.round(this.opts.config.STAFF_SPACING * this.getVerticalScale())),
+                    STAFF_LINE_SPACING: Math.max(8, Math.round(this.opts.config.STAFF_LINE_SPACING * this.getVerticalScale())),
+                })
             })
 
             // Attach reusable pan/zoom that delegates viewport updates to host

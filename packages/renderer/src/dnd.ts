@@ -44,6 +44,9 @@ interface DnDOptions {
   utils: Utils
   data: DataProviders
   callbacks: Callbacks
+  getDayWidth?: () => number
+  getTaskHeight?: () => number
+  getScaledConfig?: () => { TOP_MARGIN: number; STAFF_SPACING: number; STAFF_LINE_SPACING: number }
 }
 
 export class TimelineDnDController {
@@ -55,6 +58,9 @@ export class TimelineDnDController {
   private utils: Utils
   private data: DataProviders
   private callbacks: Callbacks
+  private getDayWidthFn?: () => number
+  private getTaskHeightFn?: () => number
+  private getScaledConfigFn?: () => { TOP_MARGIN: number; STAFF_SPACING: number; STAFF_LINE_SPACING: number }
 
   private dragPreview: Graphics | null = null
   private dependencyPreview: Graphics | null = null
@@ -95,6 +101,9 @@ export class TimelineDnDController {
     this.utils = opts.utils
     this.data = opts.data
     this.callbacks = opts.callbacks
+    this.getDayWidthFn = opts.getDayWidth
+    this.getTaskHeightFn = opts.getTaskHeight
+    this.getScaledConfigFn = opts.getScaledConfig
 
     this.state = {
       isDragging: false,
@@ -147,7 +156,8 @@ export class TimelineDnDController {
   registerTask(task: TaskLike, container: Container, layout: TaskLayout): void {
     container.eventMode = 'static'
     container.cursor = 'pointer'
-    container.hitArea = new Rectangle(0, 0, layout.width, this.config.TASK_HEIGHT)
+    const taskHReg = this.getTaskHeightFn ? this.getTaskHeightFn() : this.config.TASK_HEIGHT
+    container.hitArea = new Rectangle(0, 0, layout.width, taskHReg)
 
     if (!(container as any).__wired) {
       container.on('pointermove', (event) => {
@@ -349,10 +359,21 @@ export class TimelineDnDController {
       const taskStart = new Date((this.state.draggedTask as any).startDate)
       const projectStartDate = this.utils.getProjectStartDate()
       const dayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
-      const startX = this.config.LEFT_MARGIN + dayIndex * this.config.DAY_WIDTH
-      const newWidth = Math.max(this.config.DAY_WIDTH, localPos.x - startX)
+      const dayWidth = this.getDayWidthFn ? this.getDayWidthFn() : this.config.DAY_WIDTH
+      const startX = this.config.LEFT_MARGIN + dayIndex * dayWidth
+      // Snap the right edge to the current time grid (hour/day/week/month)
+      const snapRight = this.utils.snapXToTime
+        ? this.utils.snapXToTime(localPos.x)
+        : (() => {
+          const rel = Math.round((localPos.x - this.config.LEFT_MARGIN) / Math.max(dayWidth, 0.0001))
+          const snappedX = this.config.LEFT_MARGIN + rel * dayWidth
+          return { snappedX, dayIndex: rel }
+        })()
+      const snappedRightX = Math.max(startX + dayWidth, snapRight.snappedX)
+      const newWidth = Math.max(dayWidth, snappedRightX - startX)
       const taskY = this.scene.taskLayouts.get((this.state.draggedTask as any).id)?.topY ?? 0
-      drawNoteBodyPathAbsolute(g, startX, taskY, newWidth, this.config.TASK_HEIGHT)
+      const taskH = this.getTaskHeightFn ? this.getTaskHeightFn() : this.config.TASK_HEIGHT
+      drawNoteBodyPathAbsolute(g, startX, taskY, newWidth, taskH)
       g.fill({ color: 0x10B981, alpha: 0.5 })
       g.stroke({ width: 2, color: 0x10B981, alpha: 1 })
       if (!this.dragPreview) this.layers.dragLayer.addChild(g)
@@ -369,23 +390,29 @@ export class TimelineDnDController {
       const localClickY = this.state.clickLocalY ?? 0
       const dragX = localPos.x - localClickX
       const dragY = localPos.y - localClickY
-      const taskWidth = (this.state.draggedTask as any).durationDays * this.config.DAY_WIDTH
-      const radius = this.config.TASK_HEIGHT / 2
-      const nearest = this.utils.findNearestStaffLine(dragY + radius)
+      const dayWidth = this.getDayWidthFn ? this.getDayWidthFn() : this.config.DAY_WIDTH
+      const layoutForTask = this.scene.taskLayouts.get((this.state.draggedTask as any).id)
+      const taskWidth = layoutForTask ? layoutForTask.width : Math.max(dayWidth, (this.state.draggedTask as any).durationDays * dayWidth)
+      const taskH2 = this.getTaskHeightFn ? this.getTaskHeightFn() : this.config.TASK_HEIGHT
+      const radius = taskH2 / 2
+      const scaledCfg = this.getScaledConfigFn ? this.getScaledConfigFn() : { TOP_MARGIN: this.config.TOP_MARGIN, STAFF_SPACING: this.config.STAFF_SPACING, STAFF_LINE_SPACING: this.config.STAFF_LINE_SPACING }
+      const nearest = this.findNearestStaffLineScaled(dragY + radius, scaledCfg)
       if (nearest) {
         const targetLineY = nearest.centerY
         const snappedTopY = targetLineY - radius
-        const { snappedX, dayIndex } = this.utils.snapXToDay(dragX)
+        const snap = this.utils.snapXToTime ? this.utils.snapXToTime(dragX) : this.utils.snapXToDay(dragX)
+        const snappedX = snap.snappedX
+        const dayIndex = snap.dayIndex
         const minIdx = this.state.minAllowedDayIndex ?? 0
         const clampedDayIndex = Math.max(dayIndex, minIdx)
         this.state.snapDayIndex = clampedDayIndex
         this.state.snapStaffId = (nearest.staff as any).id
         this.state.snapStaffLine = nearest.staffLine
-        const minX = this.config.LEFT_MARGIN + (minIdx * this.config.DAY_WIDTH)
+        const minX = this.config.LEFT_MARGIN + (minIdx * dayWidth)
         const clampedX = Math.max(snappedX, minX)
         this.state.snapSnappedX = clampedX
         const drawX = clampedX
-        drawNoteBodyPathAbsolute(preview, drawX, snappedTopY, taskWidth, this.config.TASK_HEIGHT)
+        drawNoteBodyPathAbsolute(preview, drawX, snappedTopY, taskWidth, taskH2)
         preview.fill({ color: 0x8B5CF6, alpha: 0.5 })
         preview.stroke({ width: 2, color: 0xFCD34D, alpha: 1 })
       }
@@ -439,10 +466,18 @@ export class TimelineDnDController {
     if (this.state.isResizing && this.state.draggedTask && this.state.draggedTaskId) {
       const taskStart = new Date((this.state.draggedTask as any).startDate)
       const projectStartDate = this.utils.getProjectStartDate()
-      const dayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
-      const startX = this.config.LEFT_MARGIN + dayIndex * this.config.DAY_WIDTH
-      const newWidth = Math.max(this.config.DAY_WIDTH, localPos.x - startX)
-      const newDuration = Math.max(1, Math.round(newWidth / this.config.DAY_WIDTH))
+      const startDayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
+      const dayWidth = this.getDayWidthFn ? this.getDayWidthFn() : this.config.DAY_WIDTH
+      // compute snapped right index from current pointer
+      const snapRight = this.utils.snapXToTime
+        ? this.utils.snapXToTime(localPos.x)
+        : (() => {
+          const rel = Math.round((localPos.x - this.config.LEFT_MARGIN) / Math.max(dayWidth, 0.0001))
+          const snappedX = this.config.LEFT_MARGIN + rel * dayWidth
+          return { snappedX, dayIndex: rel }
+        })()
+      const rightIndex = Math.max(startDayIndex + 1, snapRight.dayIndex)
+      const newDuration = Math.max(1, rightIndex - startDayIndex)
       this.callbacks.updateTask(this.projectId, this.state.draggedTaskId, { durationDays: newDuration })
       this.resetState()
       this.callbacks.onDragEnd && this.callbacks.onDragEnd()
@@ -452,7 +487,8 @@ export class TimelineDnDController {
 
     // Drag finalize
     if (this.state.isDragging && this.state.draggedTask && this.state.draggedTaskId) {
-      const radius = this.config.TASK_HEIGHT / 2
+      const taskH = this.getTaskHeightFn ? this.getTaskHeightFn() : this.config.TASK_HEIGHT
+      const radius = taskH / 2
       // Use the same local anchor convention as the ghost: cursor over the original click point
       const localClickX = this.state.clickLocalX ?? 0
       const localClickY = this.state.clickLocalY ?? 0
@@ -462,7 +498,7 @@ export class TimelineDnDController {
       const dayIndex = this.state.snapDayIndex !== undefined
         ? this.state.snapDayIndex
         : (this.state.snapSnappedX !== undefined
-          ? Math.round((this.state.snapSnappedX - this.config.LEFT_MARGIN) / this.config.DAY_WIDTH)
+          ? Math.round((this.state.snapSnappedX - this.config.LEFT_MARGIN) / ((this.getDayWidthFn ? this.getDayWidthFn() : this.config.DAY_WIDTH)))
           : (this.utils.snapXToTime ? this.utils.snapXToTime(dropX).dayIndex : this.utils.snapXToDay(dropX).dayIndex))
       const clampedDayIndex = Math.max(dayIndex, this.state.minAllowedDayIndex ?? 0)
       const startDate = this.utils.dayIndexToIsoDate(clampedDayIndex)
@@ -534,6 +570,29 @@ export class TimelineDnDController {
       current = current.parent
     }
     return null
+  }
+
+  // Find nearest staff line using scaled config (respects verticalScale)
+  private findNearestStaffLineScaled(y: number, scaled: { TOP_MARGIN: number; STAFF_SPACING: number; STAFF_LINE_SPACING: number }): { staff: any; staffLine: number; centerY: number } | null {
+    const staffs = this.data.getStaffs()
+    if (!staffs || staffs.length === 0) return null
+    let closest: { staff: any; staffLine: number; centerY: number } | null = null
+    let minDistance = Infinity
+    const halfStep = scaled.STAFF_LINE_SPACING / 2
+    for (let i = 0; i < staffs.length; i++) {
+      const staff = staffs[i]
+      const staffStartY = scaled.TOP_MARGIN + i * scaled.STAFF_SPACING
+      const maxIndex = (staff.numberOfLines - 1) * 2
+      for (let idx = 0; idx <= maxIndex; idx++) {
+        const centerY = staffStartY + idx * halfStep
+        const dist = Math.abs(y - centerY)
+        if (dist < minDistance) {
+          minDistance = dist
+          closest = { staff, staffLine: idx, centerY }
+        }
+      }
+    }
+    return closest
   }
 
   // More precise: convert global to each container's local and check hitArea.contains
