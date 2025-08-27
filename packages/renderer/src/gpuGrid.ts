@@ -1,4 +1,4 @@
-import { Application, Container, Filter, GlProgram, Graphics, Rectangle } from 'pixi.js'
+import { Application, Container, Filter, GpuProgram, Graphics, Rectangle, UniformGroup } from 'pixi.js'
 
 export type TimeScale = 'hour' | 'day' | 'week' | 'month'
 
@@ -26,104 +26,126 @@ export class GpuTimeGrid {
         this.quad = new Graphics()
         this.container.addChild(this.quad)
 
-        const vertex = `
-      attribute vec2 aPosition;
-      varying vec2 vTextureCoord;
+        const wgsl = `
+struct GlobalFilterUniforms {
+  uInputSize:vec4<f32>,
+  uInputPixel:vec4<f32>,
+  uInputClamp:vec4<f32>,
+  uOutputFrame:vec4<f32>,
+  uGlobalFrame:vec4<f32>,
+  uOutputTexture:vec4<f32>,
+};
 
-      uniform vec4 uInputSize;
-      uniform vec4 uOutputFrame;
-      uniform vec4 uOutputTexture;
+@group(0) @binding(0) var<uniform> gfu: GlobalFilterUniforms;
+@group(0) @binding(1) var uTexture: texture_2d<f32>;
+@group(0) @binding(2) var uSampler : sampler;
 
-      void main(void) {
-          gl_Position = vec4(aPosition * 2.0 - 1.0, 0.0, 1.0);
-          vTextureCoord = aPosition;
-      }
-    `
+struct GridUniforms {
+  uScreenWidth: f32,
+  uScreenHeight: f32,
+  uLeftMarginPx: f32,
+  uViewportXDays: f32,
+  uDayWidthPx: f32,
+  uMinorStepDays: f32,
+  uMajorStepDays: f32,
+  uMinorR: f32, uMinorG: f32, uMinorB: f32, uMinorA: f32,
+  uMajorR: f32, uMajorG: f32, uMajorB: f32, uMajorA: f32,
+  uMinorHalfWidthPx: f32,
+  uMajorHalfWidthPx: f32,
+  uScaleType: f32,
+  uBaseDow: f32,
+  uWeekendAlpha: f32,
+  uGlobalAlpha: f32,
+};
 
-        const fragment = `
-      precision mediump float;
-      varying vec2 vTextureCoord;
+@group(1) @binding(0) var<uniform> grid : GridUniforms;
 
-      // Screen
-      uniform float uScreenWidth;
-      uniform float uScreenHeight;
+struct VSOutput {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv : vec2<f32>,
+};
 
-      // Timeline params
-      uniform float uLeftMarginPx;
-      uniform float uViewportXDays;
-      uniform float uDayWidthPx;
+fn filterVertexPosition(aPosition:vec2<f32>) -> vec4<f32>
+{
+    var position = aPosition * gfu.uOutputFrame.zw + gfu.uOutputFrame.xy;
+    position.x = position.x * (2.0 / gfu.uOutputTexture.x) - 1.0;
+    position.y = position.y * (2.0*gfu.uOutputTexture.z / gfu.uOutputTexture.y) - gfu.uOutputTexture.z;
+    return vec4<f32>(position, 0.0, 1.0);
+}
 
-      // Steps (in days)
-      uniform float uMinorStepDays;
-      uniform float uMajorStepDays;
+fn filterTextureCoord(aPosition:vec2<f32>) -> vec2<f32>
+{
+    return aPosition * (gfu.uOutputFrame.zw * gfu.uInputSize.zw);
+}
 
-      // Colors (0..1) and alpha
-      uniform float uMinorR; uniform float uMinorG; uniform float uMinorB; uniform float uMinorA;
-      uniform float uMajorR; uniform float uMajorG; uniform float uMajorB; uniform float uMajorA;
+@vertex
+fn mainVertex(
+  @location(0) aPosition : vec2<f32>,
+) -> VSOutput {
+  return VSOutput(
+    filterVertexPosition(aPosition),
+    filterTextureCoord(aPosition)
+  );
+}
 
-      // Line half-widths in pixels
-      uniform float uMinorHalfWidthPx;
-      uniform float uMajorHalfWidthPx;
+fn fractf(x: f32) -> f32 { return x - floor(x); }
 
-      // Scale selector (0=hour,1=day,2=week,3=month)
-      uniform float uScaleType;
+fn lineCoverage(distPx: f32, halfWidthPx: f32) -> f32 {
+  let aa = 0.75;
+  return 1.0 - smoothstep(halfWidthPx - aa, halfWidthPx + aa, distPx);
+}
 
-      // Weekend shading (day scale only)
-      uniform float uBaseDow; // 0..6 starting at projectStartDate UTC
-      uniform float uWeekendAlpha; // 0 to disable
-      // Global alpha to control overall subtlety
-      uniform float uGlobalAlpha;
+@fragment
+fn mainFragment(@location(0) uv: vec2<f32>, @builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+  let screenX = position.x;
+  // Convert to world space days: subtract left margin and divide by day width
+  let worldPxX = screenX - grid.uLeftMarginPx;
+  let worldDaysX = grid.uViewportXDays + (worldPxX / max(grid.uDayWidthPx, 0.0001));
 
-      float lineCoverage(float distPx, float halfWidthPx){
-        // Fixed AA width to avoid fwidth dependency in WebGL1; smaller = softer
-        float aa = 0.75;
-        return 1.0 - smoothstep(halfWidthPx - aa, halfWidthPx + aa, distPx);
-      }
+  let qMinor = worldDaysX / max(grid.uMinorStepDays, 0.000001);
+  let qMajor = worldDaysX / max(grid.uMajorStepDays, 0.000001);
+  let tMinor = fractf(qMinor);
+  let tMajor = fractf(qMajor);
 
-      void main(void) {
-        float screenX = vTextureCoord.x * uScreenWidth;
-        float worldPxX = screenX - uLeftMarginPx;
-        float worldDaysX = uViewportXDays + (worldPxX / max(uDayWidthPx, 0.0001));
+  let distMinorPx = min(tMinor, 1.0 - tMinor) * (grid.uMinorStepDays * grid.uDayWidthPx);
+  let distMajorPx = min(tMajor, 1.0 - tMajor) * (grid.uMajorStepDays * grid.uDayWidthPx);
 
-        // Distances to nearest minor/major vertical line in pixels
-        float tMinor = fract(worldDaysX / max(uMinorStepDays, 0.000001));
-        float tMajor = fract(worldDaysX / max(uMajorStepDays, 0.000001));
+  let covMinor = lineCoverage(distMinorPx, grid.uMinorHalfWidthPx);
+  let covMajor = lineCoverage(distMajorPx, grid.uMajorHalfWidthPx);
 
-        float distMinorPx = min(tMinor, 1.0 - tMinor) * (uMinorStepDays * uDayWidthPx);
-        float distMajorPx = min(tMajor, 1.0 - tMajor) * (uMajorStepDays * uDayWidthPx);
+  let minorColor = vec4<f32>(grid.uMinorR, grid.uMinorG, grid.uMinorB, grid.uMinorA);
+  let majorColor = vec4<f32>(grid.uMajorR, grid.uMajorG, grid.uMajorB, grid.uMajorA);
 
-        float covMinor = lineCoverage(distMinorPx, uMinorHalfWidthPx);
-        float covMajor = lineCoverage(distMajorPx, uMajorHalfWidthPx);
+  let wMajor = covMajor;
+  let wMinor = max(0.0, covMinor * (1.0 - wMajor));
+  let majorStrength = wMajor * majorColor.a;
+  let minorStrength = wMinor * minorColor.a;
+  let rgb = majorColor.rgb * majorStrength + minorColor.rgb * minorStrength;
+  var color = vec4<f32>(rgb, clamp(majorStrength + minorStrength, 0.0, 1.0));
 
-        vec4 minorColor = vec4(uMinorR, uMinorG, uMinorB, uMinorA);
-        vec4 majorColor = vec4(uMajorR, uMajorG, uMajorB, uMajorA);
+  // Weekend tint active for day (1.0) and hour (0.0) scales
+  if (grid.uWeekendAlpha > 0.0 && (abs(grid.uScaleType - 1.0) < 0.5 || abs(grid.uScaleType - 0.0) < 0.5)) {
+    let dayIndex = floor(worldDaysX);
+    let dowi: i32 = (i32(grid.uBaseDow) + i32(dayIndex)) % 7;
+    let dow: f32 = f32(dowi);
+    if (abs(dow - 0.0) < 0.5 || abs(dow - 6.0) < 0.5) {
+      let a = clamp(grid.uWeekendAlpha, 0.0, 1.0);
+      let newRgb = color.rgb * (1.0 - a) + vec3<f32>(1.0, 1.0, 1.0) * a;
+      color = vec4<f32>(newRgb, color.a);
+    }
+  }
 
-        // Blend with precedence; brightness is gated by per-line alphas
-        float wMajor = covMajor;
-        float wMinor = max(0.0, covMinor * (1.0 - wMajor));
-        float majorStrength = wMajor * majorColor.a;
-        float minorStrength = wMinor * minorColor.a;
-        vec3 rgb = majorColor.rgb * majorStrength + minorColor.rgb * minorStrength;
-        float a = clamp(majorStrength + minorStrength, 0.0, 1.0);
-        vec4 color = vec4(rgb, a);
-
-        // Weekend bands in day scale (uScaleType == 1.0)
-        if (uWeekendAlpha > 0.0 && abs(uScaleType - 1.0) < 0.5) {
-          float dayIndex = floor(worldDaysX);
-          float dow = mod(uBaseDow + dayIndex, 7.0);
-          if (abs(dow - 0.0) < 0.5 || abs(dow - 6.0) < 0.5) {
-            color.rgb = mix(color.rgb, vec3(1.0), clamp(uWeekendAlpha, 0.0, 1.0));
-          }
-        }
-
-        gl_FragColor = color * uGlobalAlpha;
-      }
-    `
+  return color * grid.uGlobalAlpha;
+}
+        `
 
         this.filter = new Filter({
-            glProgram: new GlProgram({ vertex, fragment }),
+            gpuProgram: GpuProgram.from({
+                vertex: { source: wgsl, entryPoint: 'mainVertex' },
+                fragment: { source: wgsl, entryPoint: 'mainFragment' }
+            }),
             resources: {
-                grid: {
+                grid: new UniformGroup({
                     // Screen
                     uScreenWidth: { value: 0, type: 'f32' },
                     uScreenHeight: { value: 0, type: 'f32' },
@@ -153,7 +175,7 @@ export class GpuTimeGrid {
                     uWeekendAlpha: { value: 0.0, type: 'f32' },
                     // Global alpha
                     uGlobalAlpha: { value: 1.0, type: 'f32' },
-                }
+                })
             }
         })
 

@@ -597,15 +597,9 @@ export class TimelineDnDController {
 
   // More precise: convert global to each container's local and check hitArea.contains
   private findTaskAtGlobal(global: { x: number; y: number }, excludeId?: string): string | null {
-    for (const [taskId, cont] of this.scene.taskContainers.entries()) {
-      if (excludeId && taskId === excludeId) continue
-      const local = cont.toLocal(global as any)
-      const hitArea = (cont as any).hitArea as Rectangle | undefined
-      if (hitArea && hitArea.contains(local.x, local.y)) {
-        return taskId
-      }
-    }
-    return null
+    // Convert to viewport space and query scene spatial index for fast candidates
+    const local = this.layers.viewport ? this.layers.viewport.toLocal(global as any) : global
+    return (this.scene as any).findTaskAtViewportPoint?.(local.x, local.y, excludeId) || null
   }
 
   private onContextMenu = (e: Event) => {

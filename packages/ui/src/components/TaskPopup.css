@@ -101,6 +101,46 @@
   letter-spacing: 0.5px;
 }
 
+.task-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.task-toolbar button {
+  padding: 4px 6px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--ui-surface-1-border);
+  background: var(--ui-surface-1);
+  color: var(--ui-color-text);
+  cursor: pointer;
+}
+
+.task-toolbar button:hover {
+  background: var(--ui-surface-1-focus);
+}
+
+.task-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--ui-surface-1);
+  border: 1px solid var(--ui-surface-1-border);
+  border-radius: var(--ui-radius-md);
+  color: var(--ui-color-text);
+  font-size: 14px;
+}
+
+.task-markdown-preview {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--ui-surface-1-border);
+  border-radius: 6px;
+  color: var(--ui-color-text);
+  font-size: 13px;
+}
+
 .task-input,
 .task-select {
   width: 100%;

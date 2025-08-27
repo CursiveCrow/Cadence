@@ -3,6 +3,7 @@ import { TaskStatus } from '@cadence/core'
 import './TaskPopup.css'
 import '../styles/tokens.css'
 import { TaskPopupTask, TaskPopupStaff } from '../types'
+import { markdownToSafeHtml } from '../utils/markdown'
 
 interface TaskPopupProps {
     task: TaskPopupTask | null
@@ -17,9 +18,10 @@ interface TaskPopupProps {
     onChangeStaff: (staffId: string) => void
     onChangeStaffLine: (staffLine: number) => void
     onChangeAssignee: (assignee: string) => void
+    onChangeDescription?: (description: string) => void
 }
 
-export const TaskPopup: React.FC<TaskPopupProps> = ({ task, staffs, selectedCount, position, onClose, onChangeTitle, onChangeStatus, onChangeDuration, onChangeStartDate, onChangeStaff, onChangeStaffLine, onChangeAssignee }) => {
+export const TaskPopup: React.FC<TaskPopupProps> = ({ task, staffs, selectedCount, position, onClose, onChangeTitle, onChangeStatus, onChangeDuration, onChangeStartDate, onChangeStaff, onChangeStaffLine, onChangeAssignee, onChangeDescription }) => {
     const [isMinimized, setIsMinimized] = useState(false)
 
     if (!task || !position) return null
@@ -43,6 +45,8 @@ export const TaskPopup: React.FC<TaskPopupProps> = ({ task, staffs, selectedCoun
             default: return '♪'
         }
     }
+
+    const descriptionHtml = markdownToSafeHtml(task.description || '')
 
     return (
         <div className="task-popup" style={popupStyle}>
@@ -116,6 +120,18 @@ export const TaskPopup: React.FC<TaskPopupProps> = ({ task, staffs, selectedCoun
                     <div className="task-field">
                         <label>Assignee:</label>
                         <input type="text" value={task.assignee || ''} onChange={(e) => onChangeAssignee(e.target.value)} className="task-input" placeholder="Unassigned" />
+                    </div>
+
+                    <div className="task-field">
+                        <label>Description:</label>
+                        <div className="task-toolbar">
+                            <button type="button" onClick={() => onChangeDescription && onChangeDescription(`**${task.description || ''}**`)} title="Bold">B</button>
+                            <button type="button" onClick={() => onChangeDescription && onChangeDescription(`*${task.description || ''}*`)} title="Italic"><em>I</em></button>
+                            <button type="button" onClick={() => onChangeDescription && onChangeDescription(`${task.description || ''}\\n\\n[link](https://example.com)`)} title="Link">🔗</button>
+                            <button type="button" onClick={() => onChangeDescription && onChangeDescription(`${task.description || ''}\\n\\n\`code\``)} title="Code">{`</>`}</button>
+                        </div>
+                        <textarea value={task.description || ''} onChange={(e) => onChangeDescription && onChangeDescription(e.target.value)} className="task-textarea" rows={4} placeholder="Add details..." />
+                        <div className="task-markdown-preview" dangerouslySetInnerHTML={{ __html: descriptionHtml }} />
                     </div>
 
                     {selectedCount > 1 && (

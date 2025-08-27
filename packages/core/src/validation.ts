@@ -87,6 +87,7 @@ export const IPCUpdateTaskSchema = z.object({
     durationDays: z.number().min(1).max(365).optional(),
     status: z.nativeEnum(TaskStatus).optional(),
     assignee: z.string().optional(),
+    description: z.string().max(2000).optional(),
   }),
 })
 
