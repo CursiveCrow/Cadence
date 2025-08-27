@@ -171,6 +171,7 @@ export const CadenceMain: React.FC = () => {
           onChangeStaff={(staffId) => updateTask(demoProjectId, selectedTask.id, { staffId })}
           onChangeStaffLine={(staffLine) => updateTask(demoProjectId, selectedTask.id, { staffLine })}
           onChangeAssignee={(assignee) => updateTask(demoProjectId, selectedTask.id, { assignee })}
+          onChangeDescription={(description) => updateTask(demoProjectId, selectedTask.id, { description })}
         />
       )}
       <StaffManager isOpen={showStaffManager} onClose={() => setShowStaffManager(false)} />

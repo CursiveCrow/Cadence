@@ -10,6 +10,8 @@ export * from './dnd'
 export * from './config'
 export * from './layout'
 export * from './plugins/status-glyph'
+export * from './resolution'
+export type { RendererPlugin } from './scene'
 export * from './engine'
 export * from './panzoom'
 

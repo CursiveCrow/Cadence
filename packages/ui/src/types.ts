@@ -22,5 +22,6 @@ export interface TaskPopupTask {
   staffId: string
   staffLine: number
   assignee?: string
+  description?: string
 }
 

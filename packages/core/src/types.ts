@@ -19,6 +19,7 @@ export interface Task {
   durationDays: number
   status: TaskStatus
   assignee?: string
+  description?: string
   staffId: string // ID of the staff this task is on
   staffLine: number // Which line on the staff (0 = bottom line, 1 = first space, etc.)
   projectId: string
