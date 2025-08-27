@@ -1,9 +1,13 @@
 import { Application, Container, Rectangle } from 'pixi.js'
 import { createTimelineLayers, TimelineSceneManager, drawDependencyArrow, type TimelineConfig, type RendererPlugin } from './scene'
+import { createTimelineLayers, TimelineSceneManager, drawDependencyArrow, type TimelineConfig, type RendererPlugin } from './scene'
 import { TimelineDnDController } from './dnd'
 import { PanZoomController, ViewportState } from './panzoom'
 import { checkWebGPUAvailability, logWebGPUStatus, logRendererPreference } from './webgpu-check'
+import { checkWebGPUAvailability, logWebGPUStatus, logRendererPreference } from './webgpu-check'
 import { createGpuTimeGrid, GpuTimeGrid } from './gpuGrid'
+import { computeEffectiveConfig, snapXToTimeWithConfig, computeTaskLayout, getGridParamsForZoom } from './layout'
+import { GridManager } from './gridManager'
 import { computeEffectiveConfig, snapXToTimeWithConfig, computeTaskLayout, getGridParamsForZoom } from './layout'
 import { GridManager } from './gridManager'
 // Intentionally imported for future dynamic tick density; currently computed in scene
@@ -41,7 +45,10 @@ export interface TimelineRendererEngineOptions {
     utils: EngineUtils
     callbacks: EngineCallbacks
     plugins?: RendererPlugin[]
+    plugins?: RendererPlugin[]
 }
+
+// Use shared GridManager
 
 // Use shared GridManager
 
@@ -58,6 +65,8 @@ export class TimelineRendererEngine {
     private setViewport: (v: ViewportState) => void = () => { }
     private currentData: { tasks: EngineTasks; dependencies: EngineDependencies; staffs: any[] } = { tasks: {}, dependencies: {}, staffs: [] }
     private verticalScale: number = 1
+    private gridManager: GridManager | null = null
+    private gpuGrid: GpuTimeGrid | undefined
     private gridManager: GridManager | null = null
     private gpuGrid: GpuTimeGrid | undefined
 
@@ -92,6 +101,8 @@ export class TimelineRendererEngine {
 
                 // Force WebGPU renderer
                 preference: 'webgpu',
+                // Force WebGPU renderer
+                preference: 'webgpu',
                 antialias: true,
                 clearBeforeRender: true,
                 preserveDrawingBuffer: false,
@@ -101,6 +112,7 @@ export class TimelineRendererEngine {
                 hello: false,
             })
             this.app = app
+            try { logRendererPreference(status, 'webgpu') } catch { }
             try { logRendererPreference(status, 'webgpu') } catch { }
             try { (app.renderer as any).roundPixels = true } catch { }
 
@@ -157,6 +169,16 @@ export class TimelineRendererEngine {
                 scene: this.scene,
                 config: this.opts.config,
                 projectId: this.opts.projectId,
+                utils: {
+                    ...this.opts.utils,
+                    // Centralized, time-aware snapping using current effective config and zoom
+                    snapXToTime: (x: number) => {
+                        const vp = this.getViewport()
+                        const eff = computeEffectiveConfig(this.opts.config, vp.zoom || 1, this.getVerticalScale())
+                        const result = snapXToTimeWithConfig(x, eff as any, vp.zoom || 1, this.opts.utils.getProjectStartDate())
+                        return { snappedX: result.snappedX, dayIndex: result.dayIndex }
+                    }
+                },
                 utils: {
                     ...this.opts.utils,
                     // Centralized, time-aware snapping using current effective config and zoom
@@ -224,9 +246,13 @@ export class TimelineRendererEngine {
         const scene = this.scene
         // Update scene zoom for plugin context
         try { scene.setZoom(viewport.zoom || 1) } catch { }
+        // Update scene zoom for plugin context
+        try { scene.setZoom(viewport.zoom || 1) } catch { }
 
         // Compute effective config for current zoom and vertical scale
+        // Compute effective config for current zoom and vertical scale
         const cfg = this.opts.config
+        const effectiveCfg = computeEffectiveConfig(cfg as any, viewport.zoom, this.verticalScale)
         const effectiveCfg = computeEffectiveConfig(cfg as any, viewport.zoom, this.verticalScale)
 
         // Background staff and labels; verticals are handled by WebGPU grid
@@ -244,91 +270,119 @@ export class TimelineRendererEngine {
         // Update GPU grid uniforms (WebGPU)
         const gpuGrid = this.gpuGrid
         if (gpuGrid) {
-            try {
-                const screenW = app.screen.width
-                const screenH = app.screen.height
-                const cfgEff = effectiveCfg as any
-                const projectStart = this.opts.utils.getProjectStartDate()
-                const gp = getGridParamsForZoom(viewport.zoom || 1, projectStart)
+            // Update GPU grid uniforms (WebGPU)
+            const gpuGrid = this.gpuGrid
+            if (gpuGrid) {
+                try {
+                    const screenW = app.screen.width
+                    const screenH = app.screen.height
+                    const cfgEff = effectiveCfg as any
+                    const cfgEff = effectiveCfg as any
+                    const projectStart = this.opts.utils.getProjectStartDate()
+                    const gp = getGridParamsForZoom(viewport.zoom || 1, projectStart)
+
+                    gpuGrid.container.visible = true
+                    gpuGrid.setSize(screenW, screenH)
+                    gpuGrid.updateUniforms({
+                        const gp = getGridParamsForZoom(viewport.zoom || 1, projectStart)
 
                 gpuGrid.container.visible = true
                 gpuGrid.setSize(screenW, screenH)
                 gpuGrid.updateUniforms({
-                    screenWidth: screenW,
-                    screenHeight: screenH,
-                    leftMarginPx: cfgEff.LEFT_MARGIN,
-                    viewportXDays: viewport.x,
-                    dayWidthPx: cfgEff.DAY_WIDTH,
-                    minorStepDays: gp.minorStepDays,
-                    majorStepDays: gp.majorStepDays,
-                    minorColor: cfgEff.GRID_COLOR_MINOR,
-                    majorColor: cfgEff.GRID_COLOR_MAJOR,
-                    minorAlpha: gp.minorAlpha,
-                    majorAlpha: gp.majorAlpha,
-                    minorLineWidthPx: gp.minorWidthPx,
-                    majorLineWidthPx: gp.majorWidthPx,
-                    scaleType: gp.scaleType as any,
-                    baseDow: gp.baseDow,
-                    weekendAlpha: gp.weekendAlpha,
-                    globalAlpha: gp.globalAlpha,
-                })
-            } catch { }
-        }
+                            screenWidth: screenW,
+                            screenHeight: screenH,
+                            leftMarginPx: cfgEff.LEFT_MARGIN,
+                            leftMarginPx: cfgEff.LEFT_MARGIN,
+                            viewportXDays: viewport.x,
+                            dayWidthPx: cfgEff.DAY_WIDTH,
+                            minorStepDays: gp.minorStepDays,
+                            majorStepDays: gp.majorStepDays,
+                            minorColor: cfgEff.GRID_COLOR_MINOR,
+                            majorColor: cfgEff.GRID_COLOR_MAJOR,
+                            minorAlpha: gp.minorAlpha,
+                            majorAlpha: gp.majorAlpha,
+                            minorLineWidthPx: gp.minorWidthPx,
+                            majorLineWidthPx: gp.majorWidthPx,
+                            scaleType: gp.scaleType as any,
+                            baseDow: gp.baseDow,
+                            weekendAlpha: gp.weekendAlpha,
+                            globalAlpha: gp.globalAlpha,
+                            dayWidthPx: cfgEff.DAY_WIDTH,
+                            minorStepDays: gp.minorStepDays,
+                            majorStepDays: gp.majorStepDays,
+                            minorColor: cfgEff.GRID_COLOR_MINOR,
+                            majorColor: cfgEff.GRID_COLOR_MAJOR,
+                            minorAlpha: gp.minorAlpha,
+                            majorAlpha: gp.majorAlpha,
+                            minorLineWidthPx: gp.minorWidthPx,
+                            majorLineWidthPx: gp.majorWidthPx,
+                            scaleType: gp.scaleType as any,
+                            baseDow: gp.baseDow,
+                            weekendAlpha: gp.weekendAlpha,
+                            globalAlpha: gp.globalAlpha,
+                        })
+                    } catch { }
+                }
 
         // Render tasks
         const projectStartDate = this.opts.utils.getProjectStartDate()
-        const currentIds = new Set(Object.keys(data.tasks))
-        for (const task of Object.values(data.tasks)) {
-            const layout = computeTaskLayout(effectiveCfg as any, task as any, projectStartDate, data.staffs as any)
-            const isSelected = Array.isArray(data.selection) && data.selection.includes((task as any).id)
-            const { container } = scene.upsertTask(task as any, layout, effectiveCfg as any, (task as any).title, (task as any).status, viewport.zoom, isSelected)
-            container.position.set(Math.round(layout.startX), Math.round(layout.topY))
-            container.hitArea = new Rectangle(0, 0, layout.width, effectiveCfg.TASK_HEIGHT)
-            if (this.dnd) this.dnd.registerTask(task as any, container, layout)
-        }
-        scene.removeMissingTasks(currentIds)
+                const currentIds = new Set(Object.keys(data.tasks))
+                for (const task of Object.values(data.tasks)) {
+                    const layout = computeTaskLayout(effectiveCfg as any, task as any, projectStartDate, data.staffs as any)
+                    const isSelected = Array.isArray(data.selection) && data.selection.includes((task as any).id)
+                    const { container } = scene.upsertTask(task as any, layout, effectiveCfg as any, (task as any).title, (task as any).status, viewport.zoom, isSelected)
+                    const isSelected = Array.isArray(data.selection) && data.selection.includes((task as any).id)
+                    const { container } = scene.upsertTask(task as any, layout, effectiveCfg as any, (task as any).title, (task as any).status, viewport.zoom, isSelected)
+                    container.position.set(Math.round(layout.startX), Math.round(layout.topY))
+                    container.hitArea = new Rectangle(0, 0, layout.width, effectiveCfg.TASK_HEIGHT)
+                    if (this.dnd) this.dnd.registerTask(task as any, container, layout)
+                }
+                scene.removeMissingTasks(currentIds)
 
-        // Render dependencies
-        const currentDepIds = new Set(Object.keys(data.dependencies))
-        for (const dependency of Object.values(data.dependencies)) {
-            const srcA = scene.getAnchors((dependency as any).srcTaskId)
-            const dstA = scene.getAnchors((dependency as any).dstTaskId)
-            if (!srcA || !dstA) continue
-            const g = scene.upsertDependency((dependency as any).id)
-            drawDependencyArrow(g, srcA.rightCenterX, srcA.rightCenterY, dstA.leftCenterX, dstA.leftCenterY, cfg.DEPENDENCY_COLOR)
-        }
-        scene.removeMissingDependencies(currentDepIds)
+                // Render dependencies
+                const currentDepIds = new Set(Object.keys(data.dependencies))
+                for (const dependency of Object.values(data.dependencies)) {
+                    const srcA = scene.getAnchors((dependency as any).srcTaskId)
+                    const dstA = scene.getAnchors((dependency as any).dstTaskId)
+                    if (!srcA || !dstA) continue
+                    const g = scene.upsertDependency((dependency as any).id)
+                    drawDependencyArrow(g, srcA.rightCenterX, srcA.rightCenterY, dstA.leftCenterX, dstA.leftCenterY, cfg.DEPENDENCY_COLOR)
+                }
+                scene.removeMissingDependencies(currentDepIds)
 
-        // Selection overlay
-        scene.clearSelection()
-        for (const id of data.selection) scene.drawSelection(id, effectiveCfg as any)
-        // Update spatial index for hit-testing
-        scene.rebuildSpatialIndex(effectiveCfg as any)
-    }
+                // Selection overlay
+                scene.clearSelection()
+                for (const id of data.selection) scene.drawSelection(id, effectiveCfg as any)
+                // Update spatial index for hit-testing
+                scene.rebuildSpatialIndex(effectiveCfg as any)
+                // Update spatial index for hit-testing
+                scene.rebuildSpatialIndex(effectiveCfg as any)
+            }
 
-    getApplication(): Application | null { return this.app }
-    getViewportContainer(): Container | null { return this.layers?.viewport || null }
-    // Expose current effective horizontal scale to host for snapping
-    getViewportScale(): number { return this.getViewport().zoom || 1 }
+            getApplication(): Application | null { return this.app }
+            getViewportContainer(): Container | null { return this.layers?.viewport || null }
+            // Expose current effective horizontal scale to host for snapping
+            getViewportScale(): number { return this.getViewport().zoom || 1 }
 
-    destroy(): void {
-        try { this.dnd?.destroy() } catch { }
-        try { this.panzoom?.destroy() } catch { }
+            destroy(): void {
+                try { this.dnd?.destroy() } catch {}
+        try { this.panzoom?.destroy() } catch {}
         this.dnd = null
         this.panzoom = null
         const app = this.app
-        if (app) {
-            try { app.ticker.stop() } catch { }
-            try { app.stage.removeAllListeners() } catch { }
-            try { app.destroy(true, { children: true, texture: true, textureSource: true, context: true }) } catch { }
-        }
-        try { this.scene?.destroy() } catch { }
+        if(app) {
+                    try { app.ticker.stop() } catch { }
+                    try { app.stage.removeAllListeners() } catch { }
+                    try { app.destroy(true, { children: true, texture: true, textureSource: true, context: true }) } catch { }
+                }
+        try { this.scene?.destroy() } catch {}
+        try { this.scene?.destroy() } catch {}
         this.layers = null
         this.scene = null
         this.app = null
         this.isInitialized = false
         this.tickerAdded = false
-    }
-}
+            }
+        }
 
 
