@@ -70,7 +70,7 @@ export class SQLiteOPFSProvider implements PersistenceProvider {
           if (typeof val === 'number' && Number.isFinite(val)) nextClock = val
         }
         sel.finalize()
-      } catch {}
+      } catch { }
       const stmt = this.db.prepare(`INSERT INTO crdt_updates (doc_id, clock, update_data) VALUES (?, ?, ?)`)
       stmt.bind([docId, nextClock, update])
       stmt.step()

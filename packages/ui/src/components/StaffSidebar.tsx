@@ -11,12 +11,17 @@ export interface StaffSidebarProps {
     topMargin: number
     staffSpacing: number
     staffLineSpacing: number
+    /** Height of the date header above the canvas to align Y positions */
+    headerHeight?: number
+    /** Current vertical scale so we can anchor zoom based on the initial value */
+    verticalScale?: number
     onAddNote?: () => void
     onOpenMenu?: () => void
+    onVerticalZoomChange?: (newZoom: number, anchorLocalY: number, startZoom: number) => void
 }
 
-export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, width, topMargin, staffSpacing, staffLineSpacing, onAddNote, onOpenMenu }) => {
-    const zoom = viewport.zoom || 1
+export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, width, topMargin, staffSpacing, staffLineSpacing, headerHeight, verticalScale, onAddNote, onOpenMenu, onVerticalZoomChange }) => {
+    const header = typeof headerHeight === 'number' ? headerHeight : 32
 
     const containerStyle: React.CSSProperties = {
         width: `${width}px`,
@@ -38,8 +43,29 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, wi
         bottom: 0,
     }
 
+    const dragRef = React.useRef<{ active: boolean; originY: number; originLocalY: number; startZoom: number }>({ active: false, originY: 0, originLocalY: 0, startZoom: verticalScale || 1 })
+
+    const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.button !== 1) return
+        try { e.preventDefault() } catch { }
+        try { e.stopPropagation() } catch { }
+        dragRef.current.active = true
+        dragRef.current.originY = e.clientY
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+        dragRef.current.originLocalY = e.clientY - rect.top
+        dragRef.current.startZoom = verticalScale || 1
+    }
+    const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!dragRef.current.active || !onVerticalZoomChange) return
+        const dy = e.clientY - dragRef.current.originY
+        const factor = Math.pow(1.01, -dy) // up = zoom in (more lines per screen)
+        const next = Math.max(0.5, Math.min(3, Math.round(dragRef.current.startZoom * factor * 100) / 100))
+        onVerticalZoomChange(next, dragRef.current.originLocalY, dragRef.current.startZoom)
+    }
+    const onPointerUp = () => { dragRef.current.active = false }
+
     return (
-        <div style={containerStyle}>
+        <div style={containerStyle} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
             <div style={{ position: 'absolute', top: 4, right: 4, left: 4, display: 'flex', justifyContent: 'space-between', gap: 6, pointerEvents: 'auto' }}>
                 <button
                     style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'var(--ui-color-text)', borderRadius: 6, padding: '6px 8px', fontSize: 12, cursor: 'pointer' }}
@@ -59,7 +85,8 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, wi
                 {staffs.map((staff, index) => {
                     const staffStartY = topMargin + index * staffSpacing
                     const staffCenterY = staffStartY + ((staff.numberOfLines - 1) * staffLineSpacing) / 2
-                    const y = (staffCenterY - viewport.y) * zoom
+                    // Map world -> screen without applying horizontal zoom, to stay centered regardless of zoom level
+                    const y = header + (staffCenterY - viewport.y)
                     const itemStyle: React.CSSProperties = {
                         position: 'absolute',
                         top: `${y}px`,

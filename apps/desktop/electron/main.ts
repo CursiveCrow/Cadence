@@ -75,7 +75,7 @@ ipcMain.handle(IPC_CHANNELS.dialogOpenFile, async (_event, options: unknown) => 
   if (result.canceled || result.filePaths.length === 0) return null
   const filePath = result.filePaths[0]
   const content = await fs.readFile(filePath)
-  const response = { name: filePath.split(/[/\\]/).pop() || filePath, path: filePath, content }
+  const response = { name: filePath.split(/[/\\]/).pop() || filePath, path: filePath, content: new Uint8Array(content) }
   const validated = DialogOpenFileResponse.safeParse(response)
   return validated.success ? validated.data : null
 })

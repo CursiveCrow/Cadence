@@ -9,7 +9,6 @@ export interface IElectronAPI {
 
 declare global {
   interface Window {
-    ipcRenderer: IElectronAPI
     api: { invoke: (channel: (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS], ...args: any[]) => Promise<any> }
   }
 }

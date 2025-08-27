@@ -62,7 +62,7 @@ export function logWebGPUStatus(status: WebGPUStatus): void {
 
   console.log('%c WebGPU Status ', style, status.message)
   console.log('Renderer Type:', status.rendererType.toUpperCase())
-  
+
   if (!status.available) {
     console.log('Note: The application will use WebGL as a fallback, which is fully supported.')
   }

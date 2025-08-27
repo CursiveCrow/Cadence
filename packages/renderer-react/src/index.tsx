@@ -12,6 +12,9 @@ export interface RendererReactProps {
     onViewportChange: (v: { x: number; y: number; zoom: number }) => void
     onDragStart?: () => void
     onDragEnd?: () => void
+    onUpdateTask: (projectId: string, taskId: string, updates: Partial<any>) => void
+    onCreateDependency: (projectId: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: string }) => void
+    onVerticalScaleChange?: (scale: number) => void
     className?: string
 }
 
@@ -26,6 +29,9 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
     onViewportChange,
     onDragStart,
     onDragEnd,
+    onUpdateTask,
+    onCreateDependency,
+    onVerticalScaleChange,
     className,
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -61,25 +67,45 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
                         getProjectStartDate: () => PROJECT_START_DATE,
                         findNearestStaffLine: (y: number) => findNearestStaffLineAt(y, staffsRef.current as any, TIMELINE_CONFIG as any),
                         snapXToDay: (x: number) => snapXToDayWithConfig(x, TIMELINE_CONFIG as any),
+                        // Provide a time-aware snapping using current zoom -> relies on engine's effective config
+                        snapXToTime: (x: number) => {
+                            // Mirror engine's effective config: DAY_WIDTH multiplied by current zoom
+                            const z = (engineRef.current as any)?.getViewportScale?.() || (viewportRef.current?.zoom || 1)
+                            const dayWidth = (TIMELINE_CONFIG as any).DAY_WIDTH * z
+                            const relative = (x - (TIMELINE_CONFIG as any).LEFT_MARGIN) / Math.max(dayWidth, 0.0001)
+                            const dayIndex = Math.round(relative)
+                            const snappedX = (TIMELINE_CONFIG as any).LEFT_MARGIN + dayIndex * dayWidth
+                            return { snappedX, dayIndex }
+                        },
                         dayIndexToIsoDate: (d: number) => dayIndexToIsoDateUTC(d, PROJECT_START_DATE)
                     },
-                    callbacks: {
+                    callbacks: ({
                         select: onSelect,
                         onDragStart,
                         onDragEnd,
                         updateTask: (pid: string, id: string, updates: Partial<any>) => {
-                            try { (window as any).__CADENCE_UPDATE_TASK?.(pid, id, updates) } catch { }
+                            try { onUpdateTask(pid, id, updates) } catch { }
                         },
-                        createDependency: (pid: string, dep: any) => {
-                            try { (window as any).__CADENCE_CREATE_DEP?.(pid, dep) } catch { }
+                        createDependency: (pid: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: string }) => {
+                            try { onCreateDependency(pid, dep) } catch { }
                         },
-                        onViewportChange: onViewportChange
-                    }
+                        onViewportChange: onViewportChange,
+                        onVerticalScaleChange: (s: number) => {
+                            try { onVerticalScaleChange?.(s) } catch { }
+                        }
+                    } as any)
                 })
                 await engine.init()
                 engineRef.current = engine
                 appRef.current = engine.getApplication() as any
+                    // Expose viewport setter for header zoom handler (local only)
+                    ; (window as any).__CADENCE_SET_VIEWPORT = (v: { x: number; y: number; zoom: number }) => {
+                        try { engineRef.current && engineRef.current.render({ tasks: tasksRef.current, dependencies: depsRef.current, staffs: staffsRef.current, selection: [] }, v) } catch { }
+                    }
                 if (mounted) setReady(true)
+                    ; (window as any).__CADENCE_SET_VERTICAL_SCALE = (s: number) => {
+                        try { engineRef.current?.setVerticalScale(s) } catch { }
+                    }
             } finally {
                 initializingRef.current = false
             }

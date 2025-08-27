@@ -5,6 +5,7 @@
 
 import { Container, Graphics, Text, Application, Rectangle } from 'pixi.js'
 import { STATUS_TO_ACCIDENTAL } from './config'
+import { getTimeScaleForZoom } from './layout'
 
 // Renderer plugin interface and registry (extensibility)
 export interface RendererPlugin {
@@ -23,6 +24,10 @@ export interface TimelineConfig {
   LEFT_MARGIN: number
   TOP_MARGIN: number
   DAY_WIDTH: number
+  // Optional alternate widths for dynamic scale (scaled values derived from DAY_WIDTH by default)
+  HOUR_WIDTH?: number
+  WEEK_WIDTH?: number
+  MONTH_WIDTH?: number
   STAFF_SPACING: number
   STAFF_LINE_SPACING: number
   TASK_HEIGHT: number
@@ -86,7 +91,9 @@ export function computeTaskLayout(
   const taskStart = new Date(task.startDate)
   const dayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
   const startX = config.LEFT_MARGIN + dayIndex * config.DAY_WIDTH + (config.NOTE_START_PADDING || 0)
-  const width = Math.max(task.durationDays * config.DAY_WIDTH - 8, 40)
+  // Allow tasks to shrink at low zoom; never below circle diameter (TASK_HEIGHT)
+  const minWidth = Math.max(config.TASK_HEIGHT, 4)
+  const width = Math.max(task.durationDays * config.DAY_WIDTH - 8, minWidth)
 
   const staffIndex = staffs.findIndex(s => s.id === task.staffId)
   const staffStartY = config.TOP_MARGIN + (staffIndex === -1 ? 0 : staffIndex * config.STAFF_SPACING)
@@ -110,26 +117,80 @@ export function drawGridAndStaff(
   container.removeChildren()
 
   const graphics = new Graphics()
-    // Use crisp edges by turning off antialias on vector strokes when zoomed out
-    ; (graphics as any).resolution = Math.max(1, Math.round((zoom || 1) * ((typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1)))
-  const extendedWidth = Math.max(screenWidth, config.DAY_WIDTH * 365)
+    // Keep resolution independent of zoom to maintain constant stroke thickness
+    ; (graphics as any).resolution = Math.max(1, Math.round(((typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1)))
+  // Avoid creating huge geometry at extreme zoom-out; cap the drawn extent
+  const capWidth = Math.min(Math.max(screenWidth * 4, config.DAY_WIDTH * 90), 50000)
+  const extendedWidth = Math.max(screenWidth, capWidth)
   const extendedHeight = Math.max(screenHeight * 3, 2000)
 
-  // Align world coordinates to pixel grid at current zoom to reduce blur
-  const align = (v: number) => Math.round(v * (zoom || 1)) / (zoom || 1)
+  // Align to whole pixels (scene is not scaled)
+  const align = (v: number) => Math.round(v)
 
-  for (let x = config.LEFT_MARGIN; x < extendedWidth; x += config.DAY_WIDTH * 7) {
-    const ax = align(x)
-    graphics.moveTo(ax, 0)
-    graphics.lineTo(ax, extendedHeight)
-    graphics.stroke({ width: Math.max(1, 2 / (zoom || 1)), color: config.GRID_COLOR_MAJOR, alpha: 0.1 })
+  const scale = getTimeScaleForZoom(zoom)
+  const dayWidth = config.DAY_WIDTH
+  const hourWidth = config.HOUR_WIDTH ?? (dayWidth / 24)
+  const weekWidth = config.WEEK_WIDTH ?? (dayWidth * 7)
+  const monthWidth = config.MONTH_WIDTH ?? (dayWidth * 30)
+
+  const majorStep = scale === 'hour' ? dayWidth : scale === 'day' ? weekWidth : scale === 'week' ? monthWidth : monthWidth
+  const minorStep = scale === 'hour' ? hourWidth : scale === 'day' ? dayWidth : scale === 'week' ? weekWidth : monthWidth
+
+  // Subtle alternating weekly bands and weekend shading to improve day-scale legibility
+  if (scale === 'day') {
+    const bg = new Graphics()
+    const baseDow = new Date(projectStartDate).getUTCDay() // 0 Sun .. 6 Sat
+    // Alternating week bands
+    let bandX = config.LEFT_MARGIN
+    let toggle = false
+    while (bandX < extendedWidth) {
+      bg.rect(bandX, 0, weekWidth, extendedHeight)
+      bg.fill({ color: 0xffffff, alpha: toggle ? 0.015 : 0 })
+      toggle = !toggle
+      bandX += weekWidth
+    }
+    // Weekend day overlays
+    for (let i = 0, x = config.LEFT_MARGIN; x < extendedWidth; i++, x += dayWidth) {
+      const dow = (baseDow + i) % 7
+      if (dow === 0 || dow === 6) {
+        bg.rect(x, 0, dayWidth, extendedHeight)
+        bg.fill({ color: 0xffffff, alpha: 0.02 })
+      }
+    }
+    container.addChild(bg)
   }
 
-  for (let x = config.LEFT_MARGIN; x < extendedWidth; x += config.DAY_WIDTH) {
+  if (scale === 'month') {
+    // Draw month boundaries exactly at the first of each month
+    const base = new Date(Date.UTC(projectStartDate.getUTCFullYear(), projectStartDate.getUTCMonth(), projectStartDate.getUTCDate()))
+    let cursor = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), 1))
+    while (true) {
+      const diffMs = cursor.getTime() - base.getTime()
+      const dayIndex = Math.round(diffMs / (24 * 60 * 60 * 1000))
+      const x = config.LEFT_MARGIN + dayIndex * dayWidth
+      if (x > extendedWidth) break
+      const ax = align(x)
+      graphics.moveTo(ax, 0)
+      graphics.lineTo(ax, extendedHeight)
+      graphics.stroke({ width: 2, color: config.GRID_COLOR_MAJOR, alpha: 0.1 })
+      cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1))
+    }
+  } else {
+    for (let x = config.LEFT_MARGIN; x < extendedWidth; x += majorStep) {
+      const ax = align(x)
+      graphics.moveTo(ax, 0)
+      graphics.lineTo(ax, extendedHeight)
+      const majorAlpha = scale === 'day' ? 0.15 : 0.1
+      graphics.stroke({ width: 2, color: config.GRID_COLOR_MAJOR, alpha: majorAlpha })
+    }
+  }
+
+  for (let x = config.LEFT_MARGIN; x < extendedWidth; x += minorStep) {
     const ax = align(x)
     graphics.moveTo(ax, 0)
     graphics.lineTo(ax, extendedHeight)
-    graphics.stroke({ width: Math.max(1, 1 / (zoom || 1)), color: config.GRID_COLOR_MINOR, alpha: 0.05 })
+    const minorAlpha = scale === 'day' ? 0.03 : 0.05
+    graphics.stroke({ width: 1, color: config.GRID_COLOR_MINOR, alpha: minorAlpha })
   }
 
   let currentY = config.TOP_MARGIN
@@ -138,7 +199,7 @@ export function drawGridAndStaff(
       const y = align(currentY + line * config.STAFF_LINE_SPACING)
       graphics.moveTo(config.LEFT_MARGIN, y)
       graphics.lineTo(extendedWidth, y)
-      graphics.stroke({ width: Math.max(1, 1 / (zoom || 1)), color: config.STAFF_LINE_COLOR, alpha: 0.6 })
+      graphics.stroke({ width: 1, color: config.STAFF_LINE_COLOR, alpha: 0.6 })
     }
 
     if ((config as any).DRAW_STAFF_LABELS !== false) {
@@ -177,26 +238,45 @@ export function drawGridAndStaff(
   })
 
   if ((config as any).DRAW_STAFF_LABELS !== false) {
-    const maxDays = Math.floor((extendedWidth - config.LEFT_MARGIN) / config.DAY_WIDTH)
-    for (let i = 0; i < maxDays; i++) {
-      const x = config.LEFT_MARGIN + i * config.DAY_WIDTH
+    const alignPx = (v: number) => Math.round(v)
+    const max = Math.floor((extendedWidth - config.LEFT_MARGIN) / minorStep)
+    for (let i = 0; i < max; i++) {
+      const x = config.LEFT_MARGIN + i * minorStep
       const date = new Date(projectStartDate)
-      date.setDate(date.getDate() + i)
+      const days = Math.round((x - config.LEFT_MARGIN) / dayWidth)
+      date.setDate(date.getDate() + days)
+      const label = scale === 'hour'
+        ? date.toLocaleTimeString('en-US', { hour: '2-digit' })
+        : scale === 'day'
+          ? (date.getDate() === 1
+            ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : String(date.getDate()))
+          : scale === 'week'
+            ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+
       const dateText = new Text({
-        text: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        text: label,
         style: {
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          fontSize: 11,
+          fontSize: scale === 'day' ? 12 : 11,
           fill: 0xffffff
         }
       })
-      dateText.x = x + 5
-      dateText.y = 25 - dateText.height / 2
+      if (scale === 'day') {
+        // Bold month boundaries for stronger visual rhythm
+        if (date.getDate() === 1) {
+          try { (dateText as any).style.fontWeight = 'bold' } catch { }
+        }
+      }
+      dateText.x = alignPx(x + 5)
+      dateText.y = alignPx(25 - dateText.height / 2)
       container.addChild(dateText)
     }
   }
 
-  container.addChildAt(graphics, 0)
+  // Ensure lines sit above background bands
+  container.addChildAt(graphics, Math.min(1, container.children.length))
 }
 
 export function drawTaskNote(
@@ -205,7 +285,8 @@ export function drawTaskNote(
   layout: TaskLayout,
   title: string,
   status: string | undefined,
-  isSelected: boolean
+  isSelected: boolean,
+  _zoom: number
 ): void {
   container.removeChildren()
 
@@ -220,48 +301,58 @@ export function drawTaskNote(
   const r = layout.radius
 
   graphics.beginPath()
-  graphics.moveTo(r, 0)
-  graphics.lineTo(layout.width - 4, 0)
-  graphics.quadraticCurveTo(layout.width, 0, layout.width, 4)
-  graphics.lineTo(layout.width, config.TASK_HEIGHT - 4)
-  graphics.quadraticCurveTo(layout.width, config.TASK_HEIGHT, layout.width - 4, config.TASK_HEIGHT)
-  graphics.lineTo(r, config.TASK_HEIGHT)
-  graphics.arc(r, centerYLocal, r, Math.PI / 2, -Math.PI / 2, false)
+  if (layout.width <= config.TASK_HEIGHT + 4) {
+    // Pill degenerates to a circle-only glyph at very small widths
+    graphics.circle(r, centerYLocal, r)
+  } else {
+    graphics.moveTo(r, 0)
+    graphics.lineTo(layout.width - 4, 0)
+    graphics.quadraticCurveTo(layout.width, 0, layout.width, 4)
+    graphics.lineTo(layout.width, config.TASK_HEIGHT - 4)
+    graphics.quadraticCurveTo(layout.width, config.TASK_HEIGHT, layout.width - 4, config.TASK_HEIGHT)
+    graphics.lineTo(r, config.TASK_HEIGHT)
+    graphics.arc(r, centerYLocal, r, Math.PI / 2, -Math.PI / 2, false)
+  }
   graphics.closePath()
 
   const statusKey = (status || 'default')
   const fillColor = isSelected ? config.SELECTION_COLOR : (config.TASK_COLORS[statusKey] || config.TASK_COLORS.default)
   graphics.fill({ color: fillColor, alpha: 0.9 })
+  // Scene no longer scales with zoom; keep a constant, thin stroke
   graphics.stroke({ width: isSelected ? 2 : 1, color: isSelected ? 0xFCD34D : 0xffffff, alpha: 0.3 })
 
-  graphics.circle(r, centerYLocal, r - 2)
+  graphics.circle(r, centerYLocal, Math.max(2, r - 2))
   graphics.fill({ color: 0xffffff, alpha: 0.2 })
 
   const accidental = status ? (STATUS_TO_ACCIDENTAL[status] || '') : ''
 
   if (accidental) {
+    // Scale accidental glyph with note height so it remains visually centered in the circle
+    const scaleFactor = status === 'cancelled' ? 0.72 : 0.64
+    const baseAccidentalFont = Math.max(10, Math.round(config.TASK_HEIGHT * scaleFactor))
     const accidentalText = new Text({
       text: accidental,
       style: {
         fontFamily: 'serif',
-        fontSize: status === 'cancelled' ? 16 : 14,
+        fontSize: baseAccidentalFont,
         fontWeight: 'bold',
         fill: 0xffffff,
         align: 'center'
       }
     })
-    accidentalText.x = r - accidentalText.width / 2
-    accidentalText.y = centerYLocal - accidentalText.height / 2
+    accidentalText.x = Math.round(r - accidentalText.width / 2)
+    accidentalText.y = Math.round(centerYLocal - accidentalText.height / 2)
     container.addChild(accidentalText)
   }
 
-  if (layout.width > 30) {
+  if (layout.width > Math.max(config.TASK_HEIGHT * 1.2, 30)) {
     const titleText = title || ''
+    const baseTitleFont = 11
     const text = new Text({
       text: titleText,
       style: {
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        fontSize: 11,
+        fontSize: baseTitleFont,
         fontWeight: 'bold',
         fill: 0xffffff,
         align: 'left'
@@ -269,8 +360,8 @@ export function drawTaskNote(
     })
 
     const textX = config.TASK_HEIGHT + 8
-    text.x = textX
-    text.y = centerYLocal - text.height / 2
+    text.x = Math.round(textX)
+    text.y = Math.round(centerYLocal - text.height / 2)
 
     const maxTextWidth = layout.width - config.TASK_HEIGHT - 16
     if (text.width > maxTextWidth) {
@@ -475,14 +566,18 @@ export function ensureGridAndStaff(
   screenHeight: number,
   zoom: number = 1
 ): void {
-  const key = '__grid_meta__'
-  const meta: any = (container as any)[key] || {}
+  type GridMeta = { w: number; h: number; z: number; cfg: string }
+  const metaMap: WeakMap<Container, GridMeta> = (ensureGridAndStaff as any).__metaMap || new WeakMap<Container, GridMeta>()
+    ; (ensureGridAndStaff as any).__metaMap = metaMap
+  const meta = metaMap.get(container)
   // Only rebuild when the integer screen size or rounded zoom changes to avoid subpixel jitter
   const rz = Math.round(zoom * 100) / 100
-  if (container.children.length > 0 && meta.w === screenWidth && meta.h === screenHeight && meta.z === rz) return
+  // Include spacing-related config in cache key so verticalScale changes trigger rebuild
+  const cfgKey = `${config.TOP_MARGIN}|${config.STAFF_SPACING}|${config.STAFF_LINE_SPACING}|${staffs.length}`
+  if (container.children.length > 0 && meta?.w === screenWidth && meta?.h === screenHeight && meta?.z === rz && meta?.cfg === cfgKey) return
   container.removeChildren()
   drawGridAndStaff(container, config, staffs, projectStartDate, screenWidth, screenHeight, rz)
-    ; (container as any)[key] = { w: screenWidth, h: screenHeight, z: rz }
+  metaMap.set(container, { w: screenWidth, h: screenHeight, z: rz, cfg: cfgKey })
 }
 
 /**
@@ -511,14 +606,14 @@ export class TimelineSceneManager {
     layout: TaskLayout,
     config: TimelineConfig,
     title?: string,
-    status?: string
+    status?: string,
+    zoom: number = 1
   ): { container: Container; created: boolean } {
     let container = this.taskContainers.get(task.id)
     let created = false
     if (!container) {
       container = new Container()
       container.eventMode = 'static'
-        ; (container as any).__meta = {}
       this.layers.tasks.addChild(container)
       this.taskContainers.set(task.id, container)
       created = true
@@ -536,24 +631,29 @@ export class TimelineSceneManager {
     })
 
     // Only redraw if something meaningful changed to reduce GC/CPU
-    const prevMeta = (container as any).__meta || {}
+    type ContainerMeta = { startX: number; width: number; topY: number; centerY: number; title: string; status: string; zoom: number }
+    const metaMap: WeakMap<Container, ContainerMeta> = (this as any).__containerMeta || new WeakMap<Container, ContainerMeta>()
+      ; (this as any).__containerMeta = metaMap
+    const prevMeta = metaMap.get(container)
     const shouldRedraw =
-      prevMeta.width !== layout.width ||
-      prevMeta.centerY !== layout.centerY ||
-      prevMeta.startX !== layout.startX ||
-      prevMeta.title !== (title || '') ||
-      prevMeta.status !== (status || '')
+      prevMeta?.width !== layout.width ||
+      prevMeta?.centerY !== layout.centerY ||
+      prevMeta?.startX !== layout.startX ||
+      prevMeta?.title !== (title || '') ||
+      prevMeta?.status !== (status || '') ||
+      (prevMeta ? Math.abs(prevMeta.zoom - zoom) > 0.05 : true)
 
     if (shouldRedraw) {
-      drawTaskNote(container, config, layout, title || '', status, false)
-        ; (container as any).__meta = {
-          startX: layout.startX,
-          width: layout.width,
-          topY: layout.topY,
-          centerY: layout.centerY,
-          title: title || '',
-          status: status || ''
-        }
+      drawTaskNote(container, config, layout, title || '', status, false, zoom)
+      metaMap.set(container, {
+        startX: layout.startX,
+        width: layout.width,
+        topY: layout.topY,
+        centerY: layout.centerY,
+        title: title || '',
+        status: status || '',
+        zoom
+      })
     }
     container.hitArea = new Rectangle(0, 0, layout.width, config.TASK_HEIGHT)
 

@@ -17,6 +17,8 @@ interface Utils {
   findNearestStaffLine: (y: number) => { staff: StaffLike; staffLine: number; centerY: number } | null
   snapXToDay: (x: number) => { snappedX: number; dayIndex: number }
   dayIndexToIsoDate: (dayIndex: number) => string
+  // Optional: time-aware snapping provided by host (uses current zoom/scale)
+  snapXToTime?: (x: number) => { snappedX: number; dayIndex: number }
 }
 
 interface DataProviders {
@@ -165,7 +167,7 @@ export class TimelineDnDController {
         this.state.dependencySourceTaskId = (task as any).id
         this.callbacks.onDragStart && this.callbacks.onDragStart()
       })
-      ;(container as any).__wired = true
+        ; (container as any).__wired = true
     }
   }
 
@@ -202,7 +204,7 @@ export class TimelineDnDController {
       this.backgroundHitRect = new Graphics()
       // Transparent fill just to maintain a drawable; events use hitArea below
       this.backgroundHitRect.alpha = 0
-      ;(this.backgroundHitRect as any).eventMode = 'none' // no overlay handlers; stage handles default behavior
+        ; (this.backgroundHitRect as any).eventMode = 'none' // no overlay handlers; stage handles default behavior
       this.layers.background.addChildAt(this.backgroundHitRect, 0)
     }
     // Cover a very large area in viewport space so panning/zooming still finds empty clicks
@@ -302,10 +304,8 @@ export class TimelineDnDController {
 
     // Dependency preview
     if (this.state.isCreatingDependency && this.state.dependencySourceTaskId) {
-      if (this.dependencyPreview && this.layers.dragLayer.children.includes(this.dependencyPreview)) {
-        this.layers.dragLayer.removeChild(this.dependencyPreview)
-        this.dependencyPreview.destroy()
-        this.dependencyPreview = null
+      if (this.dependencyPreview && !this.layers.dragLayer.children.includes(this.dependencyPreview)) {
+        this.layers.dragLayer.addChild(this.dependencyPreview)
       }
       const srcA = this.scene.getAnchors(this.state.dependencySourceTaskId)
       if (!srcA) return
@@ -320,7 +320,8 @@ export class TimelineDnDController {
         if (a) { dstX = a.leftCenterX; dstY = a.leftCenterY }
       }
       this.state.dependencyHoverTargetId = hoverId
-      const g = new Graphics()
+      const g = this.dependencyPreview || new Graphics()
+      g.clear()
       // During drag, start at the source note's circle center (left side) for visual consistency
       g.moveTo(srcA.leftCenterX, srcA.leftCenterY)
       g.lineTo(dstX, dstY)
@@ -333,40 +334,36 @@ export class TimelineDnDController {
       g.lineTo(dstX - arrow * Math.cos(angle + Math.PI / 6), dstY - arrow * Math.sin(angle + Math.PI / 6))
       g.closePath()
       g.fill({ color: 0x10B981, alpha: 0.8 })
-      ;(g as any).eventMode = 'none'
-      this.layers.dragLayer.addChild(g)
+        ; (g as any).eventMode = 'none'
+      if (!this.dependencyPreview) {
+        this.layers.dragLayer.addChild(g)
+      }
       this.dependencyPreview = g
       return
     }
 
     // Resize preview
     if (this.state.isResizing && this.state.draggedTask) {
-      if (this.dragPreview && this.layers.dragLayer.children.includes(this.dragPreview)) {
-        this.layers.dragLayer.removeChild(this.dragPreview)
-        this.dragPreview.destroy()
-        this.dragPreview = null
-      }
+      const g = this.dragPreview || new Graphics()
+      g.clear()
       const taskStart = new Date((this.state.draggedTask as any).startDate)
       const projectStartDate = this.utils.getProjectStartDate()
       const dayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
       const startX = this.config.LEFT_MARGIN + dayIndex * this.config.DAY_WIDTH
       const newWidth = Math.max(this.config.DAY_WIDTH, localPos.x - startX)
-      const preview = new Graphics()
       const taskY = this.scene.taskLayouts.get((this.state.draggedTask as any).id)?.topY ?? 0
-      drawNoteBodyPathAbsolute(preview, startX, taskY, newWidth, this.config.TASK_HEIGHT)
-      preview.fill({ color: 0x10B981, alpha: 0.5 })
-      preview.stroke({ width: 2, color: 0x10B981, alpha: 1 })
-      this.layers.dragLayer.addChild(preview)
-      this.dragPreview = preview
+      drawNoteBodyPathAbsolute(g, startX, taskY, newWidth, this.config.TASK_HEIGHT)
+      g.fill({ color: 0x10B981, alpha: 0.5 })
+      g.stroke({ width: 2, color: 0x10B981, alpha: 1 })
+      if (!this.dragPreview) this.layers.dragLayer.addChild(g)
+      this.dragPreview = g
       return
     }
 
     // Drag preview (ghost)
     if (this.state.isDragging && this.state.draggedTask) {
-      if (this.dragPreview && this.layers.dragLayer.children.includes(this.dragPreview)) {
-        this.layers.dragLayer.removeChild(this.dragPreview)
-      }
-      const preview = new Graphics()
+      const preview = this.dragPreview || new Graphics()
+      preview.clear()
       // Draw preview so that the point originally clicked stays under the cursor
       const localClickX = this.state.clickLocalX ?? 0
       const localClickY = this.state.clickLocalY ?? 0
@@ -392,8 +389,8 @@ export class TimelineDnDController {
         preview.fill({ color: 0x8B5CF6, alpha: 0.5 })
         preview.stroke({ width: 2, color: 0xFCD34D, alpha: 1 })
       }
-      ;(preview as any).eventMode = 'none'
-      this.layers.dragLayer.addChild(preview)
+      ; (preview as any).eventMode = 'none'
+      if (!this.dragPreview) this.layers.dragLayer.addChild(preview)
       this.dragPreview = preview
     }
   }
@@ -465,8 +462,8 @@ export class TimelineDnDController {
       const dayIndex = this.state.snapDayIndex !== undefined
         ? this.state.snapDayIndex
         : (this.state.snapSnappedX !== undefined
-            ? Math.round((this.state.snapSnappedX - this.config.LEFT_MARGIN) / this.config.DAY_WIDTH)
-            : this.utils.snapXToDay(dropX).dayIndex)
+          ? Math.round((this.state.snapSnappedX - this.config.LEFT_MARGIN) / this.config.DAY_WIDTH)
+          : (this.utils.snapXToTime ? this.utils.snapXToTime(dropX).dayIndex : this.utils.snapXToDay(dropX).dayIndex))
       const clampedDayIndex = Math.max(dayIndex, this.state.minAllowedDayIndex ?? 0)
       const startDate = this.utils.dayIndexToIsoDate(clampedDayIndex)
       const updates: any = { startDate }

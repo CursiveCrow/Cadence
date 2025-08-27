@@ -15,6 +15,7 @@ interface TimelineCanvasProps {
   staffs: Staff[]
   onDragStart?: () => void
   onDragEnd?: () => void
+  onVerticalScaleChange?: (s: number) => void
 }
 
 export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
@@ -25,13 +26,10 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
   viewport,
   staffs,
   onDragStart,
-  onDragEnd
+  onDragEnd,
+  onVerticalScaleChange
 }) => {
   const dispatch = useDispatch()
-
-    // Expose mutations for the renderer host (optional; still wired via callbacks in package)
-    ; (window as any).__CADENCE_UPDATE_TASK = (pid: string, id: string, updates: Partial<any>) => updateTask(pid, id, updates as any)
-    ; (window as any).__CADENCE_CREATE_DEP = (pid: string, dep: any) => createDependency(pid, dep as any)
 
   return (
     <div className="timeline-canvas-container">
@@ -44,6 +42,13 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
         staffs={staffs}
         onSelect={(ids: string[]) => dispatch(setSelection(ids))}
         onViewportChange={(v: { x: number; y: number; zoom: number }) => dispatch(updateViewport(v))}
+        onVerticalScaleChange={(s: number) => {
+          try { onVerticalScaleChange?.(s) } catch { }
+          // Trigger a re-render for any components depending on viewport while engine already applied vertical scale
+          dispatch(updateViewport({ ...viewport }))
+        }}
+        onUpdateTask={(pid: string, id: string, updates: Partial<any>) => updateTask(pid, id, updates as any)}
+        onCreateDependency={(pid: string, dep: any) => createDependency(pid, dep as any)}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         className="timeline-canvas"
