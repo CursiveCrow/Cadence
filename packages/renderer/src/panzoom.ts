@@ -125,10 +125,14 @@ export class PanZoomController {
         this.panState.lastY = pos.y
         const current = this.callbacks.getViewport()
         const z = current.zoom || 1
-        const newX = current.x - dx / z
-        const newY = current.y - dy / z
-        const snap = (v: number) => Math.round(v * 2) / 2
-        const clamped = this.clampViewport(snap(newX), snap(newY), current.zoom)
+        // Convert horizontal pixels to world days using base pixels-per-day at zoom
+        const basePPD = this.callbacks.getPixelsPerDayBase?.() ?? 60
+        const ppd = Math.max(0.0001, basePPD * z)
+        const dxDays = dx / ppd
+        const newX = current.x - dxDays
+        // Vertical axis is in pixels (renderer does not scale Y). Do not divide by zoom.
+        const newY = current.y - dy
+        const clamped = this.clampViewport(newX, newY, current.zoom)
         this.callbacks.setViewport(clamped)
     }
 

@@ -67,3 +67,14 @@ export function logWebGPUStatus(status: WebGPUStatus): void {
     console.log('Note: The application will use WebGL as a fallback, which is fully supported.')
   }
 }
+
+/**
+ * Log the chosen renderer preference vs availability so logs are consistent with runtime.
+ */
+export function logRendererPreference(status: WebGPUStatus, chosen: 'webgpu' | 'webgl'): void {
+  const msg = `Chosen renderer: ${chosen.toUpperCase()} (${status.available ? 'WebGPU available' : 'WebGPU unavailable'})`
+  const style = chosen === 'webgpu'
+    ? 'background: #2563eb; color: white; padding: 2px 6px; border-radius: 4px;'
+    : 'background: #6b7280; color: white; padding: 2px 6px; border-radius: 4px;'
+  console.log('%c Renderer Preference ', style, msg)
+}

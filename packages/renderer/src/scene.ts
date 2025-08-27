@@ -4,20 +4,17 @@
  */
 
 import { Container, Graphics, Text, Application, Rectangle } from 'pixi.js'
-import { STATUS_TO_ACCIDENTAL } from './config'
+import { SpatialHash } from './spatial'
 import { getTimeScaleForZoom } from './layout'
+import { computeGraphicsResolution, computeTextResolution } from './resolution.js'
+import type { Task, Dependency, Staff } from '@cadence/core'
+import type { RendererContext } from './types/context'
 
-// Renderer plugin interface and registry (extensibility)
+// Renderer plugin interface (instance-scoped)
 export interface RendererPlugin {
-  // Called after layers created; can add display objects or listeners
-  onLayersCreated?(app: Application, layers: ReturnType<typeof createTimelineLayers>): void
-  // Called after a task container is upserted and positioned
-  onTaskUpserted?(taskId: string, container: Container): void
-}
-
-const rendererPlugins: RendererPlugin[] = []
-export function registerRendererPlugin(plugin: RendererPlugin) {
-  rendererPlugins.push(plugin)
+  onLayersCreated?(app: Application, layers: ReturnType<typeof createTimelineLayers>, ctx: RendererContext): void
+  onTaskUpserted?(task: TaskLike, container: Container, ctx: { layout: TaskLayout; config: TimelineConfig; zoom: number; selected: boolean }): void
+  onDestroy?(): void
 }
 
 export interface TimelineConfig {
@@ -45,27 +42,11 @@ export interface TimelineConfig {
   NOTE_START_PADDING?: number
 }
 
-export interface StaffLike {
-  id: string
-  name: string
-  numberOfLines: number
-}
+export type StaffLike = Staff
 
-export interface TaskLike {
-  id: string
-  title?: string
-  startDate: string
-  durationDays: number
-  status?: string
-  staffId: string
-  staffLine: number
-}
+export type TaskLike = Task
 
-export interface DependencyLike {
-  id: string
-  srcTaskId: string
-  dstTaskId: string
-}
+export type DependencyLike = Dependency
 
 export interface TaskLayout {
   startX: number
@@ -82,28 +63,7 @@ export interface TaskAnchors {
   rightCenterY: number
 }
 
-export function computeTaskLayout(
-  config: TimelineConfig,
-  task: TaskLike,
-  projectStartDate: Date,
-  staffs: StaffLike[]
-): TaskLayout {
-  const taskStart = new Date(task.startDate)
-  const dayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
-  const startX = config.LEFT_MARGIN + dayIndex * config.DAY_WIDTH + (config.NOTE_START_PADDING || 0)
-  // Allow tasks to shrink at low zoom; never below circle diameter (TASK_HEIGHT)
-  const minWidth = Math.max(config.TASK_HEIGHT, 4)
-  const width = Math.max(task.durationDays * config.DAY_WIDTH - 8, minWidth)
-
-  const staffIndex = staffs.findIndex(s => s.id === task.staffId)
-  const staffStartY = config.TOP_MARGIN + (staffIndex === -1 ? 0 : staffIndex * config.STAFF_SPACING)
-
-  const centerY = staffStartY + (task.staffLine * config.STAFF_LINE_SPACING / 2)
-  const topY = centerY - config.TASK_HEIGHT / 2
-  const radius = config.TASK_HEIGHT / 2
-
-  return { startX, centerY, topY, width, radius }
-}
+// computeTaskLayout moved to layout.ts
 
 export function drawGridAndStaff(
   container: Container,
@@ -111,19 +71,19 @@ export function drawGridAndStaff(
   staffs: StaffLike[],
   projectStartDate: Date,
   screenWidth: number,
-  screenHeight: number,
+  _screenHeight: number,
   zoom: number = 1,
-  useGpuGrid: boolean = false
+  _useGpuGrid: boolean = true
 ): void {
   container.removeChildren()
 
   const graphics = new Graphics()
     // Keep resolution independent of zoom to maintain constant stroke thickness
-    ; (graphics as any).resolution = Math.max(1, Math.round(((typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1)))
+    ; (graphics as any).resolution = computeGraphicsResolution()
   // Avoid creating huge geometry at extreme zoom-out; cap the drawn extent
   const capWidth = Math.min(Math.max(screenWidth * 4, config.DAY_WIDTH * 90), 50000)
   const extendedWidth = Math.max(screenWidth, capWidth)
-  const extendedHeight = Math.max(screenHeight * 3, 2000)
+  // Height cap no longer needed for vertical lines (GPU grid handles them)
 
   // Align to whole pixels (scene is not scaled)
   const align = (v: number) => Math.round(v)
@@ -134,63 +94,10 @@ export function drawGridAndStaff(
   const weekWidth = config.WEEK_WIDTH ?? (dayWidth * 7)
   const monthWidth = config.MONTH_WIDTH ?? (dayWidth * 30)
 
-  const majorStep = scale === 'hour' ? dayWidth : scale === 'day' ? weekWidth : scale === 'week' ? monthWidth : monthWidth
+  // Minor step kept for label placement calculations below
   const minorStep = scale === 'hour' ? hourWidth : scale === 'day' ? dayWidth : scale === 'week' ? weekWidth : monthWidth
 
-  // Subtle alternating weekly bands and weekend shading (skip if GPU grid handles it)
-  if (!useGpuGrid && scale === 'day') {
-    const bg = new Graphics()
-    const baseDow = new Date(projectStartDate).getUTCDay() // 0 Sun .. 6 Sat
-    let bandX = config.LEFT_MARGIN
-    let toggle = false
-    while (bandX < extendedWidth) {
-      bg.rect(bandX, 0, weekWidth, extendedHeight)
-      bg.fill({ color: 0xffffff, alpha: toggle ? 0.02 : 0.02 })
-      toggle = !toggle
-      bandX += weekWidth
-    }
-    for (let i = 0, x = config.LEFT_MARGIN; x < extendedWidth; i++, x += dayWidth) {
-      const dow = (baseDow + i) % 7
-      if (dow === 0 || dow === 6) {
-        bg.rect(x, 0, dayWidth, extendedHeight)
-        bg.fill({ color: 0xffffff, alpha: 0.02 })
-      }
-    }
-    container.addChild(bg)
-  }
-
-  if (scale === 'month' && !useGpuGrid) {
-    // Draw month boundaries exactly at the first of each month
-    const base = new Date(Date.UTC(projectStartDate.getUTCFullYear(), projectStartDate.getUTCMonth(), projectStartDate.getUTCDate()))
-    let cursor = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), 1))
-    while (true) {
-      const diffMs = cursor.getTime() - base.getTime()
-      const dayIndex = Math.round(diffMs / (24 * 60 * 60 * 1000))
-      const x = config.LEFT_MARGIN + dayIndex * dayWidth
-      if (x > extendedWidth) break
-      const ax = align(x)
-      graphics.moveTo(ax, 0)
-      graphics.lineTo(ax, extendedHeight)
-      graphics.stroke({ width: 2, color: config.GRID_COLOR_MAJOR, alpha: 0.1 })
-      cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1))
-    }
-  } else if (!useGpuGrid) {
-    for (let x = config.LEFT_MARGIN; x < extendedWidth; x += majorStep) {
-      const ax = align(x)
-      graphics.moveTo(ax, 0)
-      graphics.lineTo(ax, extendedHeight)
-      const majorAlpha = scale === 'day' ? 0.15 : 0.1
-      graphics.stroke({ width: 2, color: config.GRID_COLOR_MAJOR, alpha: majorAlpha })
-    }
-
-    for (let x = config.LEFT_MARGIN; x < extendedWidth; x += minorStep) {
-      const ax = align(x)
-      graphics.moveTo(ax, 0)
-      graphics.lineTo(ax, extendedHeight)
-      const minorAlpha = scale === 'day' ? 0.03 : 0.05
-      graphics.stroke({ width: 1, color: config.GRID_COLOR_MINOR, alpha: minorAlpha })
-    }
-  }
+  // Vertical grid lines and bands are drawn by the GPU grid shader exclusively
 
   let currentY = config.TOP_MARGIN
   staffs.forEach((staff) => {
@@ -263,7 +170,18 @@ export function drawGridAndStaff(
       }
     } else {
       const max = Math.floor((extendedWidth - config.LEFT_MARGIN) / minorStep)
+      // Reduce label density dynamically to limit Text allocations
+      let labelStep = 1
+      if (scale === 'hour') {
+        labelStep = 3 // label every 3 hours
+      } else if (scale === 'day') {
+        // Tune thresholds to keep <= ~48 labels across 4x screen width
+        labelStep = dayWidth >= 50 ? 1 : dayWidth >= 30 ? 2 : dayWidth >= 20 ? 3 : 7
+      } else if (scale === 'week') {
+        labelStep = 1
+      }
       for (let i = 0; i < max; i++) {
+        if (labelStep > 1 && (i % labelStep) !== 0) continue
         const x = config.LEFT_MARGIN + i * minorStep
         const date = new Date(projectStartDate)
         const days = Math.round((x - config.LEFT_MARGIN) / dayWidth)
@@ -286,6 +204,8 @@ export function drawGridAndStaff(
             fill: 0xffffff
           }
         })
+          // Keep Text resolution modest and stable
+          ; (dateText as any).resolution = computeTextResolution(1, 1)
         if (scale === 'day') {
           // Bold month boundaries for stronger visual rhythm
           if (date.getDate() === 1) {
@@ -348,26 +268,7 @@ export function drawTaskNote(
   graphics.circle(r, centerYLocal, Math.max(2, r - 2))
   graphics.fill({ color: 0xffffff, alpha: 0.2 })
 
-  const accidental = status ? (STATUS_TO_ACCIDENTAL[status] || '') : ''
-
-  if (accidental) {
-    // Scale accidental glyph with note height so it remains visually centered in the circle
-    const scaleFactor = status === 'cancelled' ? 0.72 : 0.64
-    const baseAccidentalFont = Math.max(10, Math.round(config.TASK_HEIGHT * scaleFactor))
-    const accidentalText = new Text({
-      text: accidental,
-      style: {
-        fontFamily: 'serif',
-        fontSize: baseAccidentalFont,
-        fontWeight: 'bold',
-        fill: 0xffffff,
-        align: 'center'
-      }
-    })
-    accidentalText.x = Math.round(r - accidentalText.width / 2)
-    accidentalText.y = Math.round(centerYLocal - accidentalText.height / 2)
-    container.addChild(accidentalText)
-  }
+  // Accidental glyphs are now provided by StatusGlyphPlugin; core note rendering omits them.
 
   if (layout.width > Math.max(config.TASK_HEIGHT * 1.2, 30)) {
     const titleText = title || ''
@@ -563,11 +464,6 @@ export function createTimelineLayers(app: Application): {
   dragLayer.eventMode = 'none'
   tasksLayer.eventMode = 'static'
 
-  // Notify plugins
-  for (const p of rendererPlugins) {
-    try { p.onLayersCreated?.(app, { viewport, background, dependencies, tasks: tasksLayer, selection: selectionLayer, dragLayer }) } catch { }
-  }
-
   return {
     viewport,
     background,
@@ -581,29 +477,7 @@ export function createTimelineLayers(app: Application): {
 /**
  * Ensure grid/staff are drawn once; avoids re-building per frame.
  */
-export function ensureGridAndStaff(
-  container: Container,
-  config: TimelineConfig,
-  staffs: StaffLike[],
-  projectStartDate: Date,
-  screenWidth: number,
-  screenHeight: number,
-  zoom: number = 1,
-  useGpuGrid: boolean = false
-): void {
-  type GridMeta = { w: number; h: number; z: number; cfg: string }
-  const metaMap: WeakMap<Container, GridMeta> = (ensureGridAndStaff as any).__metaMap || new WeakMap<Container, GridMeta>()
-    ; (ensureGridAndStaff as any).__metaMap = metaMap
-  const meta = metaMap.get(container)
-  // Only rebuild when the integer screen size or rounded zoom changes to avoid subpixel jitter
-  const rz = Math.round(zoom * 100) / 100
-  // Include spacing-related config in cache key so verticalScale changes trigger rebuild
-  const cfgKey = `${config.TOP_MARGIN}|${config.STAFF_SPACING}|${config.STAFF_LINE_SPACING}|${staffs.length}`
-  if (container.children.length > 0 && meta?.w === screenWidth && meta?.h === screenHeight && meta?.z === rz && meta?.cfg === cfgKey) return
-  container.removeChildren()
-  drawGridAndStaff(container, config, staffs, projectStartDate, screenWidth, screenHeight, rz, useGpuGrid)
-  metaMap.set(container, { w: screenWidth, h: screenHeight, z: rz, cfg: cfgKey })
-}
+// ensureGridAndStaff has been removed in favor of instance-scoped GridManager.
 
 /**
  * Simple scene manager to own layers and task/display mappings with anchor/layout caches.
@@ -614,6 +488,11 @@ export class TimelineSceneManager {
   dependencyGraphics: Map<string, Graphics>
   taskLayouts: Map<string, TaskLayout>
   taskAnchors: Map<string, TaskAnchors>
+  private plugins: RendererPlugin[]
+  private spatial: SpatialHash
+  private lastZoom: number
+  private providerGetConfig: () => TimelineConfig
+  private providerGetProjectStartDate: () => Date
 
   constructor(layers: { viewport: Container; background: Container; dependencies: Container; tasks: Container; selection: Container; dragLayer: Container }) {
     this.layers = layers
@@ -621,6 +500,50 @@ export class TimelineSceneManager {
     this.dependencyGraphics = new Map()
     this.taskLayouts = new Map()
     this.taskAnchors = new Map()
+    this.plugins = []
+    this.spatial = new SpatialHash(200)
+    this.lastZoom = 1
+    this.providerGetConfig = () => ({
+      LEFT_MARGIN: 0,
+      TOP_MARGIN: 0,
+      DAY_WIDTH: 60,
+      STAFF_SPACING: 120,
+      STAFF_LINE_SPACING: 18,
+      TASK_HEIGHT: 20,
+      STAFF_LINE_COUNT: 5,
+      BACKGROUND_COLOR: 0x000000,
+      GRID_COLOR_MAJOR: 0xffffff,
+      GRID_COLOR_MINOR: 0xffffff,
+      STAFF_LINE_COLOR: 0xffffff,
+      TASK_COLORS: { default: 0xffffff },
+      DEPENDENCY_COLOR: 0xffffff,
+      SELECTION_COLOR: 0xffffff,
+    } as any)
+    this.providerGetProjectStartDate = () => new Date(0)
+  }
+
+  setPlugins(plugins: RendererPlugin[]): void {
+    this.plugins = plugins || []
+  }
+
+  setZoom(zoom: number): void {
+    this.lastZoom = zoom
+  }
+
+  setContextProviders(providers: { getEffectiveConfig: () => TimelineConfig; getProjectStartDate: () => Date }): void {
+    this.providerGetConfig = providers.getEffectiveConfig
+    this.providerGetProjectStartDate = providers.getProjectStartDate
+  }
+
+  notifyLayersCreated(app: Application): void {
+    const ctx: RendererContext = {
+      getZoom: () => this.lastZoom,
+      getEffectiveConfig: () => this.providerGetConfig(),
+      getProjectStartDate: () => this.providerGetProjectStartDate(),
+    }
+    for (const p of this.plugins) {
+      try { p.onLayersCreated?.(app, this.layers as any, ctx) } catch { }
+    }
   }
 
   /**
@@ -632,7 +555,8 @@ export class TimelineSceneManager {
     config: TimelineConfig,
     title?: string,
     status?: string,
-    zoom: number = 1
+    zoom: number = 1,
+    selected: boolean = false
   ): { container: Container; created: boolean } {
     let container = this.taskContainers.get(task.id)
     let created = false
@@ -669,7 +593,7 @@ export class TimelineSceneManager {
       (prevMeta ? Math.abs(prevMeta.zoom - zoom) > 0.05 : true)
 
     if (shouldRedraw) {
-      drawTaskNote(container, config, layout, title || '', status, false, zoom)
+      drawTaskNote(container, config, layout, title || '', status, selected, zoom)
       metaMap.set(container, {
         startX: layout.startX,
         width: layout.width,
@@ -682,9 +606,9 @@ export class TimelineSceneManager {
     }
     container.hitArea = new Rectangle(0, 0, layout.width, config.TASK_HEIGHT)
 
-    // Notify plugins
-    for (const p of rendererPlugins) {
-      try { p.onTaskUpserted?.(task.id, container) } catch { }
+    // Notify plugins (instance-scoped)
+    for (const p of this.plugins) {
+      try { p.onTaskUpserted?.(task, container, { layout, config, zoom, selected }) } catch { }
     }
 
     return { container, created }
@@ -693,7 +617,8 @@ export class TimelineSceneManager {
   removeMissingTasks(validIds: Set<string>): void {
     for (const [id, container] of this.taskContainers.entries()) {
       if (!validIds.has(id)) {
-        container.removeFromParent()
+        try { container.removeFromParent() } catch { }
+        try { (container as any).destroy?.({ children: true }) } catch { }
         this.taskContainers.delete(id)
         this.taskLayouts.delete(id)
         this.taskAnchors.delete(id)
@@ -718,7 +643,8 @@ export class TimelineSceneManager {
   removeMissingDependencies(validIds: Set<string>): void {
     for (const [id, g] of this.dependencyGraphics.entries()) {
       if (!validIds.has(id)) {
-        g.removeFromParent()
+        try { g.removeFromParent() } catch { }
+        try { (g as any).destroy?.() } catch { }
         this.dependencyGraphics.delete(id)
       }
     }
@@ -733,13 +659,45 @@ export class TimelineSceneManager {
     if (!layout) return
     drawSelectionHighlight(this.layers.selection, config, layout)
   }
+
+  rebuildSpatialIndex(config: TimelineConfig): void {
+    this.spatial.clear()
+    for (const [id, layout] of this.taskLayouts.entries()) {
+      this.spatial.insert({ id, x: layout.startX, y: layout.topY, width: layout.width, height: config.TASK_HEIGHT, type: 'task' })
+    }
+  }
+
+  findTaskAtViewportPoint(x: number, y: number, excludeId?: string): string | null {
+    const hits = this.spatial.pointQuery(x, y)
+    for (const h of hits) {
+      if (excludeId && h.id === excludeId) continue
+      const cont = this.taskContainers.get(h.id)
+      if (!cont) continue
+      const local = cont.toLocal({ x, y } as any)
+      const hitArea = (cont as any).hitArea as Rectangle | undefined
+      if (hitArea && hitArea.contains(local.x, local.y)) return h.id
+    }
+    return null
+  }
+
+  destroy(): void {
+    // Plugin teardown
+    for (const p of this.plugins) {
+      try { p.onDestroy?.() } catch { }
+    }
+    // Destroy graphics and containers
+    try {
+      for (const [, g] of this.dependencyGraphics) { try { (g as any).destroy?.() } catch { } }
+      for (const [, c] of this.taskContainers) { try { (c as any).destroy?.({ children: true }) } catch { } }
+    } catch { }
+    this.dependencyGraphics.clear()
+    this.taskContainers.clear()
+    this.taskLayouts.clear()
+    this.taskAnchors.clear()
+  }
 }
 
 // Example plugin export for consumers to import and register
-export const ExampleStatusGlyphPlugin: RendererPlugin = {
-  onTaskUpserted: (_taskId, _container) => {
-    // Placeholder: consumers can draw extra glyphs or overlays here
-  }
-}
+export const ExampleStatusGlyphPlugin: RendererPlugin = {}
 
 

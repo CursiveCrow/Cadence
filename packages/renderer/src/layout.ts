@@ -3,9 +3,32 @@
  */
 
 import { Staff } from '@cadence/core'
-import type { TimelineConfig } from './scene'
+import type { TimelineConfig, TaskLike, TaskLayout } from './scene'
 
 export type TimeScale = 'hour' | 'day' | 'week' | 'month'
+
+/**
+ * Compute the effective rendering config given zoom (horizontal scale) and verticalScale (Y scaling).
+ * Keeps DAY_WIDTH-derived scales consistent across the codebase.
+ */
+export function computeEffectiveConfig(
+  base: TimelineConfig,
+  zoom: number,
+  verticalScale: number
+): TimelineConfig {
+  const effDay = Math.max(base.DAY_WIDTH * (zoom || 1), 3)
+  return {
+    ...base,
+    DAY_WIDTH: effDay,
+    HOUR_WIDTH: effDay / 24,
+    WEEK_WIDTH: effDay * 7,
+    MONTH_WIDTH: effDay * 30,
+    TOP_MARGIN: Math.round(base.TOP_MARGIN * verticalScale),
+    STAFF_SPACING: Math.max(20, Math.round(base.STAFF_SPACING * verticalScale)),
+    STAFF_LINE_SPACING: Math.max(8, Math.round(base.STAFF_LINE_SPACING * verticalScale)),
+    TASK_HEIGHT: Math.max(14, Math.round(base.TASK_HEIGHT * verticalScale)),
+  } as TimelineConfig
+}
 
 export function getTimeScaleForZoom(zoom: number): TimeScale {
   if (zoom >= 2) return 'hour'
@@ -119,5 +142,59 @@ export function offsetMsToIsoDateUTC(offsetMs: number, projectStartDate: Date): 
   const utcDate = new Date(base + offsetMs)
   return utcDate.toISOString().split('T')[0]
 }
+
+/**
+ * Compute task layout (moved from scene.ts) using config and staff list.
+ */
+export function computeTaskLayout(
+  config: TimelineConfig,
+  task: TaskLike,
+  projectStartDate: Date,
+  staffs: { id: string; numberOfLines: number }[]
+): TaskLayout {
+  const taskStart = new Date(task.startDate)
+  const dayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
+  const startX = config.LEFT_MARGIN + dayIndex * config.DAY_WIDTH + (config.NOTE_START_PADDING || 0)
+  const minWidth = Math.max(config.TASK_HEIGHT, 4)
+  const width = Math.max(task.durationDays * config.DAY_WIDTH - 8, minWidth)
+  const staffIndex = staffs.findIndex(s => s.id === task.staffId)
+  const staffStartY = config.TOP_MARGIN + (staffIndex === -1 ? 0 : staffIndex * config.STAFF_SPACING)
+  const centerY = staffStartY + (task.staffLine * config.STAFF_LINE_SPACING / 2)
+  const topY = centerY - config.TASK_HEIGHT / 2
+  const radius = config.TASK_HEIGHT / 2
+  return { startX, centerY, topY, width, radius }
+}
+
+/**
+ * Grid visual parameters for WebGPU grid shader derived from zoom and config.
+ */
+export function getGridParamsForZoom(
+  zoom: number,
+  projectStartDate: Date
+): {
+  minorWidthPx: number
+  majorWidthPx: number
+  minorStepDays: number
+  majorStepDays: number
+  minorAlpha: number
+  majorAlpha: number
+  scaleType: TimeScale
+  baseDow: number
+  weekendAlpha: number
+  globalAlpha: number
+} {
+  const scale = getTimeScaleForZoom(zoom)
+  const minorWidthPx = 0.25
+  const majorWidthPx = 1
+  const minorStepDays = zoom >= 2 ? (2.0 / 24.0) : zoom >= 0.75 ? 1.0 : zoom >= 0.35 ? 7.0 : 30.0
+  const majorStepDays = zoom >= 2 ? 1.0 : zoom >= 0.75 ? 7.0 : zoom >= 0.35 ? 30.0 : 30.0
+  const minorAlpha = zoom >= 0.75 ? 0.6 : 0.25
+  const majorAlpha = zoom >= 0.75 ? 1.5 : 0.6
+  const baseDow = new Date(projectStartDate).getUTCDay()
+  const weekendAlpha = (zoom >= 0.75 ? 0.2 : 0.0)
+  const globalAlpha = 0.25
+  return { minorWidthPx, majorWidthPx, minorStepDays, majorStepDays, minorAlpha, majorAlpha, scaleType: scale, baseDow, weekendAlpha, globalAlpha }
+}
+
 
 

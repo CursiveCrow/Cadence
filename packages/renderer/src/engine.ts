@@ -1,11 +1,11 @@
 import { Application, Container, Rectangle } from 'pixi.js'
-import { createTimelineLayers, TimelineSceneManager, ensureGridAndStaff, drawDependencyArrow, type TimelineConfig } from './scene'
+import { createTimelineLayers, TimelineSceneManager, drawDependencyArrow, type TimelineConfig, type RendererPlugin } from './scene'
 import { TimelineDnDController } from './dnd'
 import { PanZoomController, ViewportState } from './panzoom'
-import { checkWebGPUAvailability, logWebGPUStatus } from './webgpu-check'
-import { computeTaskLayout } from './scene'
+import { checkWebGPUAvailability, logWebGPUStatus, logRendererPreference } from './webgpu-check'
 import { createGpuTimeGrid, GpuTimeGrid } from './gpuGrid'
-import { getTimeScaleForZoom } from './layout'
+import { computeEffectiveConfig, snapXToTimeWithConfig, computeTaskLayout, getGridParamsForZoom } from './layout'
+import { GridManager } from './gridManager'
 // Intentionally imported for future dynamic tick density; currently computed in scene
 
 export interface EngineTasks {
@@ -40,7 +40,10 @@ export interface TimelineRendererEngineOptions {
     config: TimelineConfig
     utils: EngineUtils
     callbacks: EngineCallbacks
+    plugins?: RendererPlugin[]
 }
+
+// Use shared GridManager
 
 export class TimelineRendererEngine {
     private app: Application | null = null
@@ -48,7 +51,6 @@ export class TimelineRendererEngine {
     private scene: TimelineSceneManager | null = null
     private dnd: TimelineDnDController | null = null
     private panzoom: PanZoomController | null = null
-    private gpuGrid: GpuTimeGrid | null = null
     private tickerAdded = false
     private isInitialized = false
     private initializing = false
@@ -56,6 +58,8 @@ export class TimelineRendererEngine {
     private setViewport: (v: ViewportState) => void = () => { }
     private currentData: { tasks: EngineTasks; dependencies: EngineDependencies; staffs: any[] } = { tasks: {}, dependencies: {}, staffs: [] }
     private verticalScale: number = 1
+    private gridManager: GridManager | null = null
+    private gpuGrid: GpuTimeGrid | undefined
 
     constructor(private readonly opts: TimelineRendererEngineOptions) { }
 
@@ -86,8 +90,8 @@ export class TimelineRendererEngine {
                 autoDensity: true,
                 backgroundColor: this.opts.config.BACKGROUND_COLOR,
 
-                // Use WebGL to ensure compatibility with custom GlProgram-based filters
-                preference: 'webgl',
+                // Force WebGPU renderer
+                preference: 'webgpu',
                 antialias: true,
                 clearBeforeRender: true,
                 preserveDrawingBuffer: false,
@@ -97,6 +101,7 @@ export class TimelineRendererEngine {
                 hello: false,
             })
             this.app = app
+            try { logRendererPreference(status, 'webgpu') } catch { }
             try { (app.renderer as any).roundPixels = true } catch { }
 
             const layers = createTimelineLayers(app)
@@ -110,13 +115,34 @@ export class TimelineRendererEngine {
             } catch { }
 
             this.scene = new TimelineSceneManager(layers)
+            this.scene.setPlugins(this.opts.plugins || [])
+            // Provide context providers for plugins to query effective config and project start
+            const getEffective = () => {
+                const vp = this.getViewport()
+                return computeEffectiveConfig(this.opts.config as any, vp.zoom || 1, this.getVerticalScale()) as any
+            }
+            this.scene.setContextProviders({
+                getEffectiveConfig: getEffective,
+                getProjectStartDate: () => this.opts.utils.getProjectStartDate()
+            })
+            this.scene.notifyLayersCreated(app)
+            this.gridManager = new GridManager()
             this.dnd = new TimelineDnDController({
                 app,
                 layers,
                 scene: this.scene,
                 config: this.opts.config,
                 projectId: this.opts.projectId,
-                utils: this.opts.utils,
+                utils: {
+                    ...this.opts.utils,
+                    // Centralized, time-aware snapping using current effective config and zoom
+                    snapXToTime: (x: number) => {
+                        const vp = this.getViewport()
+                        const eff = computeEffectiveConfig(this.opts.config, vp.zoom || 1, this.getVerticalScale())
+                        const result = snapXToTimeWithConfig(x, eff as any, vp.zoom || 1, this.opts.utils.getProjectStartDate())
+                        return { snappedX: result.snappedX, dayIndex: result.dayIndex }
+                    }
+                },
                 data: {
                     getTasks: () => (this.currentData.tasks as any),
                     getStaffs: () => (this.currentData.staffs as any[]),
@@ -172,28 +198,15 @@ export class TimelineRendererEngine {
         const app = this.app
         const layers = this.layers
         const scene = this.scene
+        // Update scene zoom for plugin context
+        try { scene.setZoom(viewport.zoom || 1) } catch { }
 
-        // Compute effective horizontal scale by inflating day width; do not scale Y
+        // Compute effective config for current zoom and vertical scale
         const cfg = this.opts.config
-        const base = cfg.DAY_WIDTH
-        const effDay = Math.max(base * viewport.zoom, 3)
-        const effectiveCfg = {
-            ...cfg,
-            DAY_WIDTH: effDay,
-            HOUR_WIDTH: effDay / 24,
-            WEEK_WIDTH: effDay * 7,
-            MONTH_WIDTH: effDay * 30,
-            TOP_MARGIN: Math.round(cfg.TOP_MARGIN * this.verticalScale),
-            STAFF_SPACING: Math.max(20, Math.round(cfg.STAFF_SPACING * this.verticalScale)),
-            STAFF_LINE_SPACING: Math.max(8, Math.round(cfg.STAFF_LINE_SPACING * this.verticalScale)),
-            // Scale note height with vertical scale while clamping to reasonable bounds
-            TASK_HEIGHT: Math.max(14, Math.round(cfg.TASK_HEIGHT * this.verticalScale)),
-        } as typeof cfg
+        const effectiveCfg = computeEffectiveConfig(cfg as any, viewport.zoom, this.verticalScale)
 
-        // Background staff and labels; hide CPU verticals (GPU handles all scales)
-        const scaleType = getTimeScaleForZoom(viewport.zoom)
-        const useGpuGrid = true
-        ensureGridAndStaff(layers.background, effectiveCfg as any, data.staffs as any, this.opts.utils.getProjectStartDate(), app.screen.width, app.screen.height, viewport.zoom, useGpuGrid)
+        // Background staff and labels; verticals are handled by WebGPU grid
+        this.gridManager?.ensure(layers.background, effectiveCfg as any, data.staffs as any, this.opts.utils.getProjectStartDate(), app.screen.width, app.screen.height, viewport.zoom, true)
 
         // Update viewport transform: translate in pixels; do not scale Y; keep stage scale at 1
         const offsetX = -viewport.x * effectiveCfg.DAY_WIDTH
@@ -202,52 +215,36 @@ export class TimelineRendererEngine {
         layers.viewport.y = Math.round(Number.isFinite(-viewport.y) ? -viewport.y : 0)
         layers.viewport.scale.set(1, 1)
 
-        // Update GPU grid uniforms
-        if (this.gpuGrid) {
+        // Update GPU grid uniforms (WebGPU)
+        const gpuGrid = this.gpuGrid
+        if (gpuGrid) {
             try {
                 const screenW = app.screen.width
                 const screenH = app.screen.height
-                const cfg = effectiveCfg as any
+                const cfgEff = effectiveCfg as any
                 const projectStart = this.opts.utils.getProjectStartDate()
-                const baseDow = new Date(projectStart).getUTCDay()
+                const gp = getGridParamsForZoom(viewport.zoom || 1, projectStart)
 
-                const minorWidthPx = 0.25
-                const majorWidthPx = 1
-                // Keep majors brighter than minors; globalAlpha caps final strength
-                const minorAlpha = scaleType === 'day' ? .6 : 0.25
-                const majorAlpha = scaleType === 'day' ? 1.5 : 0.6
-
-                const minorStepDays = scaleType === 'hour' ? (2.0 / 24.0)
-                    : scaleType === 'day' ? 1.0
-                        : scaleType === 'week' ? 7.0
-                            : 30.0
-
-                const majorStepDays = scaleType === 'hour' ? 1.0
-                    : scaleType === 'day' ? 7.0
-                        : scaleType === 'week' ? 30.0
-                            : 30.0
-
-                // Always use GPU grid; CPU verticals are disabled via useGpuGrid
-                this.gpuGrid.container.visible = true
-                this.gpuGrid.setSize(screenW, screenH)
-                this.gpuGrid.updateUniforms({
+                gpuGrid.container.visible = true
+                gpuGrid.setSize(screenW, screenH)
+                gpuGrid.updateUniforms({
                     screenWidth: screenW,
                     screenHeight: screenH,
-                    leftMarginPx: cfg.LEFT_MARGIN,
+                    leftMarginPx: cfgEff.LEFT_MARGIN,
                     viewportXDays: viewport.x,
-                    dayWidthPx: cfg.DAY_WIDTH,
-                    minorStepDays,
-                    majorStepDays,
-                    minorColor: cfg.GRID_COLOR_MINOR,
-                    majorColor: cfg.GRID_COLOR_MAJOR,
-                    minorAlpha,
-                    majorAlpha,
-                    minorLineWidthPx: minorWidthPx,
-                    majorLineWidthPx: majorWidthPx,
-                    scaleType: scaleType as any,
-                    baseDow,
-                    weekendAlpha: scaleType === 'day' ? 0.2 : 0.0,
-                    globalAlpha: 0.25,
+                    dayWidthPx: cfgEff.DAY_WIDTH,
+                    minorStepDays: gp.minorStepDays,
+                    majorStepDays: gp.majorStepDays,
+                    minorColor: cfgEff.GRID_COLOR_MINOR,
+                    majorColor: cfgEff.GRID_COLOR_MAJOR,
+                    minorAlpha: gp.minorAlpha,
+                    majorAlpha: gp.majorAlpha,
+                    minorLineWidthPx: gp.minorWidthPx,
+                    majorLineWidthPx: gp.majorWidthPx,
+                    scaleType: gp.scaleType as any,
+                    baseDow: gp.baseDow,
+                    weekendAlpha: gp.weekendAlpha,
+                    globalAlpha: gp.globalAlpha,
                 })
             } catch { }
         }
@@ -257,7 +254,8 @@ export class TimelineRendererEngine {
         const currentIds = new Set(Object.keys(data.tasks))
         for (const task of Object.values(data.tasks)) {
             const layout = computeTaskLayout(effectiveCfg as any, task as any, projectStartDate, data.staffs as any)
-            const { container } = scene.upsertTask(task as any, layout, effectiveCfg as any, (task as any).title, (task as any).status, viewport.zoom)
+            const isSelected = Array.isArray(data.selection) && data.selection.includes((task as any).id)
+            const { container } = scene.upsertTask(task as any, layout, effectiveCfg as any, (task as any).title, (task as any).status, viewport.zoom, isSelected)
             container.position.set(Math.round(layout.startX), Math.round(layout.topY))
             container.hitArea = new Rectangle(0, 0, layout.width, effectiveCfg.TASK_HEIGHT)
             if (this.dnd) this.dnd.registerTask(task as any, container, layout)
@@ -278,6 +276,8 @@ export class TimelineRendererEngine {
         // Selection overlay
         scene.clearSelection()
         for (const id of data.selection) scene.drawSelection(id, effectiveCfg as any)
+        // Update spatial index for hit-testing
+        scene.rebuildSpatialIndex(effectiveCfg as any)
     }
 
     getApplication(): Application | null { return this.app }
@@ -296,6 +296,7 @@ export class TimelineRendererEngine {
             try { app.stage.removeAllListeners() } catch { }
             try { app.destroy(true, { children: true, texture: true, textureSource: true, context: true }) } catch { }
         }
+        try { this.scene?.destroy() } catch { }
         this.layers = null
         this.scene = null
         this.app = null
