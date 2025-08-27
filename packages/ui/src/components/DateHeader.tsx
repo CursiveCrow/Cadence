@@ -100,7 +100,7 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
                 const diffMs = cursor.getTime() - base.getTime()
                 const dayIndex = Math.round(diffMs / (24 * 60 * 60 * 1000))
                 if (dayIndex > endDays) break
-                const text = cursor.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+                const text = cursor.toLocaleDateString('en-US', { month: 'short' })
                 const xWorld = leftMargin + dayIndex * effectiveDayWidth
                 const xScreen = worldToScreen(xWorld)
                 labels.push({ x: xScreen + 6, text })

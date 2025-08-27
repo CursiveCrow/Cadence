@@ -4,6 +4,8 @@ import { TimelineDnDController } from './dnd'
 import { PanZoomController, ViewportState } from './panzoom'
 import { checkWebGPUAvailability, logWebGPUStatus } from './webgpu-check'
 import { computeTaskLayout } from './scene'
+import { createGpuTimeGrid, GpuTimeGrid } from './gpuGrid'
+import { getTimeScaleForZoom } from './layout'
 // Intentionally imported for future dynamic tick density; currently computed in scene
 
 export interface EngineTasks {
@@ -46,6 +48,7 @@ export class TimelineRendererEngine {
     private scene: TimelineSceneManager | null = null
     private dnd: TimelineDnDController | null = null
     private panzoom: PanZoomController | null = null
+    private gpuGrid: GpuTimeGrid | null = null
     private tickerAdded = false
     private isInitialized = false
     private initializing = false
@@ -82,7 +85,9 @@ export class TimelineRendererEngine {
                 resolution: Math.max(1, Math.min(2, (window.devicePixelRatio || 1))),
                 autoDensity: true,
                 backgroundColor: this.opts.config.BACKGROUND_COLOR,
-                preference: (status.available && status.rendererType === 'webgpu') ? 'webgpu' : 'webgl',
+
+                // Use WebGL to ensure compatibility with custom GlProgram-based filters
+                preference: 'webgl',
                 antialias: true,
                 clearBeforeRender: true,
                 preserveDrawingBuffer: false,
@@ -96,6 +101,13 @@ export class TimelineRendererEngine {
 
             const layers = createTimelineLayers(app)
             this.layers = layers
+
+            // Insert GPU grid beneath viewport so it doesn't move with panning
+            try {
+                const grid = createGpuTimeGrid(app)
+                this.gpuGrid = grid
+                app.stage.addChildAt(grid.container, Math.max(0, app.stage.getChildIndex(layers.viewport)))
+            } catch { }
 
             this.scene = new TimelineSceneManager(layers)
             this.dnd = new TimelineDnDController({
@@ -163,8 +175,10 @@ export class TimelineRendererEngine {
             TASK_HEIGHT: Math.max(14, Math.round(cfg.TASK_HEIGHT * this.verticalScale)),
         } as typeof cfg
 
-        // Background grid and staff
-        ensureGridAndStaff(layers.background, effectiveCfg as any, data.staffs as any, this.opts.utils.getProjectStartDate(), app.screen.width, app.screen.height, viewport.zoom)
+        // Background staff and labels; hide CPU verticals (GPU handles all scales)
+        const scaleType = getTimeScaleForZoom(viewport.zoom)
+        const useGpuGrid = true
+        ensureGridAndStaff(layers.background, effectiveCfg as any, data.staffs as any, this.opts.utils.getProjectStartDate(), app.screen.width, app.screen.height, viewport.zoom, useGpuGrid)
 
         // Update viewport transform: translate in pixels; do not scale Y; keep stage scale at 1
         const offsetX = -viewport.x * effectiveCfg.DAY_WIDTH
@@ -172,6 +186,56 @@ export class TimelineRendererEngine {
         layers.viewport.x = Math.round(Number.isFinite(offsetX) ? offsetX : 0)
         layers.viewport.y = Math.round(Number.isFinite(-viewport.y) ? -viewport.y : 0)
         layers.viewport.scale.set(1, 1)
+
+        // Update GPU grid uniforms
+        if (this.gpuGrid) {
+            try {
+                const screenW = app.screen.width
+                const screenH = app.screen.height
+                const cfg = effectiveCfg as any
+                const projectStart = this.opts.utils.getProjectStartDate()
+                const baseDow = new Date(projectStart).getUTCDay()
+
+                const minorWidthPx = 0.25
+                const majorWidthPx = 1
+                // Keep majors brighter than minors; globalAlpha caps final strength
+                const minorAlpha = scaleType === 'day' ? .6 : 0.25
+                const majorAlpha = scaleType === 'day' ? 1.5 : 0.6
+
+                const minorStepDays = scaleType === 'hour' ? (2.0 / 24.0)
+                    : scaleType === 'day' ? 1.0
+                        : scaleType === 'week' ? 7.0
+                            : 30.0
+
+                const majorStepDays = scaleType === 'hour' ? 1.0
+                    : scaleType === 'day' ? 7.0
+                        : scaleType === 'week' ? 30.0
+                            : 30.0
+
+                // Always use GPU grid; CPU verticals are disabled via useGpuGrid
+                this.gpuGrid.container.visible = true
+                this.gpuGrid.setSize(screenW, screenH)
+                this.gpuGrid.updateUniforms({
+                    screenWidth: screenW,
+                    screenHeight: screenH,
+                    leftMarginPx: cfg.LEFT_MARGIN,
+                    viewportXDays: viewport.x,
+                    dayWidthPx: cfg.DAY_WIDTH,
+                    minorStepDays,
+                    majorStepDays,
+                    minorColor: cfg.GRID_COLOR_MINOR,
+                    majorColor: cfg.GRID_COLOR_MAJOR,
+                    minorAlpha,
+                    majorAlpha,
+                    minorLineWidthPx: minorWidthPx,
+                    majorLineWidthPx: majorWidthPx,
+                    scaleType: scaleType as any,
+                    baseDow,
+                    weekendAlpha: scaleType === 'day' ? 0.2 : 0.0,
+                    globalAlpha: 0.25,
+                })
+            } catch { }
+        }
 
         // Render tasks
         const projectStartDate = this.opts.utils.getProjectStartDate()

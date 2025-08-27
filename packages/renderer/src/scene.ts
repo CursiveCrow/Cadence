@@ -112,7 +112,8 @@ export function drawGridAndStaff(
   projectStartDate: Date,
   screenWidth: number,
   screenHeight: number,
-  zoom: number = 1
+  zoom: number = 1,
+  useGpuGrid: boolean = false
 ): void {
   container.removeChildren()
 
@@ -136,20 +137,18 @@ export function drawGridAndStaff(
   const majorStep = scale === 'hour' ? dayWidth : scale === 'day' ? weekWidth : scale === 'week' ? monthWidth : monthWidth
   const minorStep = scale === 'hour' ? hourWidth : scale === 'day' ? dayWidth : scale === 'week' ? weekWidth : monthWidth
 
-  // Subtle alternating weekly bands and weekend shading to improve day-scale legibility
-  if (scale === 'day') {
+  // Subtle alternating weekly bands and weekend shading (skip if GPU grid handles it)
+  if (!useGpuGrid && scale === 'day') {
     const bg = new Graphics()
     const baseDow = new Date(projectStartDate).getUTCDay() // 0 Sun .. 6 Sat
-    // Alternating week bands
     let bandX = config.LEFT_MARGIN
     let toggle = false
     while (bandX < extendedWidth) {
       bg.rect(bandX, 0, weekWidth, extendedHeight)
-      bg.fill({ color: 0xffffff, alpha: toggle ? 0.015 : 0 })
+      bg.fill({ color: 0xffffff, alpha: toggle ? 0.02 : 0.02 })
       toggle = !toggle
       bandX += weekWidth
     }
-    // Weekend day overlays
     for (let i = 0, x = config.LEFT_MARGIN; x < extendedWidth; i++, x += dayWidth) {
       const dow = (baseDow + i) % 7
       if (dow === 0 || dow === 6) {
@@ -160,7 +159,7 @@ export function drawGridAndStaff(
     container.addChild(bg)
   }
 
-  if (scale === 'month') {
+  if (scale === 'month' && !useGpuGrid) {
     // Draw month boundaries exactly at the first of each month
     const base = new Date(Date.UTC(projectStartDate.getUTCFullYear(), projectStartDate.getUTCMonth(), projectStartDate.getUTCDate()))
     let cursor = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), 1))
@@ -175,7 +174,7 @@ export function drawGridAndStaff(
       graphics.stroke({ width: 2, color: config.GRID_COLOR_MAJOR, alpha: 0.1 })
       cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1))
     }
-  } else {
+  } else if (!useGpuGrid) {
     for (let x = config.LEFT_MARGIN; x < extendedWidth; x += majorStep) {
       const ax = align(x)
       graphics.moveTo(ax, 0)
@@ -183,14 +182,14 @@ export function drawGridAndStaff(
       const majorAlpha = scale === 'day' ? 0.15 : 0.1
       graphics.stroke({ width: 2, color: config.GRID_COLOR_MAJOR, alpha: majorAlpha })
     }
-  }
 
-  for (let x = config.LEFT_MARGIN; x < extendedWidth; x += minorStep) {
-    const ax = align(x)
-    graphics.moveTo(ax, 0)
-    graphics.lineTo(ax, extendedHeight)
-    const minorAlpha = scale === 'day' ? 0.03 : 0.05
-    graphics.stroke({ width: 1, color: config.GRID_COLOR_MINOR, alpha: minorAlpha })
+    for (let x = config.LEFT_MARGIN; x < extendedWidth; x += minorStep) {
+      const ax = align(x)
+      graphics.moveTo(ax, 0)
+      graphics.lineTo(ax, extendedHeight)
+      const minorAlpha = scale === 'day' ? 0.03 : 0.05
+      graphics.stroke({ width: 1, color: config.GRID_COLOR_MINOR, alpha: minorAlpha })
+    }
   }
 
   let currentY = config.TOP_MARGIN
@@ -239,39 +238,64 @@ export function drawGridAndStaff(
 
   if ((config as any).DRAW_STAFF_LABELS !== false) {
     const alignPx = (v: number) => Math.round(v)
-    const max = Math.floor((extendedWidth - config.LEFT_MARGIN) / minorStep)
-    for (let i = 0; i < max; i++) {
-      const x = config.LEFT_MARGIN + i * minorStep
-      const date = new Date(projectStartDate)
-      const days = Math.round((x - config.LEFT_MARGIN) / dayWidth)
-      date.setDate(date.getDate() + days)
-      const label = scale === 'hour'
-        ? date.toLocaleTimeString('en-US', { hour: '2-digit' })
-        : scale === 'day'
-          ? (date.getDate() === 1
-            ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            : String(date.getDate()))
-          : scale === 'week'
-            ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            : date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
-
-      const dateText = new Text({
-        text: label,
-        style: {
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          fontSize: scale === 'day' ? 12 : 11,
-          fill: 0xffffff
-        }
-      })
-      if (scale === 'day') {
-        // Bold month boundaries for stronger visual rhythm
-        if (date.getDate() === 1) {
-          try { (dateText as any).style.fontWeight = 'bold' } catch { }
-        }
+    if (scale === 'month') {
+      // Place month labels exactly on the 1st of each month
+      const base = new Date(Date.UTC(projectStartDate.getUTCFullYear(), projectStartDate.getUTCMonth(), projectStartDate.getUTCDate()))
+      let cursor = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), 1))
+      while (true) {
+        const diffMs = cursor.getTime() - base.getTime()
+        const dayIndex = Math.round(diffMs / (24 * 60 * 60 * 1000))
+        const x = config.LEFT_MARGIN + dayIndex * dayWidth
+        if (x > extendedWidth) break
+        const label = cursor.toLocaleDateString('en-US', { month: 'short' })
+        const dateText = new Text({
+          text: label,
+          style: {
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            fontSize: 11,
+            fill: 0xffffff
+          }
+        })
+        dateText.x = alignPx(x + 5)
+        dateText.y = alignPx(25 - dateText.height / 2)
+        container.addChild(dateText)
+        cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1))
       }
-      dateText.x = alignPx(x + 5)
-      dateText.y = alignPx(25 - dateText.height / 2)
-      container.addChild(dateText)
+    } else {
+      const max = Math.floor((extendedWidth - config.LEFT_MARGIN) / minorStep)
+      for (let i = 0; i < max; i++) {
+        const x = config.LEFT_MARGIN + i * minorStep
+        const date = new Date(projectStartDate)
+        const days = Math.round((x - config.LEFT_MARGIN) / dayWidth)
+        date.setDate(date.getDate() + days)
+        const label = scale === 'hour'
+          ? date.toLocaleTimeString('en-US', { hour: '2-digit' })
+          : scale === 'day'
+            ? (date.getDate() === 1
+              ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              : String(date.getDate()))
+            : scale === 'week'
+              ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              : date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+
+        const dateText = new Text({
+          text: label,
+          style: {
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            fontSize: scale === 'day' ? 12 : 11,
+            fill: 0xffffff
+          }
+        })
+        if (scale === 'day') {
+          // Bold month boundaries for stronger visual rhythm
+          if (date.getDate() === 1) {
+            try { (dateText as any).style.fontWeight = 'bold' } catch { }
+          }
+        }
+        dateText.x = alignPx(x + 5)
+        dateText.y = alignPx(25 - dateText.height / 2)
+        container.addChild(dateText)
+      }
     }
   }
 
@@ -564,7 +588,8 @@ export function ensureGridAndStaff(
   projectStartDate: Date,
   screenWidth: number,
   screenHeight: number,
-  zoom: number = 1
+  zoom: number = 1,
+  useGpuGrid: boolean = false
 ): void {
   type GridMeta = { w: number; h: number; z: number; cfg: string }
   const metaMap: WeakMap<Container, GridMeta> = (ensureGridAndStaff as any).__metaMap || new WeakMap<Container, GridMeta>()
@@ -576,7 +601,7 @@ export function ensureGridAndStaff(
   const cfgKey = `${config.TOP_MARGIN}|${config.STAFF_SPACING}|${config.STAFF_LINE_SPACING}|${staffs.length}`
   if (container.children.length > 0 && meta?.w === screenWidth && meta?.h === screenHeight && meta?.z === rz && meta?.cfg === cfgKey) return
   container.removeChildren()
-  drawGridAndStaff(container, config, staffs, projectStartDate, screenWidth, screenHeight, rz)
+  drawGridAndStaff(container, config, staffs, projectStartDate, screenWidth, screenHeight, rz, useGpuGrid)
   metaMap.set(container, { w: screenWidth, h: screenHeight, z: rz, cfg: cfgKey })
 }
 
