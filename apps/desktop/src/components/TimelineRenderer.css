@@ -19,9 +19,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--ui-color-text);
 }
 
 .timeline-error {
-  color: #fff;
+  color: var(--ui-color-text);
 }

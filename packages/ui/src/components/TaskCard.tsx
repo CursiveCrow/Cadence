@@ -30,7 +30,7 @@ export function TaskCard({
 
   const baseClasses = 'border rounded-lg p-4 cursor-pointer transition-colors'
   const selectedClasses = selected ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
-  
+
   const classes = [baseClasses, selectedClasses, className].join(' ')
 
   const handleClick = () => {
@@ -46,7 +46,7 @@ export function TaskCard({
   }
 
   return (
-    <div 
+    <div
       className={classes}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
@@ -68,9 +68,7 @@ export function TaskCard({
           </span>
         </div>
       </div>
-      <div className="text-xs text-gray-500 mt-2">
-        Lane: {task.laneIndex}
-      </div>
+      <div className="text-xs text-gray-500 mt-2" />
     </div>
   )
 }

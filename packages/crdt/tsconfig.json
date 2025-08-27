@@ -4,11 +4,21 @@
     "outDir": "dist",
     "rootDir": "src",
     "baseUrl": ".",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "paths": {
-      "@cadence/core": ["../core/dist"]
+      "@cadence/core": [
+        "../core/dist"
+      ]
     },
     "types": []
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/__tests__"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/__tests__"
+  ]
 }

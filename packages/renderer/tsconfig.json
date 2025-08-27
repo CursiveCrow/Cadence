@@ -3,12 +3,29 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
+    "noEmit": false,
+    "emitDeclarationOnly": false,
+    "declaration": true,
+    "declarationMap": true,
+    "allowImportingTsExtensions": false,
     "types": [],
     "baseUrl": ".",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "paths": {
-      "@cadence/core": ["../core/dist"]
+      "@cadence/core": [
+        "../core/dist"
+      ],
+      "@cadence/config": [
+        "../config/dist"
+      ]
     }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

@@ -1,0 +1,212 @@
+.task-popup {
+  background: var(--ui-color-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--ui-color-border);
+  border-radius: var(--ui-radius-xl);
+  box-shadow: 0 20px 40px var(--ui-color-shadow);
+  color: var(--ui-color-text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  min-width: 280px;
+  max-width: 320px;
+  pointer-events: all;
+  animation: popup-appear 0.2s ease-out;
+}
+
+@keyframes popup-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.task-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--ui-color-primary-weak);
+  border-radius: var(--ui-radius-xl) var(--ui-radius-xl) 0 0;
+}
+
+.task-popup-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ui-color-text);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-status-icon {
+  font-size: 16px;
+  color: var(--ui-color-primary);
+  font-weight: bold;
+}
+
+.task-popup-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.popup-minimize-btn,
+.popup-close-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.popup-minimize-btn:hover,
+.popup-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ui-color-text);
+}
+
+.popup-close-btn:hover {
+  background: var(--ui-color-danger-weak);
+  color: var(--ui-color-danger);
+}
+
+.task-popup-content {
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.task-field {
+  margin-bottom: 12px;
+}
+
+.task-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.task-input,
+.task-select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--ui-surface-1);
+  border: 1px solid var(--ui-surface-1-border);
+  border-radius: var(--ui-radius-md);
+  color: var(--ui-color-text);
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.task-input:focus,
+.task-select:focus {
+  outline: none;
+  border-color: var(--ui-color-primary);
+  background: var(--ui-surface-1-focus);
+  box-shadow: 0 0 0 2px var(--ui-color-primary-weak);
+}
+
+.task-input::placeholder {
+  color: rgba(156, 163, 175, 0.6);
+}
+
+.task-select option {
+  background: #374151;
+  color: var(--ui-color-text);
+}
+
+.duration-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.duration-input .task-input {
+  flex: 1;
+}
+
+.duration-unit {
+  font-size: 12px;
+  color: var(--ui-color-muted);
+  font-weight: 500;
+}
+
+.staff-position-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.staff-position-controls .task-select {
+  flex: 1;
+}
+
+.staff-line-indicator {
+  font-size: 18px;
+  color: var(--ui-color-primary);
+  font-weight: bold;
+  min-width: 24px;
+  text-align: center;
+}
+
+.multi-select-info {
+  background: var(--ui-color-primary-weak);
+  border: 1px solid var(--ui-color-primary-border);
+  border-radius: var(--ui-radius-lg);
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: #c4b5fd;
+  margin-top: 16px;
+}
+
+.multi-count {
+  font-weight: bold;
+  color: var(--ui-color-primary);
+}
+
+/* Custom scrollbar for content */
+.task-popup-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.task-popup-content::-webkit-scrollbar-track {
+  background: rgba(55, 65, 81, 0.3);
+  border-radius: 3px;
+}
+
+.task-popup-content::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.5);
+  border-radius: 3px;
+}
+
+.task-popup-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.7);
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .task-popup {
+    min-width: 260px;
+    max-width: 90vw;
+  }
+
+  .task-popup-title {
+    max-width: 150px;
+  }
+}

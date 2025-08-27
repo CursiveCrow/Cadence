@@ -6,6 +6,19 @@
 import { Container, Graphics, Text, Application, Rectangle } from 'pixi.js'
 import { STATUS_TO_ACCIDENTAL } from './config'
 
+// Renderer plugin interface and registry (extensibility)
+export interface RendererPlugin {
+  // Called after layers created; can add display objects or listeners
+  onLayersCreated?(app: Application, layers: ReturnType<typeof createTimelineLayers>): void
+  // Called after a task container is upserted and positioned
+  onTaskUpserted?(taskId: string, container: Container): void
+}
+
+const rendererPlugins: RendererPlugin[] = []
+export function registerRendererPlugin(plugin: RendererPlugin) {
+  rendererPlugins.push(plugin)
+}
+
 export interface TimelineConfig {
   LEFT_MARGIN: number
   TOP_MARGIN: number
@@ -76,9 +89,7 @@ export function computeTaskLayout(
   const width = Math.max(task.durationDays * config.DAY_WIDTH - 8, 40)
 
   const staffIndex = staffs.findIndex(s => s.id === task.staffId)
-  const staffStartY = staffIndex === -1
-    ? 40 + (task as any).laneIndex * 80 + 40
-    : config.TOP_MARGIN + staffIndex * config.STAFF_SPACING
+  const staffStartY = config.TOP_MARGIN + (staffIndex === -1 ? 0 : staffIndex * config.STAFF_SPACING)
 
   const centerY = staffStartY + (task.staffLine * config.STAFF_LINE_SPACING / 2)
   const topY = centerY - config.TASK_HEIGHT / 2
@@ -99,25 +110,32 @@ export function drawGridAndStaff(
   container.removeChildren()
 
   const graphics = new Graphics()
+    // Use crisp edges by turning off antialias on vector strokes when zoomed out
+    ; (graphics as any).resolution = Math.max(1, Math.round((zoom || 1) * ((typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1)))
   const extendedWidth = Math.max(screenWidth, config.DAY_WIDTH * 365)
   const extendedHeight = Math.max(screenHeight * 3, 2000)
 
+  // Align world coordinates to pixel grid at current zoom to reduce blur
+  const align = (v: number) => Math.round(v * (zoom || 1)) / (zoom || 1)
+
   for (let x = config.LEFT_MARGIN; x < extendedWidth; x += config.DAY_WIDTH * 7) {
-    graphics.moveTo(x, 0)
-    graphics.lineTo(x, extendedHeight)
+    const ax = align(x)
+    graphics.moveTo(ax, 0)
+    graphics.lineTo(ax, extendedHeight)
     graphics.stroke({ width: Math.max(1, 2 / (zoom || 1)), color: config.GRID_COLOR_MAJOR, alpha: 0.1 })
   }
 
   for (let x = config.LEFT_MARGIN; x < extendedWidth; x += config.DAY_WIDTH) {
-    graphics.moveTo(x, 0)
-    graphics.lineTo(x, extendedHeight)
+    const ax = align(x)
+    graphics.moveTo(ax, 0)
+    graphics.lineTo(ax, extendedHeight)
     graphics.stroke({ width: Math.max(1, 1 / (zoom || 1)), color: config.GRID_COLOR_MINOR, alpha: 0.05 })
   }
 
   let currentY = config.TOP_MARGIN
   staffs.forEach((staff) => {
     for (let line = 0; line < staff.numberOfLines; line++) {
-      const y = currentY + line * config.STAFF_LINE_SPACING
+      const y = align(currentY + line * config.STAFF_LINE_SPACING)
       graphics.moveTo(config.LEFT_MARGIN, y)
       graphics.lineTo(extendedWidth, y)
       graphics.stroke({ width: Math.max(1, 1 / (zoom || 1)), color: config.STAFF_LINE_COLOR, alpha: 0.6 })
@@ -140,7 +158,7 @@ export function drawGridAndStaff(
       container.addChild(labelText)
 
       const clefSymbol = staff.name.toLowerCase().includes('treble') ? '𝄞' :
-                         staff.name.toLowerCase().includes('bass') ? '𝄢' : '♪'
+        staff.name.toLowerCase().includes('bass') ? '𝄢' : '♪'
       const clefText = new Text({
         text: clefSymbol,
         style: {
@@ -430,6 +448,11 @@ export function createTimelineLayers(app: Application): {
   dragLayer.eventMode = 'none'
   tasksLayer.eventMode = 'static'
 
+  // Notify plugins
+  for (const p of rendererPlugins) {
+    try { p.onLayersCreated?.(app, { viewport, background, dependencies, tasks: tasksLayer, selection: selectionLayer, dragLayer }) } catch { }
+  }
+
   return {
     viewport,
     background,
@@ -454,10 +477,12 @@ export function ensureGridAndStaff(
 ): void {
   const key = '__grid_meta__'
   const meta: any = (container as any)[key] || {}
-  if (container.children.length > 0 && meta.w === screenWidth && meta.h === screenHeight && meta.z === zoom) return
+  // Only rebuild when the integer screen size or rounded zoom changes to avoid subpixel jitter
+  const rz = Math.round(zoom * 100) / 100
+  if (container.children.length > 0 && meta.w === screenWidth && meta.h === screenHeight && meta.z === rz) return
   container.removeChildren()
-  drawGridAndStaff(container, config, staffs, projectStartDate, screenWidth, screenHeight, zoom)
-  ;(container as any)[key] = { w: screenWidth, h: screenHeight, z: zoom }
+  drawGridAndStaff(container, config, staffs, projectStartDate, screenWidth, screenHeight, rz)
+    ; (container as any)[key] = { w: screenWidth, h: screenHeight, z: rz }
 }
 
 /**
@@ -493,7 +518,7 @@ export class TimelineSceneManager {
     if (!container) {
       container = new Container()
       container.eventMode = 'static'
-      ;(container as any).__meta = {}
+        ; (container as any).__meta = {}
       this.layers.tasks.addChild(container)
       this.taskContainers.set(task.id, container)
       created = true
@@ -521,16 +546,21 @@ export class TimelineSceneManager {
 
     if (shouldRedraw) {
       drawTaskNote(container, config, layout, title || '', status, false)
-      ;(container as any).__meta = {
-        startX: layout.startX,
-        width: layout.width,
-        topY: layout.topY,
-        centerY: layout.centerY,
-        title: title || '',
-        status: status || ''
-      }
+        ; (container as any).__meta = {
+          startX: layout.startX,
+          width: layout.width,
+          topY: layout.topY,
+          centerY: layout.centerY,
+          title: title || '',
+          status: status || ''
+        }
     }
     container.hitArea = new Rectangle(0, 0, layout.width, config.TASK_HEIGHT)
+
+    // Notify plugins
+    for (const p of rendererPlugins) {
+      try { p.onTaskUpserted?.(task.id, container) } catch { }
+    }
 
     return { container, created }
   }
@@ -577,6 +607,13 @@ export class TimelineSceneManager {
     const layout = this.taskLayouts.get(taskId)
     if (!layout) return
     drawSelectionHighlight(this.layers.selection, config, layout)
+  }
+}
+
+// Example plugin export for consumers to import and register
+export const ExampleStatusGlyphPlugin: RendererPlugin = {
+  onTaskUpserted: (_taskId, _container) => {
+    // Placeholder: consumers can draw extra glyphs or overlays here
   }
 }
 

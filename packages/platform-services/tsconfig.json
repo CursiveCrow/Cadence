@@ -2,8 +2,24 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": [
+      "node"
+    ],
+    "baseUrl": ".",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "paths": {
+      "@cadence/contracts": [
+        "../contracts/dist"
+      ]
+    }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

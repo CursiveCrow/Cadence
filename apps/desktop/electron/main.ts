@@ -1,4 +1,6 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { IPC_CHANNELS, DialogOpenFileRequest, SaveFileRequest, DialogOpenFileResponse, SaveFileResponse, AppGetVersionResponse } from '@cadence/contracts'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 
 // The built directory structure
@@ -56,6 +58,62 @@ async function createWindow() {
 }
 
 app.whenReady().then(createWindow)
+
+// ---------------- IPC handlers ----------------
+ipcMain.handle(IPC_CHANNELS.dialogOpenFile, async (_event, options: unknown) => {
+  const parsed = DialogOpenFileRequest.safeParse(options)
+  if (!parsed.success) {
+    return null
+  }
+  const { title, defaultPath, filters } = parsed.data
+  const result = await dialog.showOpenDialog({
+    title,
+    defaultPath,
+    filters,
+    properties: ['openFile']
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+  const filePath = result.filePaths[0]
+  const content = await fs.readFile(filePath)
+  const response = { name: filePath.split(/[/\\]/).pop() || filePath, path: filePath, content }
+  const validated = DialogOpenFileResponse.safeParse(response)
+  return validated.success ? validated.data : null
+})
+
+ipcMain.handle(IPC_CHANNELS.dialogSaveFile, async (_event, options: unknown) => {
+  const parsed = SaveFileRequest.safeParse(options)
+  if (!parsed.success) {
+    return null
+  }
+  const { title, defaultPath, filters } = parsed.data
+  const result = await dialog.showSaveDialog({ title, defaultPath, filters })
+  const validated = SaveFileResponse.safeParse(result.canceled ? null : result.filePath || null)
+  return validated.success ? validated.data : null
+})
+
+ipcMain.handle(IPC_CHANNELS.fsReadFile, async (_event, path: string) => {
+  const content = await fs.readFile(path)
+  return content
+})
+
+ipcMain.handle(IPC_CHANNELS.fsWriteFile, async (_event, path: string, content: ArrayBuffer | Buffer | Uint8Array) => {
+  const buf = Buffer.isBuffer(content) ? content : Buffer.from(content as ArrayBuffer)
+  await fs.writeFile(path, buf)
+  return true
+})
+
+ipcMain.handle(IPC_CHANNELS.dialogMessageBox, async (_event, options: any) => {
+  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+  if (!win) return { response: -1 }
+  const result = await dialog.showMessageBox(win, options)
+  return result
+})
+
+ipcMain.handle(IPC_CHANNELS.appGetVersion, () => {
+  const validated = AppGetVersionResponse.safeParse(app.getVersion())
+  return validated.success ? validated.data : '0.0.0'
+})
+ipcMain.handle(IPC_CHANNELS.appQuit, () => { app.quit(); return true })
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

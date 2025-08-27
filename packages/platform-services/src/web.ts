@@ -14,7 +14,7 @@ export class WebPlatformServices implements PlatformServices {
       const input = document.createElement('input')
       input.type = 'file'
       input.multiple = false
-      
+
       if (options.filters && options.filters.length > 0) {
         const extensions = options.filters.flatMap(f => f.extensions.map(ext => `.${ext}`))
         input.accept = extensions.join(',')
@@ -40,8 +40,22 @@ export class WebPlatformServices implements PlatformServices {
   }
 
   async showSaveDialog(options: FileDialogOptions): Promise<string | null> {
-    // Web implementation would use File System Access API or fallback to download
-    // This is a simplified version
+    // Prefer File System Access API if available to get a file name
+    try {
+      const w = window as any
+      if (w.showSaveFilePicker) {
+        const handle = await w.showSaveFilePicker({
+          suggestedName: options.defaultPath || 'untitled',
+          types: options.filters?.map((f) => ({
+            description: f.name,
+            accept: { 'application/octet-stream': f.extensions.map((e) => `.${e}`) }
+          }))
+        })
+        return (handle as any).name || options.defaultPath || 'untitled'
+      }
+    } catch {
+      // fall back to prompt below
+    }
     const filename = prompt(options.title || 'Save file as:', options.defaultPath || 'untitled')
     return filename
   }
@@ -52,7 +66,20 @@ export class WebPlatformServices implements PlatformServices {
   }
 
   async writeFile(path: string, content: ArrayBuffer): Promise<void> {
-    // Web implementation using download
+    // Try File System Access API first
+    try {
+      const w = window as any
+      if (w.showSaveFilePicker) {
+        const handle = await w.showSaveFilePicker({ suggestedName: path })
+        const writable = await handle.createWritable()
+        await writable.write(content)
+        await writable.close()
+        return
+      }
+    } catch {
+      // fallback to download below
+    }
+    // Fallback: trigger a download
     const blob = new Blob([content])
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')

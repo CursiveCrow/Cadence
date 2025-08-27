@@ -21,7 +21,6 @@ export interface Task {
   assignee?: string
   staffId: string // ID of the staff this task is on
   staffLine: number // Which line on the staff (0 = bottom line, 1 = first space, etc.)
-  laneIndex: number // Backward compatibility - can be removed later
   projectId: string
   createdAt: string
   updatedAt: string
@@ -78,3 +77,5 @@ export interface UIState {
   viewport: { x: number; y: number; zoom: number }
   staffs: Staff[] // Musical staffs configuration
 }
+
+export type ViewportState = UIState['viewport']

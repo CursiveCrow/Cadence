@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -17,14 +21,39 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@cadence/core": ["packages/core/src"],
-      "@cadence/state": ["packages/state/src"],
-      "@cadence/crdt": ["packages/crdt/src"],
-      "@cadence/renderer": ["packages/renderer/src"],
-      "@cadence/platform-services": ["packages/platform-services/src"],
-      "@cadence/ui": ["packages/ui/src"]
+      "@cadence/core": [
+        "packages/core/dist"
+      ],
+      "@cadence/state": [
+        "packages/state/src"
+      ],
+      "@cadence/crdt": [
+        "packages/crdt/dist"
+      ],
+      "@cadence/renderer": [
+        "packages/renderer/dist"
+      ],
+      "@cadence/platform-services": [
+        "packages/platform-services/dist"
+      ],
+      "@cadence/ui": [
+        "packages/ui/dist"
+      ],
+      "@cadence/config": [
+        "packages/config/dist"
+      ],
+      "@cadence/contracts": [
+        "packages/contracts/dist"
+      ],
+      "@cadence/events": [
+        "packages/events/dist"
+      ]
     }
   },
   "include": [],
-  "exclude": ["node_modules", "**/node_modules", "**/*.js"]
+  "exclude": [
+    "node_modules",
+    "**/node_modules",
+    "**/*.js"
+  ]
 }

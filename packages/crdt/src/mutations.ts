@@ -4,17 +4,20 @@
  */
 
 import { getProjectDoc, TaskData, DependencyData } from './ydoc'
-import { TaskStatus } from '@cadence/core'
+import { Task, TaskStatus } from '@cadence/core'
 
-export function createTask(
-  projectId: string,
-  task: Omit<TaskData, 'id'> & { id: string }
-): void {
-  const ydoc = getProjectDoc(projectId)
-  
-  ydoc.ydoc.transact(() => {
-    ydoc.tasks.set(task.id, task)
-  }, 'local')
+/**
+ * Create a new task in a project
+ */
+export function createTask(projectId: string, task: Omit<Task, 'projectId' | 'createdAt' | 'updatedAt'>): void {
+  const doc = getProjectDoc(projectId)
+  const taskData: TaskData = {
+    ...task,
+    projectId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+  doc.tasks.set(task.id, taskData)
 }
 
 export function updateTask(
@@ -23,7 +26,7 @@ export function updateTask(
   updates: Partial<TaskData>
 ): void {
   const ydoc = getProjectDoc(projectId)
-  
+
   ydoc.ydoc.transact(() => {
     const task = ydoc.tasks.get(taskId)
     if (task) {
@@ -34,10 +37,10 @@ export function updateTask(
 
 export function deleteTask(projectId: string, taskId: string): void {
   const ydoc = getProjectDoc(projectId)
-  
+
   ydoc.ydoc.transact(() => {
     ydoc.tasks.delete(taskId)
-    
+
     // Also remove any dependencies involving this task
     const dependencies = ydoc.getDependencies()
     for (const [depId, dep] of Object.entries(dependencies)) {
@@ -68,7 +71,7 @@ export function createDependency(
   dependency: DependencyData
 ): void {
   const ydoc = getProjectDoc(projectId)
-  
+
   ydoc.ydoc.transact(() => {
     ydoc.dependencies.set(dependency.id, dependency)
   }, 'local')
@@ -76,7 +79,7 @@ export function createDependency(
 
 export function deleteDependency(projectId: string, dependencyId: string): void {
   const ydoc = getProjectDoc(projectId)
-  
+
   ydoc.ydoc.transact(() => {
     ydoc.dependencies.delete(dependencyId)
   }, 'local')
@@ -88,12 +91,4 @@ export function updateTaskStatus(
   status: TaskStatus
 ): void {
   updateTask(projectId, taskId, { status })
-}
-
-export function updateTaskLane(
-  projectId: string,
-  taskId: string,
-  laneIndex: number
-): void {
-  updateTask(projectId, taskId, { laneIndex })
 }

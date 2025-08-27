@@ -4,12 +4,26 @@
     "outDir": "dist",
     "rootDir": "src",
     "baseUrl": ".",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "paths": {
-      "@cadence/core": ["../core/dist"],
-      "@cadence/ui": ["../ui/dist"],
-      "@cadence/crdt": ["../crdt/dist"]
-    }
+      "@cadence/core": [
+        "../core/dist"
+      ],
+      "@cadence/ui": [
+        "../ui/dist"
+      ],
+      "@cadence/crdt": [
+        "../crdt/dist"
+      ]
+    },
+    "types": []
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

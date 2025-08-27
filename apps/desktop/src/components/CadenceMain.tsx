@@ -1,108 +1,51 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { RootState, setActiveProject, initializeDefaultStaffs, setSelection } from '@cadence/state'
-import { useProjectTasks, useProjectDependencies, createTask, createDependency } from '@cadence/crdt'
-import { TaskStatus, DependencyType } from '@cadence/core'
+import { RootState, setSelection } from '@cadence/state'
+import { useProjectTasks, useProjectDependencies, useTask, updateTask, createTask } from '@cadence/crdt'
+import { TaskStatus } from '@cadence/core'
 import { TimelineRenderer } from './TimelineRenderer'
-import { StaffSidebar } from './StaffSidebar'
-import { DateHeader } from './DateHeader'
-import { TIMELINE_CONFIG } from '@cadence/renderer'
-import { ProjectHeader } from './ProjectHeader'
-import { TaskPopup } from './TaskPopup'
+import {
+  StaffSidebar as UIStaffSidebar,
+  DateHeader as UIDateHeader,
+  TaskPopup as UITaskPopup,
+  TaskPopupTask,
+  TaskPopupStaff
+} from '@cadence/ui'
+import { TIMELINE_CONFIG, PROJECT_START_DATE } from '@cadence/renderer'
+import { ProjectHeader as UIProjectHeader } from '@cadence/ui'
+import { StaffManager } from './StaffManager'
+import { useResizableSidebar } from '../hooks/useResizableSidebar'
+import { useDemoProject } from '../hooks/useDemoProject'
+import { useTaskPopupPosition } from '../hooks/useTaskPopupPosition'
 import './CadenceMain.css'
 
 export const CadenceMain: React.FC = () => {
   const dispatch = useDispatch()
-  const { activeProjectId, selection, viewport, staffs } = useSelector((state: RootState) => state.ui)
-  
-  // For now, create a demo project
-  const demoProjectId = 'demo-project'
+  const selection = useSelector((state: RootState) => state.selection.ids)
+  const viewport = useSelector((state: RootState) => state.viewport)
+  const staffs = useSelector((state: RootState) => state.staffs.list)
+
+  const { demoProjectId } = useDemoProject()
   const tasks = useProjectTasks(demoProjectId)
   const dependencies = useProjectDependencies(demoProjectId)
-  const [isInitialized, setIsInitialized] = React.useState(false)
-  const [popupPosition, setPopupPosition] = useState<{x: number, y: number} | null>(null)
+  const [popupPosition, setPopupPosition] = useState<{ x: number, y: number } | null>(null)
   const [isDragInProgress, setIsDragInProgress] = useState(false)
-  const [sidebarWidth, setSidebarWidth] = useState<number>(120)
-  const resizerRef = React.useRef<HTMLDivElement | null>(null)
-  const resizingRef = React.useRef<boolean>(false)
-  const startXRef = React.useRef<number>(0)
-  const startWidthRef = React.useRef<number>(120)
+  const [showStaffManager, setShowStaffManager] = useState(false)
+  const { sidebarWidth, resizerRef, beginResize, resetSidebarWidth } = useResizableSidebar()
+  const { calculatePopupPosition } = useTaskPopupPosition(tasks)
 
-  const clampSidebarWidth = useCallback((w: number) => Math.max(80, Math.min(260, w)), [])
+  // State for the selected task popup
+  const selectedTaskId = selection.length > 0 ? selection[0] : null
+  const selectedTask = useTask(demoProjectId, selectedTaskId || '')
 
-  const onMouseMoveResize = useCallback((e: MouseEvent) => {
-    if (!resizingRef.current) return
-    const dx = e.clientX - startXRef.current
-    setSidebarWidth(clampSidebarWidth(startWidthRef.current + dx))
-  }, [clampSidebarWidth])
-
-  const endResize = useCallback(() => {
-    if (!resizingRef.current) return
-    resizingRef.current = false
-    window.removeEventListener('mousemove', onMouseMoveResize, true)
-    window.removeEventListener('mouseup', endResize, true)
-    try { document.body.style.cursor = '' } catch {}
-  }, [onMouseMoveResize])
-
-  const beginResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    resizingRef.current = true
-    startXRef.current = e.clientX
-    startWidthRef.current = sidebarWidth
-    window.addEventListener('mousemove', onMouseMoveResize, true)
-    window.addEventListener('mouseup', endResize, true)
-    try { document.body.style.cursor = 'col-resize' } catch {}
-  }, [sidebarWidth, onMouseMoveResize, endResize])
-
-  // Calculate popup position based on selected task
-  const calculatePopupPosition = useCallback((taskId: string) => {
-    const task = tasks[taskId]
-    if (!task) return null
-
-    // Calculate task position on screen using shared TIMELINE_CONFIG
-    const dayWidth = TIMELINE_CONFIG.DAY_WIDTH
-    const leftMargin = TIMELINE_CONFIG.LEFT_MARGIN
-    const staffSpacing = TIMELINE_CONFIG.STAFF_SPACING
-    const staffStartY = TIMELINE_CONFIG.TOP_MARGIN
-
-    // Find staff index
-    const staffIndex = staffs.findIndex(staff => staff.id === task.staffId)
-    if (staffIndex === -1) return null
-
-    // Calculate X position (based on start date)
-    const projectStart = new Date('2024-01-01')
-    const taskStart = new Date(task.startDate)
-    const dayIndex = Math.floor((taskStart.getTime() - projectStart.getTime()) / (1000 * 60 * 60 * 24))
-    const taskX = leftMargin + dayIndex * dayWidth
-
-    // Calculate Y position (based on staff and line)
-    const staffY = staffStartY + staffIndex * staffSpacing
-    const STAFF_LINE_SPACING = TIMELINE_CONFIG.STAFF_LINE_SPACING
-    const taskY = staffY + (task.staffLine * STAFF_LINE_SPACING / 2)
-
-    // Convert to screen coordinates (approximate)
-    return {
-      x: taskX + 100, // Offset to avoid covering the task
-      y: taskY - 50   // Offset above the task
-    }
-  }, [tasks, staffs])
-
-  // Handle closing the popup
   const handleClosePopup = useCallback(() => {
     dispatch(setSelection([]))
     setPopupPosition(null)
   }, [dispatch])
 
-  // Handle drag start/end from TimelineCanvas
-  const handleDragStart = useCallback(() => {
-    setIsDragInProgress(true)
-  }, [])
+  const handleDragStart = useCallback(() => { setIsDragInProgress(true) }, [])
+  const handleDragEnd = useCallback(() => { setIsDragInProgress(false) }, [])
 
-  const handleDragEnd = useCallback(() => {
-    setIsDragInProgress(false)
-  }, [])
-
-  // Update popup position when selection changes
   useEffect(() => {
     if (selection.length > 0 && !isDragInProgress) {
       const position = calculatePopupPosition(selection[0])
@@ -112,186 +55,10 @@ export const CadenceMain: React.FC = () => {
     }
   }, [selection, calculatePopupPosition, isDragInProgress])
 
-  useEffect(() => {
-    // Set the demo project as active on startup
-    if (!activeProjectId) {
-      dispatch(setActiveProject(demoProjectId))
-      dispatch(initializeDefaultStaffs(demoProjectId))
-    }
-  }, [activeProjectId, dispatch])
-
-  useEffect(() => {
-    // Create demo tasks after a short delay to ensure Yjs is ready
-    if (activeProjectId === demoProjectId && Object.keys(tasks).length === 0 && !isInitialized) {
-      setTimeout(() => {
-        createDemoData()
-        setIsInitialized(true)
-      }, 100)
-    }
-  }, [activeProjectId, tasks, isInitialized])
-
-  const createDemoData = () => {
-    // Create some sample tasks to match the mockup
-    createTask(demoProjectId, {
-      id: 'task-1',
-      title: 'Intro Theme',
-      startDate: '2024-01-01',
-      durationDays: 3,
-      status: TaskStatus.IN_PROGRESS,
-      staffId: 'staff-treble',
-      staffLine: 4, // Middle line of treble staff (3rd line)
-      laneIndex: 0, // Backward compatibility
-    })
-
-    createTask(demoProjectId, {
-      id: 'task-2', 
-      title: 'Main Melody',
-      startDate: '2024-01-03',
-      durationDays: 4,
-      status: TaskStatus.NOT_STARTED,
-      staffId: 'staff-treble',
-      staffLine: 8, // Top line of treble staff (5th line)
-      laneIndex: 0, // Backward compatibility
-    })
-
-    createTask(demoProjectId, {
-      id: 'task-3',
-      title: 'Bass Line', 
-      startDate: '2024-01-02',
-      durationDays: 3,
-      status: TaskStatus.IN_PROGRESS,
-      staffId: 'staff-bass',
-      staffLine: 0, // Bottom line of bass staff
-      laneIndex: 1, // Backward compatibility
-    })
-
-    createTask(demoProjectId, {
-      id: 'task-4',
-      title: 'Harmony Section', 
-      startDate: '2024-01-05',
-      durationDays: 2,
-      status: TaskStatus.NOT_STARTED,
-      staffId: 'staff-bass',
-      staffLine: 4, // Middle line of bass staff (3rd line)
-      laneIndex: 1, // Backward compatibility
-    })
-
-    createTask(demoProjectId, {
-      id: 'task-5',
-      title: 'Bridge', 
-      startDate: '2024-01-04',
-      durationDays: 2,
-      status: TaskStatus.COMPLETED,
-      staffId: 'staff-treble',
-      staffLine: 2, // Second line of treble staff
-      laneIndex: 2, // Backward compatibility
-    })
-
-    createTask(demoProjectId, {
-      id: 'task-6',
-      title: 'Solo Section', 
-      startDate: '2024-01-07',
-      durationDays: 3,
-      status: TaskStatus.BLOCKED,
-      staffId: 'staff-treble',
-      staffLine: 6, // Space above middle line (treble staff)
-      laneIndex: 0, // Backward compatibility
-    })
-
-    // Create a chord (multiple notes starting at same time)
-    createTask(demoProjectId, {
-      id: 'task-7',
-      title: 'Harmony Part A', 
-      startDate: '2024-01-10',
-      durationDays: 2,
-      status: TaskStatus.IN_PROGRESS,
-      staffId: 'staff-treble',
-      staffLine: 6, // Space above middle line (treble staff)
-      laneIndex: 0, // Backward compatibility
-    })
-
-    createTask(demoProjectId, {
-      id: 'task-8',
-      title: 'Harmony Part B', 
-      startDate: '2024-01-10',
-      durationDays: 2,
-      status: TaskStatus.IN_PROGRESS,
-      staffId: 'staff-treble',
-      staffLine: 2, // Second line of treble staff
-      laneIndex: 1, // Backward compatibility
-    })
-
-    createTask(demoProjectId, {
-      id: 'task-9',
-      title: 'Harmony Part C', 
-      startDate: '2024-01-10',
-      durationDays: 2,
-      status: TaskStatus.COMPLETED,
-      staffId: 'staff-bass',
-      staffLine: 4, // Middle line of bass staff (3rd line)
-      laneIndex: 2, // Backward compatibility
-    })
-
-    // Create another chord (blocked tasks)
-    createTask(demoProjectId, {
-      id: 'task-10',
-      title: 'Finale Upper', 
-      startDate: '2024-01-13',
-      durationDays: 1,
-      status: TaskStatus.BLOCKED,
-      staffId: 'staff-treble',
-      staffLine: 8, // Top line of treble staff (5th line)
-      laneIndex: 0, // Backward compatibility
-    })
-
-    createTask(demoProjectId, {
-      id: 'task-11',
-      title: 'Finale Lower', 
-      startDate: '2024-01-13',
-      durationDays: 1,
-      status: TaskStatus.BLOCKED,
-      staffId: 'staff-bass',
-      staffLine: 0, // Bottom line of bass staff
-      laneIndex: 2, // Backward compatibility
-    })
-
-    // Create a cancelled task
-    createTask(demoProjectId, {
-      id: 'task-12',
-      title: 'Dropped Feature', 
-      startDate: '2024-01-06',
-      durationDays: 1,
-      status: TaskStatus.CANCELLED,
-      staffId: 'staff-bass',
-      staffLine: 2, // Second line of bass staff
-      laneIndex: 1, // Backward compatibility
-    })
-
-    // Add some dependencies
-    setTimeout(() => {
-      createDependency(demoProjectId, {
-        id: 'dep-1',
-        srcTaskId: 'task-1',
-        dstTaskId: 'task-2',
-        type: DependencyType.FINISH_TO_START
-      })
-
-      createDependency(demoProjectId, {
-        id: 'dep-2', 
-        srcTaskId: 'task-3',
-        dstTaskId: 'task-4',
-        type: DependencyType.FINISH_TO_START
-      })
-    }, 200)
-  }
-
   const addNewTask = () => {
     const taskId = `task-${Date.now()}`
-    
-    // Choose a random staff and line
     const randomStaff = staffs[Math.floor(Math.random() * staffs.length)] || staffs[0]
-    const randomLine = Math.floor(Math.random() * (randomStaff?.numberOfLines * 2 - 1 || 9)) // Lines and spaces
-    
+    const randomLine = Math.floor(Math.random() * (randomStaff?.numberOfLines * 2 - 1 || 9))
     const newTask = {
       id: taskId,
       title: 'New Note',
@@ -300,47 +67,43 @@ export const CadenceMain: React.FC = () => {
       status: TaskStatus.NOT_STARTED,
       staffId: randomStaff?.id || 'staff-treble',
       staffLine: randomLine,
-      laneIndex: Math.floor(Math.random() * 3), // Random lane 0-2 (backward compatibility)
+      projectId: demoProjectId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
-    
     console.log('Creating new task:', newTask)
     createTask(demoProjectId, newTask)
   }
 
   return (
     <div className="cadence-main">
-      <ProjectHeader 
+      <UIProjectHeader
         projectName="Score Name"
         onAddTask={addNewTask}
+        onOpenStaffManager={() => setShowStaffManager(true)}
       />
-      
+
       <div className="cadence-content">
-        {/* Left resizable staff sidebar */}
         <div className="staff-sidebar" style={{ width: `${sidebarWidth}px` }}>
-          <StaffSidebar
+          <UIStaffSidebar
             staffs={staffs}
             viewport={viewport}
             width={sidebarWidth}
+            topMargin={TIMELINE_CONFIG.TOP_MARGIN}
+            staffSpacing={TIMELINE_CONFIG.STAFF_SPACING}
+            staffLineSpacing={TIMELINE_CONFIG.STAFF_LINE_SPACING}
             onAddNote={addNewTask}
             onOpenMenu={() => {
-              // Reuse header menu by showing a lightweight alert for now; could elevate to a shared menu later
               const el = document.querySelector('.menu-btn') as HTMLButtonElement | null
               if (el) el.click()
             }}
           />
         </div>
-        {/* Vertical resizer */}
-        <div
-          className="vertical-resizer"
-          ref={resizerRef}
-          onMouseDown={beginResize}
-          onDoubleClick={() => setSidebarWidth(120)}
-        />
-        {/* Right main column: date header + timeline */}
+        <div className="vertical-resizer" ref={resizerRef} onMouseDown={beginResize} onDoubleClick={resetSidebarWidth} />
         <div className="main-column">
-          <DateHeader viewport={viewport} />
+          <UIDateHeader viewport={viewport} projectStart={PROJECT_START_DATE} leftMargin={TIMELINE_CONFIG.LEFT_MARGIN} dayWidth={TIMELINE_CONFIG.DAY_WIDTH} />
           <div className="timeline-container full-width">
-            <TimelineRenderer 
+            <TimelineRenderer
               projectId={demoProjectId}
               tasks={tasks}
               dependencies={dependencies}
@@ -354,15 +117,23 @@ export const CadenceMain: React.FC = () => {
         </div>
       </div>
 
-      {/* Task popup - shows when a note is selected */}
-      {selection.length > 0 && popupPosition && (
-        <TaskPopup 
-          projectId={demoProjectId}
-          selectedTaskIds={selection}
+      {selectedTask && popupPosition && (
+        <UITaskPopup
+          task={selectedTask as TaskPopupTask}
+          staffs={staffs as TaskPopupStaff[]}
+          selectedCount={selection.length}
           position={popupPosition}
           onClose={handleClosePopup}
+          onChangeTitle={(title) => updateTask(demoProjectId, selectedTask.id, { title })}
+          onChangeStatus={(status) => updateTask(demoProjectId, selectedTask.id, { status: status as TaskStatus })}
+          onChangeDuration={(days) => updateTask(demoProjectId, selectedTask.id, { durationDays: days })}
+          onChangeStartDate={(iso) => updateTask(demoProjectId, selectedTask.id, { startDate: iso })}
+          onChangeStaff={(staffId) => updateTask(demoProjectId, selectedTask.id, { staffId })}
+          onChangeStaffLine={(staffLine) => updateTask(demoProjectId, selectedTask.id, { staffLine })}
+          onChangeAssignee={(assignee) => updateTask(demoProjectId, selectedTask.id, { assignee })}
         />
       )}
+      <StaffManager isOpen={showStaffManager} onClose={() => setShowStaffManager(false)} />
     </div>
   )
 }

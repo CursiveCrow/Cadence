@@ -9,6 +9,9 @@ export * from './scene'
 export * from './dnd'
 export * from './config'
 export * from './layout'
+export * from './plugins/status-glyph'
+export * from './engine'
+export * from './panzoom'
 
 // Re-export select PixiJS classes to centralize the Pixi API surface
 // and reduce the risk of multiple Pixi instances across the monorepo.

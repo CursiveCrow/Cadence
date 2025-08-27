@@ -3,28 +3,39 @@
  */
 
 import { PlatformServices, FileDialogOptions, FileHandle, MessageBoxOptions, MessageBoxResult } from './interfaces'
+import { IPC_CHANNELS, DialogOpenFileRequest, DialogOpenFileResponse, SaveFileRequest, SaveFileResponse, AppGetVersionResponse } from '@cadence/contracts'
 
 /**
  * Electron implementation using IPC
  * Communicates with main process via contextBridge API
  */
 export class ElectronPlatformServices implements PlatformServices {
-  private ipc: {
-    invoke: (channel: string, ...args: unknown[]) => Promise<any>
-  }
+  private invoker: (channel: string, ...args: unknown[]) => Promise<any>
 
   constructor() {
-    // Access the contextBridge API exposed by preload script
-    this.ipc = (window as any).ipcRenderer
-    if (!this.ipc) {
-      throw new Error('Electron IPC not available. Make sure contextBridge is properly configured.')
+    // Prefer minimal API exposed by preload
+    const api = (window as any).api
+    const legacy = (window as any).ipcRenderer
+    if (api && typeof api.invoke === 'function') {
+      this.invoker = api.invoke.bind(api)
+    } else if (legacy && typeof legacy.invoke === 'function') {
+      this.invoker = legacy.invoke.bind(legacy)
+    } else {
+      throw new Error('Electron IPC not available. Ensure preload exposes window.api or window.ipcRenderer')
     }
   }
 
   async showOpenDialog(options: FileDialogOptions): Promise<FileHandle | null> {
     try {
-      const result = await this.ipc.invoke('dialog:openFile', options)
-      return result
+      // Validate request shape
+      DialogOpenFileRequest.parse({
+        title: options?.title,
+        defaultPath: options?.defaultPath,
+        filters: options?.filters,
+      })
+      const result = await this.invoker(IPC_CHANNELS.dialogOpenFile, options)
+      const parsed = DialogOpenFileResponse.parse(result)
+      return parsed as any
     } catch (error) {
       console.error('Failed to open file dialog:', error)
       return null
@@ -33,8 +44,14 @@ export class ElectronPlatformServices implements PlatformServices {
 
   async showSaveDialog(options: FileDialogOptions): Promise<string | null> {
     try {
-      const result = await this.ipc.invoke('dialog:saveFile', options)
-      return result
+      SaveFileRequest.parse({
+        title: options?.title,
+        defaultPath: options?.defaultPath,
+        filters: options?.filters,
+      })
+      const result = await this.invoker(IPC_CHANNELS.dialogSaveFile, options)
+      const parsed = SaveFileResponse.parse(result)
+      return parsed
     } catch (error) {
       console.error('Failed to open save dialog:', error)
       return null
@@ -43,7 +60,7 @@ export class ElectronPlatformServices implements PlatformServices {
 
   async readFile(path: string): Promise<ArrayBuffer> {
     try {
-      const result = await this.ipc.invoke('fs:readFile', path)
+      const result = await this.invoker(IPC_CHANNELS.fsReadFile, path)
       return result
     } catch (error) {
       console.error('Failed to read file:', error)
@@ -53,7 +70,7 @@ export class ElectronPlatformServices implements PlatformServices {
 
   async writeFile(path: string, content: ArrayBuffer): Promise<void> {
     try {
-      await this.ipc.invoke('fs:writeFile', path, content)
+      await this.invoker(IPC_CHANNELS.fsWriteFile, path, content)
     } catch (error) {
       console.error('Failed to write file:', error)
       throw error
@@ -62,7 +79,7 @@ export class ElectronPlatformServices implements PlatformServices {
 
   async showMessageBox(options: MessageBoxOptions): Promise<MessageBoxResult> {
     try {
-      const result = await this.ipc.invoke('dialog:messageBox', options)
+      const result = await this.invoker(IPC_CHANNELS.dialogMessageBox, options)
       return result
     } catch (error) {
       console.error('Failed to show message box:', error)
@@ -81,7 +98,8 @@ export class ElectronPlatformServices implements PlatformServices {
 
   async getAppVersion(): Promise<string> {
     try {
-      return await this.ipc.invoke('app:getVersion')
+      const result = await this.invoker(IPC_CHANNELS.appGetVersion)
+      return AppGetVersionResponse.parse(result)
     } catch (error) {
       console.error('Failed to get app version:', error)
       return 'unknown'
@@ -90,7 +108,7 @@ export class ElectronPlatformServices implements PlatformServices {
 
   async quit(): Promise<void> {
     try {
-      await this.ipc.invoke('app:quit')
+      await this.invoker(IPC_CHANNELS.appQuit)
     } catch (error) {
       console.error('Failed to quit app:', error)
     }

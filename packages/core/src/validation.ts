@@ -6,56 +6,59 @@
 import { z } from 'zod'
 import { TaskStatus, DependencyType } from './types'
 
+// Relaxed formats to align with current demo data while keeping strong constraints elsewhere
+const IdString = z.string().min(1)
+const IsoDateOrYMD = z.string().refine((s) => /\d{4}-\d{2}-\d{2}(T.*)?$/.test(s), 'Expected YYYY-MM-DD or ISO datetime')
+
 export const ProjectSchema = z.object({
-  id: z.string().uuid(),
+  id: IdString,
   name: z.string().min(1).max(255),
-  startDate: z.string().datetime(),
-  endDate: z.string().datetime(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  startDate: IsoDateOrYMD,
+  endDate: IsoDateOrYMD,
+  createdAt: IsoDateOrYMD,
+  updatedAt: IsoDateOrYMD,
 }).refine(data => new Date(data.startDate) <= new Date(data.endDate), {
-  message: "Start date must be before or equal to end date",
-  path: ["endDate"],
+  message: 'Start date must be before or equal to end date',
+  path: ['endDate'],
 })
 
 export const TaskSchema = z.object({
-  id: z.string().uuid(),
+  id: IdString,
   title: z.string().min(1).max(255),
-  startDate: z.string().datetime(),
+  startDate: IsoDateOrYMD,
   durationDays: z.number().min(1).max(365),
   status: z.nativeEnum(TaskStatus),
   assignee: z.string().optional(),
-  laneIndex: z.number().min(0),
-  projectId: z.string().uuid(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  projectId: IdString,
+  createdAt: IsoDateOrYMD,
+  updatedAt: IsoDateOrYMD,
 })
 
 export const MilestoneSchema = z.object({
-  id: z.string().uuid(),
+  id: IdString,
   title: z.string().min(1).max(255),
-  date: z.string().datetime(),
-  projectId: z.string().uuid(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  date: IsoDateOrYMD,
+  projectId: IdString,
+  createdAt: IsoDateOrYMD,
+  updatedAt: IsoDateOrYMD,
 })
 
 export const DependencySchema = z.object({
-  id: z.string().uuid(),
-  srcTaskId: z.string().uuid(),
-  dstTaskId: z.string().uuid(),
+  id: IdString,
+  srcTaskId: IdString,
+  dstTaskId: IdString,
   type: z.nativeEnum(DependencyType),
-  projectId: z.string().uuid(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  projectId: IdString,
+  createdAt: IsoDateOrYMD,
+  updatedAt: IsoDateOrYMD,
 }).refine(data => data.srcTaskId !== data.dstTaskId, {
-  message: "Source and destination tasks cannot be the same",
-  path: ["dstTaskId"],
+  message: 'Source and destination tasks cannot be the same',
+  path: ['dstTaskId'],
 })
 
 export const UIStateSchema = z.object({
-  activeProjectId: z.string().uuid().nullable(),
-  selection: z.array(z.string().uuid()),
+  activeProjectId: IdString.nullable(),
+  selection: z.array(IdString),
   viewport: z.object({
     x: z.number(),
     y: z.number(),
@@ -65,37 +68,36 @@ export const UIStateSchema = z.object({
 
 // IPC Validation Schemas
 export const IPCOpenProjectSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: IdString,
 })
 
 export const IPCCreateTaskSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: IdString,
   title: z.string().min(1).max(255),
-  startDate: z.string().datetime(),
+  startDate: IsoDateOrYMD,
   durationDays: z.number().min(1).max(365),
   assignee: z.string().optional(),
 })
 
 export const IPCUpdateTaskSchema = z.object({
-  taskId: z.string().uuid(),
+  taskId: IdString,
   updates: z.object({
     title: z.string().min(1).max(255).optional(),
-    startDate: z.string().datetime().optional(),
+    startDate: IsoDateOrYMD.optional(),
     durationDays: z.number().min(1).max(365).optional(),
     status: z.nativeEnum(TaskStatus).optional(),
     assignee: z.string().optional(),
-    laneIndex: z.number().min(0).optional(),
   }),
 })
 
 export const IPCCreateDependencySchema = z.object({
-  projectId: z.string().uuid(),
-  srcTaskId: z.string().uuid(),
-  dstTaskId: z.string().uuid(),
+  projectId: IdString,
+  srcTaskId: IdString,
+  dstTaskId: IdString,
   type: z.nativeEnum(DependencyType),
 }).refine(data => data.srcTaskId !== data.dstTaskId, {
-  message: "Source and destination tasks cannot be the same",
-  path: ["dstTaskId"],
+  message: 'Source and destination tasks cannot be the same',
+  path: ['dstTaskId'],
 })
 
 // Export/Import Schemas

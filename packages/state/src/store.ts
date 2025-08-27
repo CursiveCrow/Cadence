@@ -3,11 +3,17 @@
  */
 
 import { configureStore } from '@reduxjs/toolkit'
-import { uiSlice } from './slices/uiSlice'
+import ui from './slices/uiSlice'
+import selection from './slices/selectionSlice'
+import viewport from './slices/viewportSlice'
+import staffs from './slices/staffsSlice'
 
 export const store = configureStore({
   reducer: {
-    ui: uiSlice.reducer,
+    ui,
+    selection,
+    viewport,
+    staffs,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

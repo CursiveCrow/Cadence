@@ -1,22 +1,39 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { IPC_CHANNELS } from '@cadence/contracts'
 
-// --------- Expose some API to the Renderer process ---------
+// --------- Expose minimal, typed API to the Renderer process ---------
+// New preferred surface
+const allowedChannels = new Set(Object.values(IPC_CHANNELS))
+contextBridge.exposeInMainWorld('api', {
+  invoke: (channel: (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS], ...args: unknown[]) => {
+    if (!allowedChannels.has(channel)) {
+      throw new Error(`Blocked IPC channel: ${channel}`)
+    }
+    return ipcRenderer.invoke(channel, ...args as any)
+  },
+})
+
+// Backward compatibility: expose a narrowed ipcRenderer wrapper (will be removed later)
 contextBridge.exposeInMainWorld('ipcRenderer', {
-  on(...args: Parameters<typeof ipcRenderer.on>) {
-    const [channel, listener] = args
+  on(channel: (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS], listener: (event: any, ...args: any[]) => void) {
+    try { console.warn('[DEPRECATED] window.ipcRenderer is deprecated; use window.api.invoke instead.') } catch { }
+    if (!allowedChannels.has(channel)) return
     return ipcRenderer.on(channel, (event, ...args) => listener(event, ...args))
   },
-  off(...args: Parameters<typeof ipcRenderer.off>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.off(channel, ...omit)
+  off(channel: (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS], listener?: (...args: any[]) => void) {
+    if (!allowedChannels.has(channel)) return
+    return ipcRenderer.off(channel, listener as any)
   },
-  send(...args: Parameters<typeof ipcRenderer.send>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.send(channel, ...omit)
+  send(channel: (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS], ...args: any[]) {
+    if (!allowedChannels.has(channel)) return
+    return ipcRenderer.send(channel, ...args)
   },
-  invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.invoke(channel, ...omit)
+  invoke(channel: (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS], ...args: any[]) {
+    try { console.warn('[DEPRECATED] window.ipcRenderer.invoke is deprecated; use window.api.invoke instead.') } catch { }
+    if (!allowedChannels.has(channel)) {
+      throw new Error(`Blocked IPC channel: ${channel}`)
+    }
+    return ipcRenderer.invoke(channel, ...args)
   },
 })
 

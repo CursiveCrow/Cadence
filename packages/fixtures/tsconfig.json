@@ -1,0 +1,38 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "composite": false,
+        "rootDir": "src",
+        "outDir": "dist",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "jsx": "react-jsx",
+        "skipLibCheck": true,
+        "declaration": false,
+        "emitDeclarationOnly": false,
+        "types": [],
+        "baseUrl": ".",
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "paths": {
+            "@cadence/core": [
+                "../core/dist"
+            ],
+            "@cadence/crdt": [
+                "../crdt/dist"
+            ],
+            "@cadence/renderer": [
+                "../renderer/src"
+            ],
+            "@cadence/config": [
+                "../config/src"
+            ],
+            "@cadence/contracts": [
+                "../contracts/src"
+            ]
+        }
+    },
+    "include": [
+        "src"
+    ]
+}

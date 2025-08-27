@@ -4,7 +4,7 @@
 
 import * as Y from 'yjs'
 import { TaskStatus, DependencyType } from '@cadence/core'
-
+import { getPersistenceProvider, initializePersistence } from './persistence'
 
 export interface TaskData {
   id: string
@@ -15,7 +15,9 @@ export interface TaskData {
   assignee?: string
   staffId: string // ID of the staff this task is on
   staffLine: number // Which line on the staff (0 = bottom line, 1 = first space, etc.)
-  laneIndex: number // Backward compatibility - can be removed later
+  projectId: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface DependencyData {
@@ -23,6 +25,32 @@ export interface DependencyData {
   srcTaskId: string
   dstTaskId: string
   type: DependencyType
+}
+
+/**
+ * Persistence controller encapsulates persistence lifecycle per project
+ */
+class ProjectPersistenceController {
+  private bound = false
+
+  constructor(private readonly projectId: string, private readonly ydoc: Y.Doc) { }
+
+  async init(): Promise<void> {
+    await initializePersistence()
+    const provider = getPersistenceProvider()
+    // Load historical updates
+    const updates = await provider.loadUpdates(this.projectId)
+    for (const u of updates) {
+      try { Y.applyUpdate(this.ydoc, u) } catch { }
+    }
+    // Bind persister once
+    if (!this.bound) {
+      this.ydoc.on('update', (update: Uint8Array) => {
+        provider.saveUpdate(this.projectId, update).catch(() => { })
+      })
+      this.bound = true
+    }
+  }
 }
 
 /**
@@ -37,6 +65,7 @@ export class ProjectDocument {
   public readonly dependencies: Y.Map<DependencyData>
   public readonly settings: Y.Map<unknown>
   public readonly undoManager: Y.UndoManager
+  private persistence: ProjectPersistenceController
 
   constructor(public readonly projectId: string) {
     this.ydoc = new Y.Doc()
@@ -46,6 +75,10 @@ export class ProjectDocument {
 
     // Set up UndoManager for undo/redo functionality
     this.undoManager = new Y.UndoManager([this.tasks, this.dependencies, this.settings])
+
+    // Attach persistence controller (non-blocking)
+    this.persistence = new ProjectPersistenceController(projectId, this.ydoc)
+    void this.persistence.init()
   }
 
   /**

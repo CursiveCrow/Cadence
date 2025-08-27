@@ -309,27 +309,15 @@ export class TimelineDnDController {
       }
       const srcA = this.scene.getAnchors(this.state.dependencySourceTaskId)
       if (!srcA) return
-      // Determine hover target via renderer hitTest first, then precise local hit check
+      // Determine hover target via precise local hit check only
       let hoverId: string | null = null
       let dstX = localPos.x
       let dstY = localPos.y
-      const rb = (this.app.renderer as any)?.events?.rootBoundary
-      const hitTarget = rb?.hitTest?.(globalPos.x, globalPos.y)
-      if (hitTarget) {
-        const matchedId = this.resolveTaskIdFromHit(hitTarget as any)
-        if (matchedId && matchedId !== this.state.dependencySourceTaskId) {
-          hoverId = matchedId
-          const a = this.scene.getAnchors(matchedId)
-          if (a) { dstX = a.leftCenterX; dstY = a.leftCenterY }
-        }
-      }
-      if (!hoverId) {
-        const found = this.findTaskAtGlobal(globalPos, this.state.dependencySourceTaskId || undefined)
-        if (found) {
-          hoverId = found
-          const a = this.scene.getAnchors(found)
-          if (a) { dstX = a.leftCenterX; dstY = a.leftCenterY }
-        }
+      const found = this.findTaskAtGlobal(globalPos, this.state.dependencySourceTaskId || undefined)
+      if (found) {
+        hoverId = found
+        const a = this.scene.getAnchors(found)
+        if (a) { dstX = a.leftCenterX; dstY = a.leftCenterY }
       }
       this.state.dependencyHoverTargetId = hoverId
       const g = new Graphics()
@@ -430,16 +418,7 @@ export class TimelineDnDController {
     if (this.state.isCreatingDependency && this.state.dependencySourceTaskId) {
       let targetTaskId: string | null = this.state.dependencyHoverTargetId || null
       if (!targetTaskId) {
-        // Prefer renderer hitTest, then precise local hit check
-        const rb = (this.app.renderer as any)?.events?.rootBoundary
-        const hitTarget = rb?.hitTest?.(globalPos.x, globalPos.y)
-        if (hitTarget) {
-          const matchedId = this.resolveTaskIdFromHit(hitTarget as any)
-          if (matchedId && matchedId !== this.state.dependencySourceTaskId) targetTaskId = matchedId
-        }
-        if (!targetTaskId) {
-          targetTaskId = this.findTaskAtGlobal(globalPos, this.state.dependencySourceTaskId || undefined)
-        }
+        targetTaskId = this.findTaskAtGlobal(globalPos, this.state.dependencySourceTaskId || undefined)
       }
       if (targetTaskId && targetTaskId !== this.state.dependencySourceTaskId) {
         const sourceTask = this.data.getTasks()[this.state.dependencySourceTaskId]

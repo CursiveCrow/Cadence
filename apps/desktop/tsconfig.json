@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
     /* Bundler mode */
@@ -17,8 +21,42 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": []
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@cadence/core": [
+        "../../packages/core/src"
+      ],
+      "@cadence/renderer": [
+        "../../packages/renderer/src"
+      ],
+      "@cadence/config": [
+        "../../packages/config/src"
+      ],
+      "@cadence/contracts": [
+        "../../packages/contracts/src"
+      ],
+      "@cadence/platform-services": [
+        "../../packages/platform-services/src"
+      ],
+      "@cadence/fixtures": [
+        "../../packages/fixtures/src"
+      ],
+      "@cadence/ui": [
+        "../../packages/ui/src"
+      ],
+      "@cadence/renderer-react": [
+        "../../packages/renderer-react/src"
+      ]
+    }
   },
-  "include": ["src", "electron"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": [
+    "src",
+    "electron"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
 }

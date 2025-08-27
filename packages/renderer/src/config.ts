@@ -2,7 +2,8 @@
  * Shared timeline rendering configuration for PixiJS renderer
  */
 
-import { TimelineConfig } from './scene'
+import type { TimelineConfig } from './scene'
+import { PROJECT_START_DATE as SHARED_PROJECT_START_DATE } from '@cadence/config'
 
 export const TIMELINE_CONFIG: TimelineConfig = {
   LEFT_MARGIN: 0,
@@ -38,5 +39,8 @@ export const STATUS_TO_ACCIDENTAL: Record<string, string> = {
   blocked: '♭',
   cancelled: '𝄪',
 }
+
+// Centralized project start date used for timeline calculations
+export const PROJECT_START_DATE = SHARED_PROJECT_START_DATE
 
 
