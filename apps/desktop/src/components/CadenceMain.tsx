@@ -51,8 +51,14 @@ export const CadenceMain: React.FC = () => {
 
   useEffect(() => {
     if (selection.length > 0 && !isDragInProgress) {
-      const position = calculatePopupPosition(selection[0])
-      setPopupPosition(position)
+      // Prefer last pointer position from renderer if available
+      const last = (window as any).__CADENCE_LAST_SELECT_POS as { x: number; y: number } | undefined
+      if (last && Number.isFinite(last.x) && Number.isFinite(last.y)) {
+        setPopupPosition({ x: last.x, y: last.y })
+      } else {
+        const position = calculatePopupPosition(selection[0])
+        setPopupPosition(position)
+      }
     } else {
       setPopupPosition(null)
     }
@@ -82,7 +88,6 @@ export const CadenceMain: React.FC = () => {
     <div className="cadence-main">
       <UIProjectHeader
         projectName="Score Name"
-        onAddTask={addNewTask}
         onOpenStaffManager={() => setShowStaffManager(true)}
       />
 

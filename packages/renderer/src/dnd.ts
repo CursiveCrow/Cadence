@@ -246,6 +246,14 @@ export class TimelineDnDController {
       return
     }
 
+    // Record the last selection pointer position in CSS pixels for UI popups
+    try {
+      const view = this.app.view as HTMLCanvasElement
+      const rect = view.getBoundingClientRect()
+      const cssX = rect.left + (globalPos.x * (rect.width / view.width))
+      const cssY = rect.top + (globalPos.y * (rect.height / view.height))
+        ; (window as any).__CADENCE_LAST_SELECT_POS = { x: Math.round(cssX), y: Math.round(cssY) }
+    } catch { }
     this.callbacks.select([(task as any).id])
     const widthNow = layout ? layout.width : (container as any).hitArea?.width || 0
     const isNearRightEdge = localPos.x > widthNow - 10 && localPos.x >= 0

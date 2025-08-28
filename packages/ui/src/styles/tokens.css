@@ -10,6 +10,8 @@
   --ui-color-primary-border: rgba(139, 92, 246, 0.3);
   --ui-color-danger-weak: rgba(239, 68, 68, 0.2);
   --ui-color-danger: #fca5a5;
+  /* Accent used for highlights like Today/Selection */
+  --ui-color-accent: #f59e0b;
 
   /* Semantic Colors (Status & Dependencies) */
   --ui-status-not-started-bg: #1f2937;
@@ -31,6 +33,13 @@
   --ui-surface-1: rgba(55, 65, 81, 0.8);
   --ui-surface-1-border: rgba(75, 85, 99, 0.8);
   --ui-surface-1-focus: rgba(55, 65, 81, 1);
+  /* Secondary surface for headers/sidebars for clearer separation */
+  --ui-surface-2: rgba(45, 55, 72, 0.9);
+
+  /* Grid and staff tokens used by the WebGPU renderer (colors only; alpha handled in code) */
+  --ui-grid-major: #ffffff;
+  --ui-grid-minor: #ffffff;
+  --ui-staff-line: #d1d5db;
 
   /* Radii */
   --ui-radius-sm: 4px;
@@ -63,6 +72,7 @@
   --ui-color-primary-border: rgba(124, 58, 237, 0.3);
   --ui-color-danger-weak: rgba(239, 68, 68, 0.12);
   --ui-color-danger: #ef4444;
+  --ui-color-accent: #f59e0b;
 
   --ui-status-not-started-bg: #f3f4f6;
   --ui-status-not-started-text: #111827;
@@ -78,6 +88,11 @@
   --ui-surface-1: rgba(249, 250, 251, 0.9);
   --ui-surface-1-border: rgba(229, 231, 235, 1);
   --ui-surface-1-focus: rgba(243, 244, 246, 1);
+  --ui-surface-2: rgba(243, 244, 246, 1);
+
+  --ui-grid-major: #000000;
+  --ui-grid-minor: #000000;
+  --ui-staff-line: #4b5563;
 }
 
 /* High Contrast Theme */
@@ -92,6 +107,7 @@
   --ui-color-primary-border: rgba(0, 255, 255, 0.6);
   --ui-color-danger-weak: rgba(255, 0, 0, 0.25);
   --ui-color-danger: #ff4d4d;
+  --ui-color-accent: #00ffff;
 
   --ui-status-not-started-bg: #000000;
   --ui-status-not-started-text: #ffffff;
@@ -107,4 +123,9 @@
   --ui-surface-1: #000000;
   --ui-surface-1-border: #ffffff;
   --ui-surface-1-focus: #0a0a0a;
+  --ui-surface-2: #000000;
+
+  --ui-grid-major: #ffffff;
+  --ui-grid-minor: #ffffff;
+  --ui-staff-line: #ffffff;
 }

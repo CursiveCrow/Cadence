@@ -65,8 +65,8 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, wi
     return (
         <div className="ui-surface-1 ui-border-r ui-text" style={containerStyle} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
             <div className="ui-absolute ui-flex ui-justify-between ui-items-center" style={{ top: 4, right: 4, left: 4, gap: 6, pointerEvents: 'auto' }}>
-                <button className="ui-btn ui-rounded-md ui-text-sm" onClick={onAddNote}>+ Add Note</button>
-                <button className="ui-btn ui-rounded-md ui-text-sm" onClick={onOpenMenu} aria-label="Project menu">⋮</button>
+                <button className="ui-btn ui-btn-primary ui-rounded-md ui-text-sm ui-focus-ring" onClick={onAddNote}>+ Add Note</button>
+                <button className="ui-btn ui-rounded-md ui-text-sm ui-focus-ring" onClick={onOpenMenu} aria-label="Project menu">⋮</button>
             </div>
             <div style={labelContainerStyle}>
                 {staffs.map((staff, index) => {

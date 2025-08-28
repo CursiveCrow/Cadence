@@ -37,6 +37,8 @@ export interface TimelineConfig {
   TASK_COLORS: Record<string, number>
   DEPENDENCY_COLOR: number
   SELECTION_COLOR: number
+  /** Accent color for today marker and other timeline accents */
+  TODAY_COLOR?: number
   /** When false, suppress staff name/clef labels from the Pixi scene (for external sidebar labels) */
   DRAW_STAFF_LABELS?: boolean
   /** Horizontal padding after each date/grid line before a note body starts */
@@ -108,7 +110,7 @@ export function drawGridAndStaff(
       const y = align(currentY + line * config.STAFF_LINE_SPACING)
       graphics.moveTo(config.LEFT_MARGIN, y)
       graphics.lineTo(extendedWidth, y)
-      graphics.stroke({ width: 1, color: config.STAFF_LINE_COLOR, alpha: 0.6 })
+      graphics.stroke({ width: 1, color: config.STAFF_LINE_COLOR, alpha: 0.4 })
     }
 
     if ((config as any).DRAW_STAFF_LABELS !== false) {
@@ -179,11 +181,11 @@ export function drawGridAndStaff(
         // Dynamic density to mirror header: 4h → 2h → 1h
         const hourWidth = Math.max(1, dayWidth / 24)
         if (hourWidth >= 40) labelStep = 1
-        else if (hourWidth >= 20) labelStep = 2
+        else if (hourWidth >= 24) labelStep = 2
         else labelStep = 4
       } else if (scale === 'day') {
         // Tune thresholds to keep <= ~48 labels across 4x screen width
-        labelStep = dayWidth >= 50 ? 1 : dayWidth >= 30 ? 2 : dayWidth >= 20 ? 3 : 7
+        labelStep = dayWidth >= 56 ? 1 : dayWidth >= 40 ? 2 : dayWidth >= 28 ? 3 : 7
       } else if (scale === 'week') {
         labelStep = 1
       }
@@ -519,6 +521,7 @@ export class TimelineSceneManager {
   private hoverGuide: Graphics | null = null
   private hoverText: Text | null = null
   private todayLine: Graphics | null = null
+  private hoverRow: Graphics | null = null
 
   constructor(layers: { viewport: Container; background: Container; dependencies: Container; tasks: Container; selection: Container; dragLayer: Container }) {
     this.layers = layers
@@ -775,7 +778,8 @@ export class TimelineSceneManager {
       line.moveTo(ax, 0)
       line.lineTo(ax, Math.max(0, screenHeight))
       // Warm accent color with higher alpha to be readable across backgrounds
-      line.stroke({ width: 2, color: 0xF59E0B, alpha: 0.9 })
+      const accent = (config.TODAY_COLOR ?? config.SELECTION_COLOR ?? 0xF59E0B) as number
+      line.stroke({ width: 2, color: accent, alpha: 0.9 })
         ; (line as any).eventMode = 'none'
       if (!this.todayLine) this.layers.background.addChild(line)
       this.todayLine = line
@@ -785,7 +789,7 @@ export class TimelineSceneManager {
   /**
    * Show a task tooltip near the cursor if hovering a task container; otherwise hide it.
    */
-  updateTaskHoverAtViewportPoint(x: number, y: number, _config: TimelineConfig, _projectStartDate: Date): void {
+  updateTaskHoverAtViewportPoint(x: number, y: number, _config: TimelineConfig, _projectStartDate: Date, _screenWidth?: number): void {
     const id = this.findTaskAtViewportPoint(x, y)
     if (!id) {
       // Clear any existing tooltip
@@ -798,6 +802,9 @@ export class TimelineSceneManager {
       const stem = (this as any).__tooltipStem as Graphics | undefined
       if (stem && this.layers.dragLayer.children.includes(stem)) this.layers.dragLayer.removeChild(stem)
         ; (this as any).__tooltipStem = undefined
+      // Clear hover row highlight
+      if (this.hoverRow && this.layers.dragLayer.children.includes(this.hoverRow)) this.layers.dragLayer.removeChild(this.hoverRow)
+      this.hoverRow = null
       return
     }
     const task = this.taskData.get(id)
@@ -889,6 +896,31 @@ export class TimelineSceneManager {
       // Match tooltip color (0x111111) and make stem slightly thicker for readability
       stem.stroke({ width: 3, color: 0x111111, alpha: 0.9 })
     }
+
+    // Draw faint hover row highlight using the actual staff bounds (from first to last staff line)
+    try {
+      const lines = Math.max(1, _config.STAFF_LINE_COUNT)
+      const gap = Math.max(1, _config.STAFF_LINE_SPACING)
+      const lineBandHeight = (lines - 1) * gap
+      const topMargin = _config.TOP_MARGIN || 0
+      const spacing = Math.max(1, _config.STAFF_SPACING)
+      const staffIndex = Math.max(0, Math.floor((y - topMargin) / spacing))
+      const topLines = Math.round(topMargin + staffIndex * spacing)
+      const h = Math.max(1, lineBandHeight)
+      // Draw an effectively-infinite width so the band is not tied to current screen width
+      const left = -100000
+      const w = 200000
+      let hr = this.hoverRow
+      if (!hr) {
+        hr = new Graphics()
+          ; (hr as any).eventMode = 'none'
+        this.layers.dragLayer.addChild(hr)
+        this.hoverRow = hr
+      }
+      hr.clear()
+      hr.rect(left, topLines, w, h)
+      hr.fill({ color: 0xffffff, alpha: 0.05 })
+    } catch { }
   }
 
   destroy(): void {

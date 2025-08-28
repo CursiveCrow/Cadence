@@ -5,7 +5,14 @@ const MAX_WIDTH = 260
 const DEFAULT_WIDTH = 120
 
 export function useResizableSidebar() {
-  const [sidebarWidth, setSidebarWidth] = useState<number>(DEFAULT_WIDTH)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    try {
+      const v = localStorage.getItem('cadence.sidebar.width')
+      return v ? Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, parseInt(v, 10))) : DEFAULT_WIDTH
+    } catch {
+      return DEFAULT_WIDTH
+    }
+  })
   const resizerRef = useRef<HTMLDivElement | null>(null)
   const resizingRef = useRef<boolean>(false)
   const startXRef = useRef<number>(0)
@@ -16,7 +23,9 @@ export function useResizableSidebar() {
   const onMouseMoveResize = useCallback((e: MouseEvent) => {
     if (!resizingRef.current) return
     const dx = e.clientX - startXRef.current
-    setSidebarWidth(clampSidebarWidth(startWidthRef.current + dx))
+    const next = clampSidebarWidth(startWidthRef.current + dx)
+    setSidebarWidth(next)
+    try { localStorage.setItem('cadence.sidebar.width', String(next)) } catch { }
   }, [clampSidebarWidth])
 
   const endResize = useCallback(() => {
@@ -36,8 +45,11 @@ export function useResizableSidebar() {
     window.addEventListener('mouseup', endResize, true)
     try { document.body.style.cursor = 'col-resize' } catch { }
   }, [sidebarWidth, onMouseMoveResize, endResize])
-  
-  const resetSidebarWidth = useCallback(() => setSidebarWidth(DEFAULT_WIDTH), [])
+
+  const resetSidebarWidth = useCallback(() => {
+    setSidebarWidth(DEFAULT_WIDTH)
+    try { localStorage.setItem('cadence.sidebar.width', String(DEFAULT_WIDTH)) } catch { }
+  }, [])
 
   return {
     sidebarWidth,

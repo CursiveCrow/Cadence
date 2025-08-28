@@ -4,7 +4,6 @@ import '../styles/ui.css'
 
 export interface ProjectHeaderProps {
     projectName: string
-    onAddTask: () => void
     onOpenStaffManager: () => void
     onSettings?: () => void
     onExport?: () => void
@@ -15,7 +14,6 @@ export interface ProjectHeaderProps {
 
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
     projectName,
-    onAddTask,
     onOpenStaffManager,
     onSettings,
     onExport,
@@ -38,16 +36,13 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
 
     return (
         <header className="ui-header ui-flex ui-justify-between ui-items-center ui-py-3 ui-px-3">
-            <div className="ui-text ui-uppercase ui-font-700" style={{ fontSize: 24, letterSpacing: 2, textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
+            <div className="ui-text ui-font-700" style={{ fontSize: 22, letterSpacing: 0.5, textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}>
                 {projectName}
             </div>
             {showControls && (
                 <div className="ui-flex ui-gap-4 ui-items-center">
-                    <button className="ui-btn ui-btn-strong ui-uppercase" style={{ padding: '10px 20px', letterSpacing: 0.5 }} onClick={onAddTask}>
-                        + Add Note
-                    </button>
                     <div className="ui-relative" ref={menuRef}>
-                        <button className="ui-btn ui-rounded-md ui-btn" style={{ fontSize: 20, width: 40, height: 40, padding: '8px 12px' }} onClick={() => setShowMenu(v => !v)}>
+                        <button className="ui-btn ui-rounded-md ui-focus-ring menu-btn" style={{ fontSize: 18, width: 40, height: 40 }} onClick={() => setShowMenu(v => !v)} aria-label="Project menu">
                             ⋮
                         </button>
                         {showMenu && (

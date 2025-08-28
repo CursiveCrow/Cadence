@@ -148,6 +148,14 @@
   font-size: var(--ui-font-size-sm);
   cursor: pointer;
 }
+.ui-btn:hover {
+  background: var(--ui-color-primary-weak);
+  border-color: var(--ui-color-primary-border);
+}
+.ui-btn:active {
+  transform: translateY(0.5px);
+  filter: brightness(0.98);
+}
 .ui-btn-strong {
   background: rgba(255, 255, 255, 0.25);
   border: 2px solid rgba(255, 255, 255, 0.4);
@@ -170,9 +178,15 @@
 /* Header */
 .ui-header {
   background: linear-gradient(135deg, var(--ui-color-primary) 0%, #7c3aed 100%);
-  border-bottom: 3px solid var(--ui-color-primary);
-  min-height: 70px;
-  box-shadow: 0 4px 12px var(--ui-color-shadow);
+  border-bottom: 1px solid var(--ui-color-primary-border);
+  min-height: 56px;
+  box-shadow: 0 2px 8px var(--ui-color-shadow);
+}
+
+/* Focus ring utility */
+.ui-focus-ring:focus-visible {
+  outline: 2px solid var(--ui-color-primary-border);
+  outline-offset: 2px;
 }
 
 /* Overlays */

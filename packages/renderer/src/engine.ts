@@ -142,7 +142,7 @@ export class TimelineRendererEngine {
                         const eff = getEffective()
                         this.scene?.updateHoverAtViewportX(local.x, eff as any, app.screen.height)
                         // Task tooltip near hovered task
-                        this.scene?.updateTaskHoverAtViewportPoint(local.x, local.y, eff as any, this.opts.utils.getProjectStartDate())
+                        this.scene?.updateTaskHoverAtViewportPoint(local.x, local.y, eff as any, this.opts.utils.getProjectStartDate(), app.screen.width)
                     } catch (err) { devLog.warn('globalpointermove handler error', err) }
                 })
                 app.stage.on('pointerleave', () => {
@@ -288,6 +288,7 @@ export class TimelineRendererEngine {
                     baseDow: gp.baseDow,
                     weekendAlpha: gp.weekendAlpha,
                     globalAlpha: gp.globalAlpha,
+                    bandAlpha: gp.scaleType === 'day' || gp.scaleType === 'week' ? 0.04 : 0.0,
                 })
             } catch (err) { devLog.warn('gpuGrid.updateUniforms failed', err) }
         }
