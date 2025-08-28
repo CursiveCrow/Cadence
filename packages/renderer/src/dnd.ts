@@ -163,7 +163,10 @@ export class TimelineDnDController {
       container.on('pointermove', (event) => {
         const localPos = container.toLocal((event as any).global)
         const relativeX = localPos.x
-        const isNearRightEdge = relativeX > layout.width - 10 && relativeX >= 0
+        // Use the latest layout from the scene to respect zoom/resize changes
+        const currentLayout = this.scene.taskLayouts.get((task as any).id)
+        const widthNow = currentLayout ? currentLayout.width : layout.width
+        const isNearRightEdge = relativeX > widthNow - 10 && relativeX >= 0
         container.cursor = isNearRightEdge ? 'ew-resize' : 'grab'
       })
       container.on('pointerout', () => {
@@ -171,7 +174,7 @@ export class TimelineDnDController {
       })
       container.on('rightclick', (e) => { (e as any).preventDefault?.() })
       container.on('contextmenu', (e) => { (e as any).preventDefault?.() })
-      container.on('pointerdown', (event) => this.onDownTask(event as any, task, container, layout))
+      container.on('pointerdown', (event) => this.onDownTask(event as any, task, container))
       container.on('rightdown', () => {
         this.state.isCreatingDependency = true
         this.state.dependencySourceTaskId = (task as any).id
@@ -230,10 +233,11 @@ export class TimelineDnDController {
 
   // Removed overlay 'empty pointer up' logic per default-case behavior
 
-  private onDownTask = (event: any, task: TaskLike, container: Container, layout: TaskLayout) => {
+  private onDownTask = (event: any, task: TaskLike, container: Container) => {
     const globalPos = event.global
     const viewportPos = this.layers.viewport ? this.layers.viewport.toLocal(globalPos) : globalPos
     const localPos = container.toLocal(globalPos)
+    const layout = this.scene.taskLayouts.get((task as any).id) as TaskLayout | undefined
     const isRightButton = event.button === 2
     if (isRightButton) {
       this.state.isCreatingDependency = true
@@ -243,7 +247,8 @@ export class TimelineDnDController {
     }
 
     this.callbacks.select([(task as any).id])
-    const isNearRightEdge = localPos.x > layout.width - 10 && localPos.x >= 0
+    const widthNow = layout ? layout.width : (container as any).hitArea?.width || 0
+    const isNearRightEdge = localPos.x > widthNow - 10 && localPos.x >= 0
     if (isNearRightEdge) {
       this.state = {
         ...this.state,
@@ -269,7 +274,7 @@ export class TimelineDnDController {
       this.app.renderer?.events?.setCursor?.('ew-resize')
       this.callbacks.onDragStart && this.callbacks.onDragStart()
     } else {
-      const taskY = layout.centerY - this.config.TASK_HEIGHT / 2
+      const taskY = (layout ? layout.centerY : (this.scene.taskLayouts.get((task as any).id)?.centerY ?? 0)) - this.config.TASK_HEIGHT / 2
       this.state = {
         ...this.state,
         isDragging: false,
@@ -280,7 +285,7 @@ export class TimelineDnDController {
         draggedTask: task,
         dragStartX: globalPos.x,
         dragStartY: globalPos.y,
-        offsetX: viewportPos.x - layout.startX,
+        offsetX: viewportPos.x - (layout ? layout.startX : (this.scene.taskLayouts.get((task as any).id)?.startX ?? viewportPos.x)),
         offsetY: viewportPos.y - taskY,
         clickLocalX: localPos.x,
         clickLocalY: localPos.y,

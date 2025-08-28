@@ -7,6 +7,7 @@ import { checkWebGPUAvailability, logWebGPUStatus, logRendererPreference } from 
 import { createGpuTimeGrid, GpuTimeGrid } from './gpuGrid'
 import { computeEffectiveConfig, snapXToTimeWithConfig, computeTaskLayout, getGridParamsForZoom } from './layout'
 import { GridManager } from './gridManager'
+import { devLog } from './devlog'
 
 // Intentionally imported for future dynamic tick density; currently computed in scene
 
@@ -68,7 +69,7 @@ export class TimelineRendererEngine {
     public setVerticalScale(scale: number): void {
         const clamped = Math.max(0.5, Math.min(3, scale))
         this.verticalScale = clamped
-        try { this.opts.callbacks.onVerticalScaleChange?.(clamped) } catch { }
+        try { this.opts.callbacks.onVerticalScaleChange?.(clamped) } catch (err) { devLog.warn('onVerticalScaleChange callback failed', err) }
     }
 
     getVerticalScale(): number { return this.verticalScale }
@@ -103,8 +104,8 @@ export class TimelineRendererEngine {
                 hello: false,
             })
             this.app = app
-            try { logRendererPreference(status, 'webgpu') } catch { }
-            try { (app.renderer as any).roundPixels = true } catch { }
+            try { logRendererPreference(status, 'webgpu') } catch (err) { devLog.warn('logRendererPreference failed', err) }
+            try { (app.renderer as any).roundPixels = true } catch (err) { devLog.warn('roundPixels set failed', err) }
 
             const layers = createTimelineLayers(app)
             this.layers = layers
@@ -114,7 +115,7 @@ export class TimelineRendererEngine {
                 const grid = createGpuTimeGrid(app)
                 this.gpuGrid = grid
                 app.stage.addChildAt(grid.container, Math.max(0, app.stage.getChildIndex(layers.viewport)))
-            } catch { }
+            } catch (err) { devLog.warn('createGpuTimeGrid/init failed', err) }
 
             this.scene = new TimelineSceneManager(layers)
             // Always enable status glyphs; merge with any provided plugins and de-duplicate
@@ -141,21 +142,21 @@ export class TimelineRendererEngine {
                         this.scene?.updateHoverAtViewportX(local.x, eff as any, app.screen.height)
                         // Task tooltip near hovered task
                         this.scene?.updateTaskHoverAtViewportPoint(local.x, local.y, eff as any, this.opts.utils.getProjectStartDate())
-                    } catch { }
+                    } catch (err) { devLog.warn('globalpointermove handler error', err) }
                 })
                 app.stage.on('pointerleave', () => {
                     try {
                         const eff = getEffective()
                         this.scene?.updateHoverAtViewportX(null as any, eff as any, app.screen.height)
-                    } catch { }
+                    } catch (err) { devLog.warn('pointerleave handler error', err) }
                 })
                 app.stage.on('pointerout', () => {
                     try {
                         const eff = getEffective()
                         this.scene?.updateHoverAtViewportX(null as any, eff as any, app.screen.height)
-                    } catch { }
+                    } catch (err) { devLog.warn('pointerout handler error', err) }
                 })
-            } catch { }
+            } catch (err) { devLog.warn('register pointer handlers failed', err) }
             this.gridManager = new GridManager()
             this.dnd = new TimelineDnDController({
                 app,
@@ -224,12 +225,12 @@ export class TimelineRendererEngine {
         this.currentData = { tasks: data.tasks, dependencies: data.dependencies, staffs: data.staffs }
         // Provide live viewport for pan/zoom controller
         this.getViewport = () => viewport
-        this.setViewport = (v) => { try { this.opts.callbacks.onViewportChange?.(v) } catch { } }
+        this.setViewport = (v) => { try { this.opts.callbacks.onViewportChange?.(v) } catch (err) { devLog.warn('onViewportChange callback failed', err) } }
         const app = this.app
         const layers = this.layers
         const scene = this.scene
         // Update scene zoom for plugin context
-        try { scene.setZoom(viewport.zoom || 1) } catch { }
+        try { scene.setZoom(viewport.zoom || 1) } catch (err) { devLog.warn('scene.setZoom failed', err) }
 
         // Compute effective config for current zoom and vertical scale
         const cfg = this.opts.config
@@ -238,7 +239,7 @@ export class TimelineRendererEngine {
         // Background staff and labels; verticals are handled by WebGPU grid
         this.gridManager?.ensure(layers.background, effectiveCfg as any, data.staffs as any, this.opts.utils.getProjectStartDate(), app.screen.width, app.screen.height, viewport.zoom, true)
         // Today marker (updates every render; cheap)
-        try { this.scene.updateTodayMarker(this.opts.utils.getProjectStartDate(), effectiveCfg as any, app.screen.height) } catch { }
+        try { this.scene.updateTodayMarker(this.opts.utils.getProjectStartDate(), effectiveCfg as any, app.screen.height) } catch (err) { devLog.warn('updateTodayMarker failed', err) }
 
         // Update viewport transform: translate in pixels; do not scale Y; keep stage scale at 1
         const offsetX = -viewport.x * effectiveCfg.DAY_WIDTH
@@ -278,7 +279,7 @@ export class TimelineRendererEngine {
                     weekendAlpha: gp.weekendAlpha,
                     globalAlpha: gp.globalAlpha,
                 })
-            } catch { }
+            } catch (err) { devLog.warn('gpuGrid.updateUniforms failed', err) }
         }
         // Render tasks
         const projectStartDate = this.opts.utils.getProjectStartDate()
@@ -317,17 +318,17 @@ export class TimelineRendererEngine {
     getViewportScale(): number { return this.getViewport().zoom || 1 }
 
     destroy(): void {
-        try { this.dnd?.destroy() } catch { }
-        try { this.panzoom?.destroy() } catch { }
+        try { this.dnd?.destroy() } catch (err) { devLog.warn('dnd.destroy failed', err) }
+        try { this.panzoom?.destroy() } catch (err) { devLog.warn('panzoom.destroy failed', err) }
         this.dnd = null
         this.panzoom = null
         const app = this.app
         if (app) {
-            try { app.ticker.stop() } catch { }
-            try { app.stage.removeAllListeners() } catch { }
-            try { app.destroy(true, { children: true, texture: true, textureSource: true, context: true }) } catch { }
+            try { app.ticker.stop() } catch (err) { devLog.warn('app.ticker.stop failed', err) }
+            try { app.stage.removeAllListeners() } catch (err) { devLog.warn('stage.removeAllListeners failed', err) }
+            try { app.destroy(true, { children: true, texture: true, textureSource: true, context: true }) } catch (err) { devLog.warn('app.destroy failed', err) }
         }
-        try { this.scene?.destroy() } catch { }
+        try { this.scene?.destroy() } catch (err) { devLog.warn('scene.destroy failed', err) }
         this.layers = null
         this.scene = null
         this.app = null

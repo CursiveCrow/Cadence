@@ -9,6 +9,7 @@ import { getTimeScaleForZoom } from './layout'
 import { computeGraphicsResolution, computeTextResolution } from './resolution.js'
 import type { Task, Dependency, Staff } from '@cadence/core'
 import type { RendererContext } from './types/context'
+import { devLog } from './devlog'
 
 
 export interface RendererPlugin {
@@ -568,7 +569,7 @@ export class TimelineSceneManager {
       getProjectStartDate: () => this.providerGetProjectStartDate(),
     }
     for (const p of this.plugins) {
-      try { p.onLayersCreated?.(app, this.layers as any, ctx) } catch { }
+      try { p.onLayersCreated?.(app, this.layers as any, ctx) } catch (err) { devLog.warn('plugin.onLayersCreated failed', err) }
     }
   }
 
@@ -635,7 +636,7 @@ export class TimelineSceneManager {
 
     // Notify plugins (instance-scoped)
     for (const p of this.plugins) {
-      try { p.onTaskUpserted?.(task, container, { layout, config, zoom, selected }) } catch { }
+      try { p.onTaskUpserted?.(task, container, { layout, config, zoom, selected }) } catch (err) { devLog.warn('plugin.onTaskUpserted failed', err) }
     }
     return { container, created }
   }
@@ -643,8 +644,8 @@ export class TimelineSceneManager {
   removeMissingTasks(validIds: Set<string>): void {
     for (const [id, container] of this.taskContainers.entries()) {
       if (!validIds.has(id)) {
-        try { container.removeFromParent() } catch { }
-        try { (container as any).destroy?.({ children: true }) } catch { }
+        try { container.removeFromParent() } catch (err) { devLog.warn('container.removeFromParent failed', err) }
+        try { (container as any).destroy?.({ children: true }) } catch (err) { devLog.warn('container.destroy failed', err) }
         this.taskContainers.delete(id)
         this.taskLayouts.delete(id)
         this.taskAnchors.delete(id)
@@ -670,8 +671,8 @@ export class TimelineSceneManager {
   removeMissingDependencies(validIds: Set<string>): void {
     for (const [id, g] of this.dependencyGraphics.entries()) {
       if (!validIds.has(id)) {
-        try { g.removeFromParent() } catch { }
-        try { (g as any).destroy?.() } catch { }
+        try { g.removeFromParent() } catch (err) { devLog.warn('dependencyGraphics.removeFromParent failed', err) }
+        try { (g as any).destroy?.() } catch (err) { devLog.warn('dependencyGraphics.destroy failed', err) }
         this.dependencyGraphics.delete(id)
       }
     }
@@ -700,7 +701,8 @@ export class TimelineSceneManager {
       if (excludeId && h.id === excludeId) continue
       const cont = this.taskContainers.get(h.id)
       if (!cont) continue
-      const local = cont.toLocal({ x, y } as any)
+      // Convert from viewport space to container local space
+      const local = cont.toLocal({ x, y } as any, this.layers.viewport)
       const hitArea = (cont as any).hitArea as Rectangle | undefined
       if (hitArea && hitArea.contains(local.x, local.y)) return h.id
     }
@@ -708,7 +710,7 @@ export class TimelineSceneManager {
   }
 
   /**
-   * Draw or update a thin vertical hover guide and a small date tooltip near the top ruler.
+   * Draw or update a thin vertical hover guide and a small tooltip near the top ruler.
    * Pass px in viewport coordinate space. If px is null, clears the hover UI.
    */
   updateHoverAtViewportX(px: number | null, config: TimelineConfig, screenHeight: number): void {
@@ -717,6 +719,13 @@ export class TimelineSceneManager {
       if (this.hoverText && this.layers.dragLayer.children.includes(this.hoverText)) this.layers.dragLayer.removeChild(this.hoverText)
       this.hoverGuide = null
       this.hoverText = null
+      // Also clear tooltip and stem if present
+      const tipBox = (this as any).__taskHtmlTip as Container | undefined
+      if (tipBox && this.layers.dragLayer.children.includes(tipBox)) this.layers.dragLayer.removeChild(tipBox)
+        ; (this as any).__taskHtmlTip = undefined
+      const stem = (this as any).__tooltipStem as Graphics | undefined
+      if (stem && this.layers.dragLayer.children.includes(stem)) this.layers.dragLayer.removeChild(stem)
+        ; (this as any).__tooltipStem = undefined
       return
     }
     const xAligned = Math.round(px) + 0.5 // pixel-align for crisp line
@@ -770,7 +779,7 @@ export class TimelineSceneManager {
         ; (line as any).eventMode = 'none'
       if (!this.todayLine) this.layers.background.addChild(line)
       this.todayLine = line
-    } catch { }
+    } catch (err) { devLog.warn('updateTodayMarker failed', err) }
   }
 
   /**
@@ -783,11 +792,17 @@ export class TimelineSceneManager {
       const tip = (this as any).__taskTip as Text | undefined
       if (tip && this.layers.dragLayer.children.includes(tip)) this.layers.dragLayer.removeChild(tip)
         ; (this as any).__taskTip = undefined
+      const tipBox = (this as any).__taskHtmlTip as Container | undefined
+      if (tipBox && this.layers.dragLayer.children.includes(tipBox)) this.layers.dragLayer.removeChild(tipBox)
+        ; (this as any).__taskHtmlTip = undefined
+      const stem = (this as any).__tooltipStem as Graphics | undefined
+      if (stem && this.layers.dragLayer.children.includes(stem)) this.layers.dragLayer.removeChild(stem)
+        ; (this as any).__tooltipStem = undefined
       return
     }
     const task = this.taskData.get(id)
-    const layout = this.taskLayouts.get(id)
-    if (!task || !layout) return
+    const taskLayout = this.taskLayouts.get(id)
+    if (!task || !taskLayout) return
     const details = (task as any).details || (task as any).description || ''
     const title = task.title || 'Untitled'
     const md = details ? `${title}\n\n${details}` : `${title}`
@@ -815,29 +830,77 @@ export class TimelineSceneManager {
     textNode.text = plain
     const padding = 8
     const tx = Math.round(x + 10)
-    const ty = Math.round(Math.max(0, layout.topY - (textNode.height + padding * 2) - 6))
+    const ty = Math.round(Math.max(0, taskLayout.topY - (textNode.height + padding * 2) - 6))
     tipBox!.x = tx
     tipBox!.y = ty
-    // Background
+    // Background: draw a callout with a slanted left edge that is flush with the stem
     const bg = (tipBox as any).__bg as Graphics
     bg.clear()
-    bg.roundRect(0, 0, Math.max(160, textNode.width + padding * 2), textNode.height + padding * 2, 6)
+    const boxW = Math.max(160, textNode.width + padding * 2)
+    const boxH = textNode.height + padding * 2
+    // Align left edge with stem while anchoring at top-left corner
+    const rStem = _config.TASK_HEIGHT / 2
+    const headRightXTmp = Math.round(taskLayout.startX + rStem * 2)
+    const headYTmp = Math.round(taskLayout.centerY)
+    const anchorAbsX = Math.round(tipBox!.x) // top-left corner of tooltip
+    const anchorAbsY = Math.round(tipBox!.y)
+    const dxStem = headRightXTmp - anchorAbsX
+    const dyStem = headYTmp - anchorAbsY
+    const lenStem = Math.max(1, Math.hypot(dxStem, dyStem))
+    const ux = dxStem / lenStem
+    const uy = dyStem / lenStem
+    // Intersection of the stem-aligned line through (0,0) with y = boxH (tooltip bottom)
+    let lbLocalX = 0
+    if (Math.abs(uy) > 0.0001) {
+      lbLocalX = (boxH / uy) * ux
+    } else {
+      lbLocalX = 0
+    }
+    // Polygon path: top-left (0,0) -> rightTop -> rightBottom -> leftBottom(on y=boxH along stem) -> close
+    bg.beginPath()
+    bg.moveTo(0, 0)
+    bg.lineTo(boxW, 0)
+    bg.lineTo(boxW, boxH)
+    bg.lineTo(lbLocalX, boxH)
+    bg.closePath()
     bg.fill({ color: 0x111111, alpha: 0.9 })
     bg.stroke({ width: 1, color: 0xFFFFFF, alpha: 0.2 })
     textNode.x = padding
     textNode.y = padding
+
+    // Draw a thin stem from tooltip box to the right side of the note head (circle)
+    const l2 = this.taskLayouts.get(id)
+    if (l2) {
+      const r = _config.TASK_HEIGHT / 2
+      const headRightX = Math.round(l2.startX + r * 2)
+      const headY = Math.round(l2.centerY)
+      // no-op: boxLeftX/boxMidY no longer needed after anchoring stem at top-left
+      let stem = (this as any).__tooltipStem as Graphics | undefined
+      if (!stem) {
+        stem = new Graphics()
+          ; (stem as any).eventMode = 'none'
+        this.layers.dragLayer.addChild(stem)
+          ; (this as any).__tooltipStem = stem
+      }
+      stem.clear()
+      // Stem from tooltip top-left to note head right side
+      stem.moveTo(anchorAbsX, anchorAbsY)
+      stem.lineTo(headRightX, headY)
+      // Match tooltip color (0x111111) and make stem slightly thicker for readability
+      stem.stroke({ width: 3, color: 0x111111, alpha: 0.9 })
+    }
   }
 
   destroy(): void {
     // Plugin teardown
     for (const p of this.plugins) {
-      try { p.onDestroy?.() } catch { }
+      try { p.onDestroy?.() } catch (err) { devLog.warn('plugin.onDestroy failed', err) }
     }
     // Destroy graphics and containers
     try {
-      for (const [, g] of this.dependencyGraphics) { try { (g as any).destroy?.() } catch { } }
-      for (const [, c] of this.taskContainers) { try { (c as any).destroy?.({ children: true }) } catch { } }
-    } catch { }
+      for (const [, g] of this.dependencyGraphics) { try { (g as any).destroy?.() } catch (err) { devLog.warn('dependencyGraphics.destroy item failed', err) } }
+      for (const [, c] of this.taskContainers) { try { (c as any).destroy?.({ children: true }) } catch (err) { devLog.warn('taskContainer.destroy item failed', err) } }
+    } catch (err) { devLog.warn('scene destroy loop failed', err) }
     this.dependencyGraphics.clear()
     this.taskContainers.clear()
     this.taskLayouts.clear()
