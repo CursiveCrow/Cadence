@@ -1,5 +1,6 @@
 import React from 'react'
 import '../styles/tokens.css'
+import '../styles/ui.css'
 import { UIStaff } from '../types'
 
 export interface ViewportLike { x: number; y: number; zoom: number }
@@ -26,12 +27,9 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, wi
     const containerStyle: React.CSSProperties = {
         width: `${width}px`,
         flexShrink: 0,
-        borderRight: '1px solid var(--ui-color-border)',
-        background: 'linear-gradient(180deg, var(--ui-surface-1) 0%, var(--ui-surface-1-focus) 100%)',
         position: 'relative',
         height: '100%',
         overflow: 'hidden',
-        color: 'var(--ui-color-text)',
         zIndex: 2
     }
 
@@ -65,21 +63,10 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, wi
     const onPointerUp = () => { dragRef.current.active = false }
 
     return (
-        <div style={containerStyle} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
-            <div style={{ position: 'absolute', top: 4, right: 4, left: 4, display: 'flex', justifyContent: 'space-between', gap: 6, pointerEvents: 'auto' }}>
-                <button
-                    style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'var(--ui-color-text)', borderRadius: 6, padding: '6px 8px', fontSize: 12, cursor: 'pointer' }}
-                    onClick={onAddNote}
-                >
-                    + Add Note
-                </button>
-                <button
-                    style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.25)', color: 'var(--ui-color-text)', borderRadius: 6, padding: '6px 8px', fontSize: 12, cursor: 'pointer' }}
-                    onClick={onOpenMenu}
-                    aria-label="Project menu"
-                >
-                    ⋮
-                </button>
+        <div className="ui-surface-1 ui-border-r ui-text" style={containerStyle} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+            <div className="ui-absolute ui-flex ui-justify-between ui-items-center" style={{ top: 4, right: 4, left: 4, gap: 6, pointerEvents: 'auto' }}>
+                <button className="ui-btn ui-rounded-md ui-text-sm" onClick={onAddNote}>+ Add Note</button>
+                <button className="ui-btn ui-rounded-md ui-text-sm" onClick={onOpenMenu} aria-label="Project menu">⋮</button>
             </div>
             <div style={labelContainerStyle}>
                 {staffs.map((staff, index) => {
@@ -93,18 +80,14 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, wi
                         left: 0,
                         right: 0,
                         transform: 'translateY(-50%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '0 8px',
-                        color: 'var(--ui-color-text)'
+                        padding: '0 8px'
                     }
                     const clefSymbol = staff.name.toLowerCase().includes('treble') ? '𝄞' :
                         staff.name.toLowerCase().includes('bass') ? '𝄢' : '♪'
                     return (
-                        <div key={staff.id} style={itemStyle}>
+                        <div key={staff.id} className="ui-flex ui-items-center ui-gap-2 ui-text" style={itemStyle}>
                             <span style={{ fontFamily: 'serif', fontSize: 18, lineHeight: 1 }}>{clefSymbol}</span>
-                            <span style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap' }}>{staff.name}</span>
+                            <span className="ui-font-700 ui-text-md" style={{ whiteSpace: 'nowrap' }}>{staff.name}</span>
                         </div>
                     )
                 })}

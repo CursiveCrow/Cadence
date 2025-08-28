@@ -13,6 +13,7 @@ import {
 } from '@cadence/ui'
 import { TIMELINE_CONFIG, PROJECT_START_DATE } from '@cadence/renderer'
 import { ProjectHeader as UIProjectHeader } from '@cadence/ui'
+import { computeDateHeaderHeight } from '@cadence/ui'
 import { StaffManager } from './StaffManager'
 import { useResizableSidebar } from '../hooks/useResizableSidebar'
 import { useDemoProject } from '../hooks/useDemoProject'
@@ -94,7 +95,7 @@ export const CadenceMain: React.FC = () => {
             topMargin={Math.round(TIMELINE_CONFIG.TOP_MARGIN * verticalScale)}
             staffSpacing={Math.max(20, Math.round(TIMELINE_CONFIG.STAFF_SPACING * verticalScale))}
             staffLineSpacing={Math.max(8, Math.round(TIMELINE_CONFIG.STAFF_LINE_SPACING * verticalScale))}
-            headerHeight={32}
+            headerHeight={computeDateHeaderHeight(viewport.zoom || 1)}
             verticalScale={verticalScale}
             onAddNote={addNewTask}
             onOpenMenu={() => {

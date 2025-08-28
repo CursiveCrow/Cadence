@@ -4,6 +4,8 @@
 
 // React import not needed with JSX runtime
 import { Task, TaskStatus } from '@cadence/core'
+import '../styles/tokens.css'
+import '../styles/ui.css'
 
 export interface TaskCardProps {
   task: Task
@@ -20,17 +22,16 @@ export function TaskCard({
   selected = false,
   className = '',
 }: TaskCardProps) {
-  const statusColors: Record<TaskStatus, string> = {
-    [TaskStatus.NOT_STARTED]: 'bg-gray-100 text-gray-800',
-    [TaskStatus.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
-    [TaskStatus.COMPLETED]: 'bg-green-100 text-green-800',
-    [TaskStatus.BLOCKED]: 'bg-red-100 text-red-800',
-    [TaskStatus.CANCELLED]: 'bg-gray-100 text-gray-600',
+  const statusClasses: Record<TaskStatus, string> = {
+    [TaskStatus.NOT_STARTED]: 'ui-status-pill ui-status-not-started',
+    [TaskStatus.IN_PROGRESS]: 'ui-status-pill ui-status-in-progress',
+    [TaskStatus.COMPLETED]: 'ui-status-pill ui-status-completed',
+    [TaskStatus.BLOCKED]: 'ui-status-pill ui-status-blocked',
+    [TaskStatus.CANCELLED]: 'ui-status-pill ui-status-cancelled',
   }
 
-  const baseClasses = 'border rounded-lg p-4 cursor-pointer transition-colors'
-  const selectedClasses = selected ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
-
+  const baseClasses = 'ui-border ui-rounded-lg ui-p-3'
+  const selectedClasses = selected ? ' ui-shadow' : ''
   const classes = [baseClasses, selectedClasses, className].join(' ')
 
   const handleClick = () => {
@@ -46,29 +47,23 @@ export function TaskCard({
   }
 
   return (
-    <div
-      className={classes}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <h3 className="font-medium text-gray-900 mb-1">
-            {task.title}
-          </h3>
-          <div className="text-sm text-gray-600 mb-2">
+    <div className={classes} onClick={handleClick} onDoubleClick={handleDoubleClick}>
+      <div className="ui-flex ui-justify-between ui-items-center">
+        <div className="ui-w-full">
+          <h3 className="ui-font-700 ui-text-md ui-mb-2 ui-text">{task.title}</h3>
+          <div className="ui-text-sm ui-text-muted ui-mb-2">
             <div>Start: {new Date(task.startDate).toLocaleDateString()}</div>
             <div>Duration: {task.durationDays} days</div>
             {task.assignee && <div>Assignee: {task.assignee}</div>}
           </div>
         </div>
-        <div className="ml-4">
-          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${statusColors[task.status as TaskStatus]}`}>
+        <div style={{ marginLeft: 16 }}>
+          <span className={statusClasses[task.status as TaskStatus]}>
             {task.status.replace('_', ' ')}
           </span>
         </div>
       </div>
-      <div className="text-xs text-gray-500 mt-2" />
+      <div className="ui-text-xs ui-text-muted" />
     </div>
   )
 }

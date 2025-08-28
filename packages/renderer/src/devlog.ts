@@ -12,8 +12,9 @@ function isDevEnv(): boolean {
         // ignore
     }
     try {
-        // NODE_ENV fallback
-        const env: any = (typeof process !== 'undefined' ? (process as any).env : undefined)
+        // NODE_ENV fallback without Node typings
+        const g: any = (typeof globalThis !== 'undefined' ? globalThis : {})
+        const env: any = g && g.process && g.process.env ? g.process.env : undefined
         return env ? env.NODE_ENV !== 'production' : false
     } catch {
         return false

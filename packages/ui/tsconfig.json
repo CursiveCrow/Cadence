@@ -23,6 +23,9 @@
       ],
       "@cadence/state": [
         "../state/src"
+      ],
+      "@cadence/renderer": [
+        "../renderer/dist"
       ]
     }
   },

@@ -1,4 +1,6 @@
 import React from 'react'
+import '../styles/tokens.css'
+import '../styles/ui.css'
 
 export interface ErrorFallbackProps {
   error: Error
@@ -37,10 +39,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       const Fallback = this.props.fallback
       if (Fallback) return <Fallback error={this.state.error} resetError={this.resetError} />
       return (
-        <div style={{ padding: 24 }}>
-          <h2>Something went wrong.</h2>
-          <pre>{String(this.state.error?.message || this.state.error)}</pre>
-          <button onClick={this.resetError}>Retry</button>
+        <div className="ui-p-3 ui-text">
+          <h2 className="ui-text-lg ui-font-700">Something went wrong.</h2>
+          <pre className="ui-text-sm" style={{ whiteSpace: 'pre-wrap' }}>{String(this.state.error?.message || this.state.error)}</pre>
+          <button className="ui-btn ui-rounded-md" onClick={this.resetError}>Retry</button>
         </div>
       )
     }

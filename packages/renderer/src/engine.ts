@@ -8,6 +8,7 @@ import { createGpuTimeGrid, GpuTimeGrid } from './gpuGrid'
 import { computeEffectiveConfig, snapXToTimeWithConfig, computeTaskLayout, getGridParamsForZoom } from './layout'
 import { GridManager } from './gridManager'
 import { devLog } from './devlog'
+import { setRendererMetrics } from './index'
 
 // Intentionally imported for future dynamic tick density; currently computed in scene
 
@@ -235,6 +236,15 @@ export class TimelineRendererEngine {
         // Compute effective config for current zoom and vertical scale
         const cfg = this.opts.config
         const effectiveCfg = computeEffectiveConfig(cfg as any, viewport.zoom, this.verticalScale)
+
+        // Update UI-visible metrics for header alignment
+        try {
+            setRendererMetrics({
+                resolution: (this.app?.renderer as any)?.resolution || (window.devicePixelRatio || 1),
+                dayWidthPx: (effectiveCfg as any).DAY_WIDTH,
+                leftMarginPx: (effectiveCfg as any).LEFT_MARGIN,
+            })
+        } catch (err) { devLog.warn('setRendererMetrics failed', err) }
 
         // Background staff and labels; verticals are handled by WebGPU grid
         this.gridManager?.ensure(layers.background, effectiveCfg as any, data.staffs as any, this.opts.utils.getProjectStartDate(), app.screen.width, app.screen.height, viewport.zoom, true)
