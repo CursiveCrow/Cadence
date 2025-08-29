@@ -56,6 +56,8 @@ export const DependencySchema = z.object({
   path: ['dstTaskId'],
 })
 
+// This will be moved to the @cadence/state package
+/*
 export const UIStateSchema = z.object({
   activeProjectId: IdString.nullable(),
   selection: z.array(IdString),
@@ -65,6 +67,7 @@ export const UIStateSchema = z.object({
     zoom: z.number().min(0.1).max(10),
   }),
 })
+*/
 
 // IPC Validation Schemas
 export const IPCOpenProjectSchema = z.object({

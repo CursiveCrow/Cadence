@@ -73,12 +73,3 @@ export interface Staff {
   /** Optional musical time signature for this staff (e.g., "4/4", "3/4") */
   timeSignature?: string
 }
-
-export interface UIState {
-  activeProjectId: string | null
-  selection: string[] // Array of selected Task IDs
-  viewport: { x: number; y: number; zoom: number }
-  staffs: Staff[] // Musical staffs configuration
-}
-
-export type ViewportState = UIState['viewport']

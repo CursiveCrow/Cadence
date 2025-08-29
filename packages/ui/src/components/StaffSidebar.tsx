@@ -1,12 +1,13 @@
-import React from 'react'
+import React, { useState } from 'react'
 import '../styles/tokens.css'
 import '../styles/ui.css'
-import { UIStaff } from '../types'
+import { Staff } from '@cadence/core'
+import { TimeSignaturePopover } from './TimeSignaturePopover'
 
 export interface ViewportLike { x: number; y: number; zoom: number }
 
 export interface StaffSidebarProps {
-    staffs: UIStaff[]
+    staffs: Staff[]
     viewport: ViewportLike
     width: number
     topMargin: number
@@ -23,6 +24,8 @@ export interface StaffSidebarProps {
 }
 
 export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, width, topMargin, staffSpacing, staffLineSpacing, headerHeight, verticalScale, onAddNote, onOpenMenu, onVerticalZoomChange, onChangeTimeSignature }) => {
+    const [popoverAnchor, setPopoverAnchor] = useState<HTMLElement | null>(null)
+    const [editingStaff, setEditingStaff] = useState<Staff | null>(null)
     const header = typeof headerHeight === 'number' ? headerHeight : 32
 
     const containerStyle: React.CSSProperties = {
@@ -63,6 +66,23 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, wi
     }
     const onPointerUp = () => { dragRef.current.active = false }
 
+    const handleTimeSignatureClick = (e: React.MouseEvent<HTMLButtonElement>, staff: Staff) => {
+        e.stopPropagation()
+        setEditingStaff(staff)
+        setPopoverAnchor(e.currentTarget)
+    }
+
+    const handleClosePopover = () => {
+        setPopoverAnchor(null)
+        setEditingStaff(null)
+    }
+
+    const handleSaveTimeSignature = (newValue: string) => {
+        if (editingStaff && onChangeTimeSignature) {
+            onChangeTimeSignature(editingStaff.id, newValue)
+        }
+    }
+
     return (
         <div className="ui-surface-1 ui-border-r ui-text" style={containerStyle} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
             <div className="ui-absolute ui-flex ui-justify-between ui-items-center" style={{ top: 4, right: 4, left: 4, gap: 6, pointerEvents: 'auto' }}>
@@ -95,12 +115,7 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, wi
                             <button
                                 className="ui-timesig"
                                 aria-label={`Time signature ${tsTop}/${tsBottom}`}
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    const current = staff.timeSignature || `${tsTop}/${tsBottom}`
-                                    const next = window.prompt('Edit time signature (e.g., 4/4, 3/4, 6/8):', current || '4/4') || current
-                                    if (next && onChangeTimeSignature) onChangeTimeSignature(staff.id, next)
-                                }}
+                                onClick={(e) => handleTimeSignatureClick(e, staff)}
                                 title="Edit time signature"
                                 style={{ cursor: 'pointer', background: 'transparent', border: 'none', padding: 0 }}
                             >
@@ -111,6 +126,14 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, wi
                     )
                 })}
             </div>
+            {editingStaff && (
+                <TimeSignaturePopover
+                    anchorElement={popoverAnchor}
+                    initialValue={editingStaff.timeSignature || '4/4'}
+                    onClose={handleClosePopover}
+                    onSave={handleSaveTimeSignature}
+                />
+            )}
         </div>
     )
 }

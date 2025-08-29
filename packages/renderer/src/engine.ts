@@ -9,30 +9,26 @@ import { computeEffectiveConfig, snapXToTimeWithConfig, computeTaskLayout, getGr
 import { GridManager } from './gridManager'
 import { devLog } from './devlog'
 import { setRendererMetrics } from './index'
+import type { Task, Dependency, Staff, DependencyType } from '@cadence/core'
 
 // Intentionally imported for future dynamic tick density; currently computed in scene
 
-export interface EngineTasks {
-    [id: string]: any
-}
-
-export interface EngineDependencies {
-    [id: string]: any
-}
+export type EngineTasks = Record<string, Task>
+export type EngineDependencies = Record<string, Dependency>
 
 export interface EngineCallbacks {
     select: (ids: string[]) => void
     onDragStart?: () => void
     onDragEnd?: () => void
-    updateTask: (projectId: string, taskId: string, updates: Partial<any>) => void
-    createDependency: (projectId: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: string }) => void
+    updateTask: (projectId: string, taskId: string, updates: Partial<Task>) => void
+    createDependency: (projectId: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: DependencyType }) => void
     onViewportChange?: (v: { x: number; y: number; zoom: number }) => void
     onVerticalScaleChange?: (scale: number) => void
 }
 
 export interface EngineUtils {
     getProjectStartDate: () => Date
-    findNearestStaffLine: (y: number) => { staff: any; staffLine: number; centerY: number } | null
+    findNearestStaffLine: (y: number) => { staff: Staff; staffLine: number; centerY: number } | null
     snapXToDay: (x: number) => { snappedX: number; dayIndex: number }
     dayIndexToIsoDate: (dayIndex: number) => string
     snapXToTime?: (x: number) => { snappedX: number; dayIndex: number }
@@ -60,7 +56,7 @@ export class TimelineRendererEngine {
     private initializing = false
     private getViewport: () => ViewportState = () => ({ x: 0, y: 0, zoom: 1 })
     private setViewport: (v: ViewportState) => void = () => { }
-    private currentData: { tasks: EngineTasks; dependencies: EngineDependencies; staffs: any[] } = { tasks: {}, dependencies: {}, staffs: [] }
+    private currentData: { tasks: EngineTasks; dependencies: EngineDependencies; staffs: Staff[] } = { tasks: {}, dependencies: {}, staffs: [] }
     private verticalScale: number = 1
     private gridManager: GridManager | null = null
     private gpuGrid: GpuTimeGrid | undefined
@@ -220,110 +216,135 @@ export class TimelineRendererEngine {
         }
     }
 
-    render(data: { tasks: EngineTasks; dependencies: EngineDependencies; staffs: any[]; selection: string[] }, viewport: { x: number; y: number; zoom: number }): void {
-        if (!this.app || !this.layers || !this.scene) return
-        // Update data providers for engine-managed controllers
-        this.currentData = { tasks: data.tasks, dependencies: data.dependencies, staffs: data.staffs }
-        // Provide live viewport for pan/zoom controller
-        this.getViewport = () => viewport
-        this.setViewport = (v) => { try { this.opts.callbacks.onViewportChange?.(v) } catch (err) { devLog.warn('onViewportChange callback failed', err) } }
-        const app = this.app
-        const layers = this.layers
-        const scene = this.scene
-        // Update scene zoom for plugin context
-        try { scene.setZoom(viewport.zoom || 1) } catch (err) { devLog.warn('scene.setZoom failed', err) }
+    render(data: { tasks: EngineTasks; dependencies: EngineDependencies; staffs: Staff[]; selection: string[] }, viewport: { x: number; y: number; zoom: number }): void {
+        if (!this.app || !this.layers || !this.scene) return;
 
-        // Compute effective config for current zoom and vertical scale
-        const cfg = this.opts.config
-        const effectiveCfg = computeEffectiveConfig(cfg as any, viewport.zoom, this.verticalScale)
+        this._updateDataAndViewport(data, viewport);
+        const effectiveCfg = this._updateEffectiveConfig(viewport);
 
-        // Update UI-visible metrics for header alignment
+        this._updateUIMetrics(effectiveCfg);
+        this._renderGrid(data, viewport, effectiveCfg);
+        this._updateViewportTransform(viewport, effectiveCfg);
+
+        this._renderTasks(data, viewport, effectiveCfg);
+        this._renderDependencies(data, effectiveCfg);
+        this._renderSelection(data, effectiveCfg);
+
+        this.scene.rebuildSpatialIndex(effectiveCfg as any);
+    }
+
+    private _updateDataAndViewport(data: { tasks: EngineTasks; dependencies: EngineDependencies; staffs: Staff[]; selection: string[] }, viewport: ViewportState): void {
+        this.currentData = { tasks: data.tasks, dependencies: data.dependencies, staffs: data.staffs };
+        this.getViewport = () => viewport;
+        this.setViewport = (v) => { try { this.opts.callbacks.onViewportChange?.(v) } catch (err) { devLog.warn('onViewportChange callback failed', err) } };
+        this.scene?.setZoom(viewport.zoom || 1);
+    }
+
+    private _updateEffectiveConfig(viewport: ViewportState): TimelineConfig {
+        const cfg = this.opts.config;
+        return computeEffectiveConfig(cfg as any, viewport.zoom, this.verticalScale);
+    }
+
+    private _updateUIMetrics(effectiveCfg: TimelineConfig): void {
         try {
             setRendererMetrics({
                 resolution: (this.app?.renderer as any)?.resolution || (window.devicePixelRatio || 1),
                 dayWidthPx: (effectiveCfg as any).DAY_WIDTH,
                 leftMarginPx: (effectiveCfg as any).LEFT_MARGIN,
-            })
-        } catch (err) { devLog.warn('setRendererMetrics failed', err) }
-
-        // Background staff and labels; verticals are handled by WebGPU grid
-        this.gridManager?.ensure(layers.background, effectiveCfg as any, data.staffs as any, this.opts.utils.getProjectStartDate(), app.screen.width, app.screen.height, viewport.zoom, true)
-        // Today marker (updates every render; cheap)
-        try { this.scene.updateTodayMarker(this.opts.utils.getProjectStartDate(), effectiveCfg as any, app.screen.height) } catch (err) { devLog.warn('updateTodayMarker failed', err) }
-
-        // Update GPU grid uniforms (WebGPU)
-        const gpuGrid = this.gpuGrid
-        if (gpuGrid) {
-            try {
-                const screenW = app.screen.width
-                const screenH = app.screen.height
-                const cfgEff = effectiveCfg as any
-                const projectStart = this.opts.utils.getProjectStartDate()
-                const gp = getGridParamsForZoom(viewport.zoom || 1, projectStart)
-
-                gpuGrid.container.visible = true
-                gpuGrid.setSize(screenW, screenH)
-                // Quantize viewportXDays to match integer pixel rounding applied to layers.viewport.x
-                const roundedViewportXDays = Math.round((viewport.x || 0) * cfgEff.DAY_WIDTH) / Math.max(cfgEff.DAY_WIDTH, 0.0001)
-                gpuGrid.updateUniforms({
-                    screenWidth: screenW,
-                    screenHeight: screenH,
-                    leftMarginPx: cfgEff.LEFT_MARGIN,
-                    viewportXDays: roundedViewportXDays,
-                    dayWidthPx: cfgEff.DAY_WIDTH,
-                    minorStepDays: gp.minorStepDays,
-                    majorStepDays: gp.majorStepDays,
-                    minorColor: cfgEff.GRID_COLOR_MINOR,
-                    majorColor: cfgEff.GRID_COLOR_MAJOR,
-                    minorAlpha: gp.minorAlpha,
-                    majorAlpha: gp.majorAlpha,
-                    minorLineWidthPx: gp.minorWidthPx,
-                    majorLineWidthPx: gp.majorWidthPx,
-                    scaleType: gp.scaleType as any,
-                    baseDow: gp.baseDow,
-                    weekendAlpha: gp.weekendAlpha,
-                    globalAlpha: gp.globalAlpha,
-                    bandAlpha: gp.scaleType === 'day' || gp.scaleType === 'week' ? 0.04 : 0.0,
-                })
-            } catch (err) { devLog.warn('gpuGrid.updateUniforms failed', err) }
+            });
+        } catch (err) {
+            devLog.warn('setRendererMetrics failed', err);
         }
-        // Update viewport transform: translate in pixels; do not scale Y; keep stage scale at 1
-        // Use symmetric rounding to avoid 1px drift vs GPU grid when V*d lands on .5
-        const offsetX = -Math.round((viewport.x || 0) * effectiveCfg.DAY_WIDTH)
-        // Clamp to finite values to avoid NaN/Inf at extreme zooms
-        layers.viewport.x = Number.isFinite(offsetX) ? offsetX : 0
-        layers.viewport.y = Math.round(Number.isFinite(-viewport.y) ? -viewport.y : 0)
-        layers.viewport.scale.set(1, 1)
+    }
 
-        // Render tasks
-        const projectStartDate = this.opts.utils.getProjectStartDate()
-        const currentIds = new Set(Object.keys(data.tasks))
+    private _renderGrid(data: { staffs: Staff[] }, viewport: ViewportState, effectiveCfg: TimelineConfig): void {
+        if (!this.app) return;
+        this.gridManager?.ensure(this.layers!.background, effectiveCfg as any, data.staffs, this.opts.utils.getProjectStartDate(), this.app.screen.width, this.app.screen.height, viewport.zoom, true);
+        this.scene?.updateTodayMarker(this.opts.utils.getProjectStartDate(), effectiveCfg as any, this.app.screen.height);
+        this._updateGpuGrid(viewport, effectiveCfg);
+    }
+
+    private _updateGpuGrid(viewport: ViewportState, effectiveCfg: TimelineConfig): void {
+        const gpuGrid = this.gpuGrid;
+        if (!gpuGrid || !this.app) return;
+
+        try {
+            const screenW = this.app.screen.width;
+            const screenH = this.app.screen.height;
+            const cfgEff = effectiveCfg as any;
+            const projectStart = this.opts.utils.getProjectStartDate();
+            const gp = getGridParamsForZoom(viewport.zoom || 1, projectStart);
+
+            gpuGrid.container.visible = true;
+            gpuGrid.setSize(screenW, screenH);
+            const roundedViewportXDays = Math.round((viewport.x || 0) * cfgEff.DAY_WIDTH) / Math.max(cfgEff.DAY_WIDTH, 0.0001);
+            gpuGrid.updateUniforms({
+                screenWidth: screenW,
+                screenHeight: screenH,
+                leftMarginPx: cfgEff.LEFT_MARGIN,
+                viewportXDays: roundedViewportXDays,
+                dayWidthPx: cfgEff.DAY_WIDTH,
+                minorStepDays: gp.minorStepDays,
+                majorStepDays: gp.majorStepDays,
+                minorColor: cfgEff.GRID_COLOR_MINOR,
+                majorColor: cfgEff.GRID_COLOR_MAJOR,
+                minorAlpha: gp.minorAlpha,
+                majorAlpha: gp.majorAlpha,
+                minorLineWidthPx: gp.minorWidthPx,
+                majorLineWidthPx: gp.majorWidthPx,
+                scaleType: gp.scaleType as any,
+                baseDow: gp.baseDow,
+                weekendAlpha: gp.weekendAlpha,
+                globalAlpha: gp.globalAlpha,
+                bandAlpha: gp.scaleType === 'day' || gp.scaleType === 'week' ? 0.04 : 0.0,
+            });
+        } catch (err) {
+            devLog.warn('gpuGrid.updateUniforms failed', err);
+        }
+    }
+
+    private _updateViewportTransform(viewport: ViewportState, effectiveCfg: TimelineConfig): void {
+        if (!this.layers) return;
+        const offsetX = -Math.round((viewport.x || 0) * effectiveCfg.DAY_WIDTH);
+        this.layers.viewport.x = Number.isFinite(offsetX) ? offsetX : 0;
+        this.layers.viewport.y = Math.round(Number.isFinite(-viewport.y) ? -viewport.y : 0);
+        this.layers.viewport.scale.set(1, 1);
+    }
+
+    private _renderTasks(data: { tasks: EngineTasks; staffs: Staff[]; selection: string[] }, viewport: ViewportState, effectiveCfg: TimelineConfig): void {
+        if (!this.scene) return;
+        const projectStartDate = this.opts.utils.getProjectStartDate();
+        const currentIds = new Set(Object.keys(data.tasks));
         for (const task of Object.values(data.tasks)) {
-            const layout = computeTaskLayout(effectiveCfg as any, task as any, projectStartDate, data.staffs as any)
-            const isSelected = Array.isArray(data.selection) && data.selection.includes((task as any).id)
-            const { container } = scene.upsertTask(task as any, layout, effectiveCfg as any, (task as any).title, (task as any).status, viewport.zoom, isSelected)
-            container.position.set(Math.round(layout.startX), Math.round(layout.topY))
-            container.hitArea = new Rectangle(0, 0, layout.width, effectiveCfg.TASK_HEIGHT)
-            if (this.dnd) this.dnd.registerTask(task as any, container, layout)
+            const layout = computeTaskLayout(effectiveCfg as any, task, projectStartDate, data.staffs);
+            const isSelected = data.selection.includes(task.id);
+            const { container } = this.scene.upsertTask(task, layout, effectiveCfg as any, task.title, task.status, viewport.zoom, isSelected);
+            container.position.set(Math.round(layout.startX), Math.round(layout.topY));
+            container.hitArea = new Rectangle(0, 0, layout.width, effectiveCfg.TASK_HEIGHT);
+            if (this.dnd) this.dnd.registerTask(task, container, layout);
         }
-        scene.removeMissingTasks(currentIds)
+        this.scene.removeMissingTasks(currentIds);
+    }
 
-        // Render dependencies
-        const currentDepIds = new Set(Object.keys(data.dependencies))
+    private _renderDependencies(data: { dependencies: EngineDependencies }, effectiveCfg: TimelineConfig): void {
+        if (!this.scene) return;
+        const currentDepIds = new Set(Object.keys(data.dependencies));
         for (const dependency of Object.values(data.dependencies)) {
-            const srcA = scene.getAnchors((dependency as any).srcTaskId)
-            const dstA = scene.getAnchors((dependency as any).dstTaskId)
-            if (!srcA || !dstA) continue
-            const g = scene.upsertDependency((dependency as any).id)
-            drawDependencyArrow(g, srcA.rightCenterX, srcA.rightCenterY, dstA.leftCenterX, dstA.leftCenterY, cfg.DEPENDENCY_COLOR)
+            const srcA = this.scene.getAnchors(dependency.srcTaskId);
+            const dstA = this.scene.getAnchors(dependency.dstTaskId);
+            if (!srcA || !dstA) continue;
+            const g = this.scene.upsertDependency(dependency.id);
+            drawDependencyArrow(g, srcA.rightCenterX, srcA.rightCenterY, dstA.leftCenterX, dstA.leftCenterY, effectiveCfg.DEPENDENCY_COLOR);
         }
-        scene.removeMissingDependencies(currentDepIds)
+        this.scene.removeMissingDependencies(currentDepIds);
+    }
 
-        // Selection overlay
-        scene.clearSelection()
-        for (const id of data.selection) scene.drawSelection(id, effectiveCfg as any)
-        // Update spatial index for hit-testing
-        scene.rebuildSpatialIndex(effectiveCfg as any)
+    private _renderSelection(data: { selection: string[] }, effectiveCfg: TimelineConfig): void {
+        if (!this.scene) return;
+        this.scene.clearSelection();
+        for (const id of data.selection) {
+            this.scene.drawSelection(id, effectiveCfg as any);
+        }
     }
 
     getApplication(): Application | null { return this.app }

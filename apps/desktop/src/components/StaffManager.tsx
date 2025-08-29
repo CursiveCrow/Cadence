@@ -2,7 +2,7 @@ import React from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState, addStaff, updateStaff, deleteStaff, reorderStaffs } from '@cadence/state'
 import { Staff } from '@cadence/core'
-import { StaffManager as UIStaffManager, type UIStaff } from '@cadence/ui'
+import { StaffManager as UIStaffManager } from '@cadence/ui'
 
 interface StaffManagerProps {
   isOpen: boolean
@@ -13,14 +13,6 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ isOpen, onClose }) =
   const dispatch = useDispatch()
   const staffs = useSelector((state: RootState) => state.staffs.list)
   const activeProjectId = useSelector((state: RootState) => state.ui.activeProjectId)
-
-  const uiStaffs: UIStaff[] = staffs.map((s) => ({
-    id: s.id,
-    name: s.name,
-    numberOfLines: s.numberOfLines,
-    lineSpacing: s.lineSpacing,
-    position: s.position,
-  }))
 
   const handleAdd = (name: string, lines: number) => {
     if (!name.trim() || !activeProjectId) return
@@ -37,11 +29,8 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ isOpen, onClose }) =
     dispatch(addStaff(newStaff))
   }
 
-  const handleUpdate = (id: string, updates: Partial<UIStaff>) => {
-    const mapped: Partial<Staff> = {}
-    if (typeof updates.name === 'string') mapped.name = updates.name
-    if (typeof updates.numberOfLines === 'number') mapped.numberOfLines = updates.numberOfLines
-    dispatch(updateStaff({ id, updates: mapped }))
+  const handleUpdate = (id: string, updates: Partial<Staff>) => {
+    dispatch(updateStaff({ id, updates }))
   }
 
   const handleDelete = (id: string) => {
@@ -61,7 +50,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ isOpen, onClose }) =
   return (
     <UIStaffManager
       isOpen={isOpen}
-      staffs={uiStaffs}
+      staffs={staffs}
       onClose={onClose}
       onAdd={handleAdd}
       onUpdate={handleUpdate}

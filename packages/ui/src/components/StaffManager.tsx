@@ -1,14 +1,14 @@
 import React from 'react'
 import '../styles/tokens.css'
 import '../styles/ui.css'
-import { UIStaff } from '../types'
+import { Staff } from '@cadence/core'
 
 export interface StaffManagerProps {
     isOpen: boolean
-    staffs: UIStaff[]
+    staffs: Staff[]
     onClose: () => void
     onAdd: (name: string, lines: number) => void
-    onUpdate: (id: string, updates: Partial<UIStaff>) => void
+    onUpdate: (id: string, updates: Partial<Staff>) => void
     onDelete: (id: string) => void
     onMoveUp: (id: string, index: number) => void
     onMoveDown: (id: string, index: number) => void

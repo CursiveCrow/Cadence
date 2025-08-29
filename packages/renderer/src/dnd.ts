@@ -1,5 +1,6 @@
 import { Application, Container, Graphics, Rectangle } from 'pixi.js'
 import { TimelineConfig, TaskLike, TaskLayout, TimelineSceneManager, drawNoteBodyPathAbsolute } from './scene'
+import { DependencyType } from '@cadence/core'
 
 type StaffLike = any
 
@@ -32,7 +33,7 @@ interface Callbacks {
   onDragStart?: () => void
   onDragEnd?: () => void
   updateTask: (projectId: string, taskId: string, updates: Partial<any>) => void
-  createDependency: (projectId: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: string }) => void
+  createDependency: (projectId: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: DependencyType }) => void
 }
 
 interface DnDOptions {
@@ -464,7 +465,7 @@ export class TimelineDnDController {
           const src = new Date(sourceTask.startDate) <= new Date(destTask.startDate) ? sourceTask : destTask
           const dst = src === sourceTask ? destTask : sourceTask
           const id = `dep-${Date.now()}`
-          this.callbacks.createDependency(this.projectId, { id, srcTaskId: (src as any).id, dstTaskId: (dst as any).id, type: 'finish_to_start' })
+          this.callbacks.createDependency(this.projectId, { id, srcTaskId: (src as any).id, dstTaskId: (dst as any).id, type: DependencyType.FINISH_TO_START })
         }
       }
       this.state.isCreatingDependency = false

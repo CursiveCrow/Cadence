@@ -2,12 +2,25 @@
  * Export all UI components
  */
 
-export * from './Button'
-export * from './TaskCard'
-export * from './ErrorBoundary'
-export * from './TaskPopup'
-export * from './StaffManager'
-export * from './ProjectHeader'
-export * from './StaffSidebar'
-export * from './DateHeader'
-export * from './dateHeaderUtils'
+import { Button } from './Button'
+import { DateHeader, computeDateHeaderHeight } from './DateHeader'
+import { ErrorBoundary } from './ErrorBoundary'
+import { ProjectHeader } from './ProjectHeader'
+import { StaffManager } from './StaffManager'
+import { StaffSidebar } from './StaffSidebar'
+import { TaskCard } from './TaskCard'
+import { TaskPopup } from './TaskPopup'
+import { TimeSignaturePopover } from './TimeSignaturePopover'
+
+export {
+    Button,
+    DateHeader,
+    computeDateHeaderHeight,
+    ErrorBoundary,
+    ProjectHeader,
+    StaffManager,
+    StaffSidebar,
+    TaskCard,
+    TaskPopup,
+    TimeSignaturePopover,
+}

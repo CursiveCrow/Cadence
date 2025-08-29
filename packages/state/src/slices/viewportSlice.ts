@@ -1,6 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-
-export interface ViewportState { x: number; y: number; zoom: number }
+import { ViewportState } from '../types'
 
 const initialState: ViewportState = { x: 0, y: 0, zoom: 1 }
 
