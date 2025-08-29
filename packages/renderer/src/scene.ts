@@ -6,7 +6,7 @@
 import { Container, Graphics, Text, Application, Rectangle } from 'pixi.js'
 import { SpatialHash } from './spatial'
 import { getTimeScaleForZoom } from './layout'
-import { computeGraphicsResolution, computeTextResolution } from './resolution.js'
+import { computeGraphicsResolution, computeTextResolution } from './resolution'
 import type { Task, Dependency, Staff } from '@cadence/core'
 import type { RendererContext } from './types/context'
 import { devLog } from './devlog'
@@ -43,6 +43,14 @@ export interface TimelineConfig {
   DRAW_STAFF_LABELS?: boolean
   /** Horizontal padding after each date/grid line before a note body starts */
   NOTE_START_PADDING?: number
+  /** Length of a measure in days for vertical measure markers (e.g., 7 or 14) */
+  MEASURE_LENGTH_DAYS?: number
+  /** Offset in days from project start for measure 0 alignment */
+  MEASURE_OFFSET_DAYS?: number
+  /** Color of measure marker lines */
+  MEASURE_COLOR?: number
+  /** Line width in pixels for measure markers */
+  MEASURE_LINE_WIDTH_PX?: number
 }
 
 export type StaffLike = Staff
@@ -66,7 +74,6 @@ export interface TaskAnchors {
 }
 
 // computeTaskLayout moved to layout.ts
-// computeTaskLayout moved to layout.ts
 
 export function drawGridAndStaff(
   container: Container,
@@ -83,11 +90,9 @@ export function drawGridAndStaff(
   const graphics = new Graphics()
     // Keep resolution independent of zoom to maintain constant stroke thickness
     ; (graphics as any).resolution = computeGraphicsResolution()
-    ; (graphics as any).resolution = computeGraphicsResolution()
   // Avoid creating huge geometry at extreme zoom-out; cap the drawn extent
   const capWidth = Math.min(Math.max(screenWidth * 4, config.DAY_WIDTH * 90), 50000)
   const extendedWidth = Math.max(screenWidth, capWidth)
-  // Height cap no longer needed for vertical lines (GPU grid handles them)
   // Height cap no longer needed for vertical lines (GPU grid handles them)
 
   // Align to whole pixels (scene is not scaled)
@@ -111,6 +116,36 @@ export function drawGridAndStaff(
       graphics.moveTo(config.LEFT_MARGIN, y)
       graphics.lineTo(extendedWidth, y)
       graphics.stroke({ width: 1, color: config.STAFF_LINE_COLOR, alpha: 0.4 })
+    }
+
+    // Draw vertical measure markers spanning this staff's line band
+    const measureLen = Math.max(1, Math.round((config as any).MEASURE_LENGTH_DAYS || 0))
+    if (measureLen > 0) {
+      const dayWidth = Math.max(1, config.DAY_WIDTH)
+      const staffTop = align(currentY)
+      const staffBottom = align(currentY + (staff.numberOfLines - 1) * config.STAFF_LINE_SPACING)
+      const measureOffset = Math.round((config as any).MEASURE_OFFSET_DAYS || 0)
+      const color = (config as any).MEASURE_COLOR ?? 0xffffff
+      const lwThick = Math.max(2, Math.round((config as any).MEASURE_LINE_WIDTH_PX || 2))
+      const lwThin = 1
+      const pairSpacing = 2 // even pixels; center pair on grid line
+      // Compute first visible measure index
+      const maxMeasures = Math.ceil((extendedWidth - config.LEFT_MARGIN) / (measureLen * dayWidth)) + 2
+      for (let i = -1; i < maxMeasures; i++) {
+        const dayIndex = i * measureLen + measureOffset
+        const x = (config.LEFT_MARGIN + dayIndex * dayWidth)
+        if (x < config.LEFT_MARGIN - 2) continue
+        if (x > extendedWidth + 2) break
+        // Thin/Thick centered around the grid line x
+        const xThin = x - pairSpacing / 2
+        const xThick = x + pairSpacing / 2
+        graphics.moveTo(xThin, staffTop)
+        graphics.lineTo(xThin, staffBottom)
+        graphics.stroke({ width: lwThin, color, alpha: 0.35 })
+        graphics.moveTo(xThick, staffTop)
+        graphics.lineTo(xThick, staffBottom)
+        graphics.stroke({ width: lwThick, color, alpha: 0.55 })
+      }
     }
 
     if ((config as any).DRAW_STAFF_LABELS !== false) {
@@ -153,10 +188,13 @@ export function drawGridAndStaff(
     if (scale === 'month') {
       // Place month labels exactly on the 1st of each month
       const base = new Date(Date.UTC(projectStartDate.getUTCFullYear(), projectStartDate.getUTCMonth(), projectStartDate.getUTCDate()))
+      const msPerDay = 24 * 60 * 60 * 1000
+      const lastVisibleDayIndex = Math.ceil((extendedWidth - config.LEFT_MARGIN) / Math.max(dayWidth, 0.0001))
+      const lastVisibleMs = base.getTime() + lastVisibleDayIndex * msPerDay
       let cursor = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), 1))
-      while (true) {
+      while (cursor.getTime() <= lastVisibleMs) {
         const diffMs = cursor.getTime() - base.getTime()
-        const dayIndex = Math.round(diffMs / (24 * 60 * 60 * 1000))
+        const dayIndex = Math.round(diffMs / msPerDay)
         const x = config.LEFT_MARGIN + dayIndex * dayWidth
         if (x > extendedWidth) break
         const label = cursor.toLocaleDateString('en-US', { month: 'short' })
@@ -225,7 +263,7 @@ export function drawGridAndStaff(
         if (scale === 'day') {
           // Bold month boundaries for stronger visual rhythm
           if (date.getDate() === 1) {
-            try { (dateText as any).style.fontWeight = 'bold' } catch { }
+            try { (dateText as any).style.fontWeight = 'bold' } catch (err) { devLog.warn('date label bold style failed', err) }
           }
         }
         if (scale === 'hour') {
@@ -290,7 +328,6 @@ export function drawTaskNote(
   graphics.circle(r, centerYLocal, Math.max(2, r - 2))
   graphics.fill({ color: 0xffffff, alpha: 0.2 })
 
-  // Accidental glyphs are now provided by StatusGlyphPlugin; core note rendering omits them.
   // Accidental glyphs are now provided by StatusGlyphPlugin; core note rendering omits them.
 
   if (layout.width > Math.max(config.TASK_HEIGHT * 1.2, 30)) {
@@ -500,7 +537,6 @@ export function createTimelineLayers(app: Application): {
 /**
  * Ensure grid/staff are drawn once; avoids re-building per frame.
  */
-// ensureGridAndStaff has been removed in favor of instance-scoped GridManager.
 // ensureGridAndStaff has been removed in favor of instance-scoped GridManager.
 
 /**
@@ -920,7 +956,7 @@ export class TimelineSceneManager {
       hr.clear()
       hr.rect(left, topLines, w, h)
       hr.fill({ color: 0xffffff, alpha: 0.05 })
-    } catch { }
+    } catch (err) { devLog.warn('hover row highlight failed', err) }
   }
 
   destroy(): void {

@@ -294,3 +294,19 @@
   background: var(--ui-color-border);
   opacity: 0.5;
 }
+
+/* Time Signature (Measures control) */
+.ui-timesig {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+  line-height: 1;
+}
+.ui-timesig-num,
+.ui-timesig-den {
+  font-family: serif;
+  font-weight: 700;
+  font-size: 14px;
+}

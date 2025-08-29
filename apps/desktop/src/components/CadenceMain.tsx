@@ -123,6 +123,12 @@ export const CadenceMain: React.FC = () => {
               try { (window as any).__CADENCE_SET_VERTICAL_SCALE?.(s1) } catch { }
               dispatch({ type: 'viewport/setViewport', payload: { x: viewport.x, y: newY, zoom: viewport.zoom } })
             }}
+            onChangeTimeSignature={(staffId, timeSignature) => {
+              try {
+                // Update in Redux store via state slice
+                dispatch({ type: 'staffs/updateStaff', payload: { id: staffId, updates: { timeSignature } } })
+              } catch { }
+            }}
           />
         </div>
         <div className="vertical-resizer" ref={resizerRef} onMouseDown={beginResize} onDoubleClick={resetSidebarWidth} />

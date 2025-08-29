@@ -56,7 +56,12 @@ export const TIMELINE_CONFIG: TimelineConfig = {
   SELECTION_COLOR: cssVarColorToHex('--ui-color-accent', 0xF59E0B),
   TODAY_COLOR: cssVarColorToHex('--ui-color-accent', 0xF59E0B),
   DRAW_STAFF_LABELS: false,
-  NOTE_START_PADDING: 2
+  NOTE_START_PADDING: 2,
+  // Measures: default to 7-day bars; align to project start; subtle color/width
+  MEASURE_LENGTH_DAYS: 7,
+  MEASURE_OFFSET_DAYS: 0,
+  MEASURE_COLOR: cssVarColorToHex('--ui-color-border', 0xffffff),
+  MEASURE_LINE_WIDTH_PX: 2,
 }
 
 // Mapping from task status to accidental symbol used in UI

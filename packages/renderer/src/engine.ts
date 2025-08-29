@@ -251,13 +251,6 @@ export class TimelineRendererEngine {
         // Today marker (updates every render; cheap)
         try { this.scene.updateTodayMarker(this.opts.utils.getProjectStartDate(), effectiveCfg as any, app.screen.height) } catch (err) { devLog.warn('updateTodayMarker failed', err) }
 
-        // Update viewport transform: translate in pixels; do not scale Y; keep stage scale at 1
-        const offsetX = -viewport.x * effectiveCfg.DAY_WIDTH
-        // Clamp to finite values to avoid NaN/Inf at extreme zooms
-        layers.viewport.x = Math.round(Number.isFinite(offsetX) ? offsetX : 0)
-        layers.viewport.y = Math.round(Number.isFinite(-viewport.y) ? -viewport.y : 0)
-        layers.viewport.scale.set(1, 1)
-
         // Update GPU grid uniforms (WebGPU)
         const gpuGrid = this.gpuGrid
         if (gpuGrid) {
@@ -270,11 +263,13 @@ export class TimelineRendererEngine {
 
                 gpuGrid.container.visible = true
                 gpuGrid.setSize(screenW, screenH)
+                // Quantize viewportXDays to match integer pixel rounding applied to layers.viewport.x
+                const roundedViewportXDays = Math.round((viewport.x || 0) * cfgEff.DAY_WIDTH) / Math.max(cfgEff.DAY_WIDTH, 0.0001)
                 gpuGrid.updateUniforms({
                     screenWidth: screenW,
                     screenHeight: screenH,
                     leftMarginPx: cfgEff.LEFT_MARGIN,
-                    viewportXDays: viewport.x,
+                    viewportXDays: roundedViewportXDays,
                     dayWidthPx: cfgEff.DAY_WIDTH,
                     minorStepDays: gp.minorStepDays,
                     majorStepDays: gp.majorStepDays,
@@ -292,6 +287,14 @@ export class TimelineRendererEngine {
                 })
             } catch (err) { devLog.warn('gpuGrid.updateUniforms failed', err) }
         }
+        // Update viewport transform: translate in pixels; do not scale Y; keep stage scale at 1
+        // Use symmetric rounding to avoid 1px drift vs GPU grid when V*d lands on .5
+        const offsetX = -Math.round((viewport.x || 0) * effectiveCfg.DAY_WIDTH)
+        // Clamp to finite values to avoid NaN/Inf at extreme zooms
+        layers.viewport.x = Number.isFinite(offsetX) ? offsetX : 0
+        layers.viewport.y = Math.round(Number.isFinite(-viewport.y) ? -viewport.y : 0)
+        layers.viewport.scale.set(1, 1)
+
         // Render tasks
         const projectStartDate = this.opts.utils.getProjectStartDate()
         const currentIds = new Set(Object.keys(data.tasks))

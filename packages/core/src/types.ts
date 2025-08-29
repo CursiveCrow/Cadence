@@ -70,6 +70,8 @@ export interface Staff {
   projectId: string
   createdAt: string
   updatedAt: string
+  /** Optional musical time signature for this staff (e.g., "4/4", "3/4") */
+  timeSignature?: string
 }
 
 export interface UIState {

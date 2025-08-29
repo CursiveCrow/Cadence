@@ -19,9 +19,10 @@ export interface StaffSidebarProps {
     onAddNote?: () => void
     onOpenMenu?: () => void
     onVerticalZoomChange?: (newZoom: number, anchorLocalY: number, startZoom: number) => void
+    onChangeTimeSignature?: (staffId: string, timeSignature: string) => void
 }
 
-export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, width, topMargin, staffSpacing, staffLineSpacing, headerHeight, verticalScale, onAddNote, onOpenMenu, onVerticalZoomChange }) => {
+export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, width, topMargin, staffSpacing, staffLineSpacing, headerHeight, verticalScale, onAddNote, onOpenMenu, onVerticalZoomChange, onChangeTimeSignature }) => {
     const header = typeof headerHeight === 'number' ? headerHeight : 32
 
     const containerStyle: React.CSSProperties = {
@@ -84,10 +85,28 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({ staffs, viewport, wi
                     }
                     const clefSymbol = staff.name.toLowerCase().includes('treble') ? '𝄞' :
                         staff.name.toLowerCase().includes('bass') ? '𝄢' : '♪'
+                    const ts = staff.timeSignature
+                    const [tsTop, tsBottom] = (ts && ts.includes('/')) ? ts.split('/') : ['4', '4']
                     return (
                         <div key={staff.id} className="ui-flex ui-items-center ui-gap-2 ui-text" style={itemStyle}>
                             <span style={{ fontFamily: 'serif', fontSize: 18, lineHeight: 1 }}>{clefSymbol}</span>
                             <span className="ui-font-700 ui-text-md" style={{ whiteSpace: 'nowrap' }}>{staff.name}</span>
+                            <div style={{ flex: 1 }} />
+                            <button
+                                className="ui-timesig"
+                                aria-label={`Time signature ${tsTop}/${tsBottom}`}
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    const current = staff.timeSignature || `${tsTop}/${tsBottom}`
+                                    const next = window.prompt('Edit time signature (e.g., 4/4, 3/4, 6/8):', current || '4/4') || current
+                                    if (next && onChangeTimeSignature) onChangeTimeSignature(staff.id, next)
+                                }}
+                                title="Edit time signature"
+                                style={{ cursor: 'pointer', background: 'transparent', border: 'none', padding: 0 }}
+                            >
+                                <span className="ui-timesig-num">{tsTop}</span>
+                                <span className="ui-timesig-den">{tsBottom}</span>
+                            </button>
                         </div>
                     )
                 })}

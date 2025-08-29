@@ -6,6 +6,8 @@ export interface UIStaff {
   numberOfLines: number
   lineSpacing: number
   position: number
+  /** Optional musical time signature shown in the staff label panel, e.g., "4/4" */
+  timeSignature?: string
 }
 
 export interface TaskPopupStaff {
