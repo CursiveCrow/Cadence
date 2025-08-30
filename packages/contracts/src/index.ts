@@ -32,6 +32,23 @@ export type SaveFileResponse = z.infer<typeof SaveFileResponse>
 export const AppGetVersionResponse = z.string()
 export type AppGetVersionResponse = z.infer<typeof AppGetVersionResponse>
 
+// Message box contracts
+export const DialogMessageBoxOptions = z.object({
+  type: z.enum(['info', 'warning', 'error', 'question']).default('info'),
+  title: z.string(),
+  message: z.string(),
+  buttons: z.array(z.string()).optional(),
+  defaultId: z.number().int().nonnegative().optional(),
+  cancelId: z.number().int().nonnegative().optional(),
+})
+export type DialogMessageBoxOptions = z.infer<typeof DialogMessageBoxOptions>
+
+export const DialogMessageBoxResponse = z.object({
+  response: z.number().int(),
+  checkboxChecked: z.boolean().optional(),
+})
+export type DialogMessageBoxResponse = z.infer<typeof DialogMessageBoxResponse>
+
 // Channel names (single source of truth)
 export const IPC_CHANNELS = {
   dialogOpenFile: 'dialog:openFile',

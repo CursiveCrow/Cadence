@@ -3,7 +3,18 @@ import { IPC_CHANNELS } from '@cadence/contracts'
 
 // --------- Expose minimal, typed API to the Renderer process ---------
 // New preferred surface
-const allowedChannels = new Set(Object.values(IPC_CHANNELS))
+const buildAllowedChannels = () => {
+  const set = new Set(Object.values(IPC_CHANNELS))
+  // In production builds, reduce IPC surface by default: block raw fs access
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      set.delete(IPC_CHANNELS.fsReadFile)
+      set.delete(IPC_CHANNELS.fsWriteFile)
+    }
+  } catch { /* no-op */ }
+  return set
+}
+const allowedChannels = buildAllowedChannels()
 contextBridge.exposeInMainWorld('api', {
   invoke: (channel: (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS], ...args: unknown[]) => {
     if (!allowedChannels.has(channel)) {

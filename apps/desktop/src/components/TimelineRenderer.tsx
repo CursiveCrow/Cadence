@@ -1,15 +1,15 @@
 import React from 'react'
 import { useDispatch } from 'react-redux'
 import { setSelection, updateViewport } from '@cadence/state'
-import { TaskData, DependencyData, updateTask, createDependency } from '@cadence/crdt'
-import { Staff } from '@cadence/core'
+import { updateTask, createDependency } from '@cadence/crdt'
+import { Staff, Task, Dependency, DependencyType } from '@cadence/core'
 import { TimelineCanvas } from '@cadence/renderer-react'
 import './TimelineRenderer.css'
 
 interface TimelineCanvasProps {
   projectId: string
-  tasks: Record<string, TaskData>
-  dependencies: Record<string, DependencyData>
+  tasks: Record<string, Task>
+  dependencies: Record<string, Dependency>
   selection: string[]
   viewport: { x: number; y: number; zoom: number }
   staffs: Staff[]
@@ -47,8 +47,8 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
           // Trigger a re-render for any components depending on viewport while engine already applied vertical scale
           dispatch(updateViewport({ ...viewport }))
         }}
-        onUpdateTask={(pid: string, id: string, updates: Partial<any>) => updateTask(pid, id, updates as any)}
-        onCreateDependency={(pid: string, dep: any) => createDependency(pid, dep as any)}
+        onUpdateTask={(pid: string, id: string, updates: Partial<Task>) => updateTask(pid, id, updates as any)}
+        onCreateDependency={(pid: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: DependencyType }) => createDependency(pid, dep as any)}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         className="timeline-canvas"

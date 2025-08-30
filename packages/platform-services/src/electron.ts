@@ -3,7 +3,7 @@
  */
 
 import { PlatformServices, FileDialogOptions, FileHandle, MessageBoxOptions, MessageBoxResult } from './interfaces'
-import { IPC_CHANNELS, DialogOpenFileRequest, DialogOpenFileResponse, SaveFileRequest, SaveFileResponse, AppGetVersionResponse } from '@cadence/contracts'
+import { IPC_CHANNELS, DialogOpenFileRequest, DialogOpenFileResponse, SaveFileRequest, SaveFileResponse, AppGetVersionResponse, DialogMessageBoxOptions, DialogMessageBoxResponse } from '@cadence/contracts'
 
 /**
  * Electron implementation using IPC
@@ -90,8 +90,10 @@ export class ElectronPlatformServices implements PlatformServices {
 
     async showMessageBox(options: MessageBoxOptions): Promise<MessageBoxResult> {
         try {
-            const result = await this.invoker(IPC_CHANNELS.dialogMessageBox, options)
-            return result
+            const req = DialogMessageBoxOptions.parse(options)
+            const result = await this.invoker(IPC_CHANNELS.dialogMessageBox, req)
+            const parsed = DialogMessageBoxResponse.safeParse(result)
+            return parsed.success ? parsed.data : { response: -1 }
         } catch (error) {
             console.error('Failed to show message box:', error)
             return { response: -1 }

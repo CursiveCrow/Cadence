@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
-import { IPC_CHANNELS, DialogOpenFileRequest, SaveFileRequest, DialogOpenFileResponse, SaveFileResponse, AppGetVersionResponse } from '@cadence/contracts'
+import { IPC_CHANNELS, DialogOpenFileRequest, SaveFileRequest, DialogOpenFileResponse, SaveFileResponse, AppGetVersionResponse, DialogMessageBoxOptions, DialogMessageBoxResponse } from '@cadence/contracts'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -91,22 +91,66 @@ ipcMain.handle(IPC_CHANNELS.dialogSaveFile, async (_event, options: unknown) => 
   return validated.success ? validated.data : null
 })
 
-ipcMain.handle(IPC_CHANNELS.fsReadFile, async (_event, path: string) => {
-  const content = await fs.readFile(path)
+function getAllowedRoots(): string[] {
+  // Restrict file access to app-scoped directories only
+  // Primary: userData directory. Extendable if needed.
+  const userData = app.getPath('userData')
+  return [path.resolve(userData)]
+}
+
+function isPathInside(base: string, target: string): boolean {
+  try {
+    const b = path.resolve(base)
+    const t = path.resolve(target)
+    // Ensure trailing separator in base for strict prefix check
+    const baseWithSep = b.endsWith(path.sep) ? b : b + path.sep
+    return t.startsWith(baseWithSep)
+  } catch {
+    return false
+  }
+}
+
+function isAllowedPath(p: unknown): p is string {
+  if (typeof p !== 'string' || p.length === 0) return false
+  // Block null bytes and obvious traversal attempts early
+  if (p.includes('\0') || p.includes('\u0000')) return false
+  const abs = path.isAbsolute(p)
+  if (!abs) return false
+  return getAllowedRoots().some((root) => isPathInside(root, p))
+}
+
+ipcMain.handle(IPC_CHANNELS.fsReadFile, async (_event, filePath: unknown) => {
+  if (!isAllowedPath(filePath)) {
+    throw new Error('Access denied: path not allowed')
+  }
+  const stat = await fs.stat(filePath).catch(() => null)
+  if (!stat || !stat.isFile()) throw new Error('File not found')
+  const content = await fs.readFile(filePath)
   return content
 })
 
-ipcMain.handle(IPC_CHANNELS.fsWriteFile, async (_event, path: string, content: ArrayBuffer | Buffer | Uint8Array) => {
+ipcMain.handle(IPC_CHANNELS.fsWriteFile, async (_event, filePath: unknown, content: ArrayBuffer | Buffer | Uint8Array) => {
+  if (!isAllowedPath(filePath)) {
+    throw new Error('Access denied: path not allowed')
+  }
   const buf = Buffer.isBuffer(content) ? content : Buffer.from(content as ArrayBuffer)
-  await fs.writeFile(path, buf)
+  // Ensure parent directory exists
+  const dir = path.dirname(filePath)
+  await fs.mkdir(dir, { recursive: true }).catch(() => { /* no-op */ })
+  await fs.writeFile(filePath, buf)
   return true
 })
 
-ipcMain.handle(IPC_CHANNELS.dialogMessageBox, async (_event, options: any) => {
+ipcMain.handle(IPC_CHANNELS.dialogMessageBox, async (_event, options: unknown) => {
+  const parsed = DialogMessageBoxOptions.safeParse(options)
+  if (!parsed.success) {
+    return { response: -1 }
+  }
   const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
   if (!win) return { response: -1 }
-  const result = await dialog.showMessageBox(win, options)
-  return result
+  const result = await dialog.showMessageBox(win, parsed.data)
+  const validated = DialogMessageBoxResponse.safeParse(result)
+  return validated.success ? validated.data : { response: -1 }
 })
 
 ipcMain.handle(IPC_CHANNELS.appGetVersion, () => {

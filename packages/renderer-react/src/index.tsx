@@ -1,19 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Application, TimelineRendererEngine, TIMELINE_CONFIG, PROJECT_START_DATE, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC, StatusGlyphPlugin } from '@cadence/renderer'
+import type { Task, Dependency, Staff, DependencyType } from '@cadence/core'
 
 export interface RendererReactProps {
     projectId: string
-    tasks: Record<string, any>
-    dependencies: Record<string, any>
+    tasks: Record<string, Task>
+    dependencies: Record<string, Dependency>
     selection: string[]
     viewport: { x: number; y: number; zoom: number }
-    staffs: any[]
+    staffs: Staff[]
     onSelect: (ids: string[]) => void
     onViewportChange: (v: { x: number; y: number; zoom: number }) => void
     onDragStart?: () => void
     onDragEnd?: () => void
-    onUpdateTask: (projectId: string, taskId: string, updates: Partial<any>) => void
-    onCreateDependency: (projectId: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: string }) => void
+    onUpdateTask: (projectId: string, taskId: string, updates: Partial<Task>) => void
+    onCreateDependency: (projectId: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: DependencyType }) => void
     onVerticalScaleChange?: (scale: number) => void
     className?: string
 }
@@ -40,9 +41,9 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
     const [ready, setReady] = useState(false)
     const initializingRef = useRef(false)
 
-    const tasksRef = useRef(tasks)
-    const depsRef = useRef(dependencies)
-    const staffsRef = useRef(staffs)
+    const tasksRef = useRef<Record<string, Task>>(tasks)
+    const depsRef = useRef<Record<string, Dependency>>(dependencies)
+    const staffsRef = useRef<Staff[]>(staffs)
     const viewportRef = useRef(viewport)
 
     useEffect(() => { tasksRef.current = tasks }, [tasks])
@@ -66,7 +67,7 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
                     plugins: [StatusGlyphPlugin],
                     utils: {
                         getProjectStartDate: () => PROJECT_START_DATE,
-                        findNearestStaffLine: (y: number) => findNearestStaffLineAt(y, staffsRef.current as any, TIMELINE_CONFIG as any),
+                        findNearestStaffLine: (y: number) => findNearestStaffLineAt(y, staffsRef.current, TIMELINE_CONFIG as any),
                         snapXToDay: (x: number) => snapXToDayWithConfig(x, TIMELINE_CONFIG as any),
                         // Provide a time-aware snapping using current zoom -> relies on engine's effective config
                         snapXToTime: (x: number) => {
@@ -84,10 +85,10 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
                         select: onSelect,
                         onDragStart,
                         onDragEnd,
-                        updateTask: (pid: string, id: string, updates: Partial<any>) => {
+                        updateTask: (pid: string, id: string, updates: Partial<Task>) => {
                             try { onUpdateTask(pid, id, updates) } catch { }
                         },
-                        createDependency: (pid: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: string }) => {
+                        createDependency: (pid: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: DependencyType }) => {
                             try { onCreateDependency(pid, dep) } catch { }
                         },
                         onViewportChange: onViewportChange,

@@ -4,20 +4,23 @@
  */
 
 import { getProjectDoc, TaskData, DependencyData } from './ydoc'
-import { Task, TaskStatus } from '@cadence/core'
+import { Task, TaskStatus, validateDAG, Dependency as CoreDependency } from '@cadence/core'
 
 /**
  * Create a new task in a project
  */
 export function createTask(projectId: string, task: Omit<Task, 'projectId' | 'createdAt' | 'updatedAt'>): void {
   const doc = getProjectDoc(projectId)
+  const now = new Date().toISOString()
   const taskData: TaskData = {
     ...task,
     projectId,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
   }
-  doc.tasks.set(task.id, taskData)
+  doc.ydoc.transact(() => {
+    doc.tasks.set(task.id, taskData)
+  }, 'local')
 }
 
 export function updateTask(
@@ -30,7 +33,7 @@ export function updateTask(
   ydoc.ydoc.transact(() => {
     const task = ydoc.tasks.get(taskId)
     if (task) {
-      ydoc.tasks.set(taskId, { ...task, ...updates })
+      ydoc.tasks.set(taskId, { ...task, ...updates, updatedAt: new Date().toISOString() })
     }
   }, 'local')
 }
@@ -61,7 +64,7 @@ export function moveTask(
   ydoc.ydoc.transact(() => {
     const task = ydoc.tasks.get(taskId)
     if (task) {
-      ydoc.tasks.set(taskId, { ...task, startDate: newStartDate })
+      ydoc.tasks.set(taskId, { ...task, startDate: newStartDate, updatedAt: new Date().toISOString() })
     }
   }, 'local')
 }
@@ -70,10 +73,35 @@ export function createDependency(
   projectId: string,
   dependency: DependencyData
 ): void {
-  const ydoc = getProjectDoc(projectId)
+  const y = getProjectDoc(projectId)
 
-  ydoc.ydoc.transact(() => {
-    ydoc.dependencies.set(dependency.id, dependency)
+  // Basic validation: distinct endpoints and existing tasks
+  if (!dependency || dependency.srcTaskId === dependency.dstTaskId) return
+  const tasksMap = y.getTasks()
+  if (!tasksMap[dependency.srcTaskId] || !tasksMap[dependency.dstTaskId]) return
+
+  // DAG validation: simulate new deps array and verify no cycles
+  const tasks = Object.values(tasksMap) as Task[]
+  const existingDeps = Object.values(y.getDependencies())
+  const depsForCheck: CoreDependency[] = existingDeps
+    .concat([{ ...dependency, projectId, createdAt: '', updatedAt: '' } as unknown as CoreDependency])
+    .map((d: any) => ({
+      id: d.id,
+      srcTaskId: d.srcTaskId,
+      dstTaskId: d.dstTaskId,
+      type: d.type,
+      projectId: d.projectId ?? projectId,
+      createdAt: d.createdAt ?? '',
+      updatedAt: d.updatedAt ?? '',
+    }))
+
+  if (!validateDAG(tasks, depsForCheck)) {
+    // Reject creating a cyclic dependency
+    return
+  }
+
+  y.ydoc.transact(() => {
+    y.dependencies.set(dependency.id, dependency)
   }, 'local')
 }
 
