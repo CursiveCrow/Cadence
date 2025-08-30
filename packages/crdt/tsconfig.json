@@ -1,24 +1,16 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
-    "baseUrl": ".",
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "paths": {
-      "@cadence/core": [
-        "../core/dist"
-      ]
-    },
-    "types": []
+    "rootDir": "src"
   },
-  "include": [
-    "src/**/*"
-  ],
+  "include": ["src"],
   "exclude": [
-    "node_modules",
-    "dist",
-    "src/__tests__"
-  ]
+    "src/**/__tests__/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx"
+  ],
+  "references": [{ "path": "../core" }]
 }

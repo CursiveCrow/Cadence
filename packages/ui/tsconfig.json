@@ -1,40 +1,22 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "composite": false,
-    "rootDir": "src",
     "outDir": "dist",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "skipLibCheck": true,
-    "declaration": true,
-    "declarationMap": true,
-    "types": [],
+    "rootDir": "src",
     "baseUrl": ".",
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
     "paths": {
-      "@cadence/core": [
-        "../core/dist"
-      ],
-      "@cadence/crdt": [
-        "../crdt/dist"
-      ],
-      "@cadence/state": [
-        "../state/src"
-      ],
-      "@cadence/renderer": [
-        "../renderer/dist"
-      ]
+      "@cadence/core": ["../core/dist"],
+      "@cadence/renderer": ["../renderer/dist"]
     }
   },
-  "include": [
-    "src"
-  ],
+  "include": ["src"],
   "exclude": [
-    "node_modules",
-    "dist",
-    "src/components/__tests__"
-  ]
+    "src/**/__tests__/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx",
+    "src/stories/**"
+  ],
+  "references": [{ "path": "../core" }, { "path": "../renderer" }]
 }

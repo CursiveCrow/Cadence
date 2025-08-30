@@ -1,37 +1,37 @@
 # Cadence
 
-**A streamlined, high-performance, offline-first project management system using Electron, TypeScript, React, PixiJS, and CRDTs.**
+A streamlined, high-performance, offline-first project management system using Electron, TypeScript, React, PixiJS, and CRDTs.
 
 ## Architecture
 
-Cadence is built as a monorepo following the architecture specified in the [Design Document](docs/Design.md). The system features:
+Cadence is built as a monorepo following the architecture specified in `docs/Design.md`. The system features:
 
-- **Desktop-first** Electron application with React 18 + TypeScript
-- **High-performance rendering** via PixiJS with mandatory OffscreenCanvas
-- **Offline-first** architecture using CRDTs (Yjs) as Single Source of Truth
-- **SQLite WASM + OPFS** for persistence in the renderer process
-- **Redux Toolkit** for UI state management separate from domain data
-- **Built-in undo/redo** via Y.UndoManager
+- Desktop-first Electron application with React 18 + TypeScript
+- High-performance rendering via PixiJS with OffscreenCanvas
+- Offline-first architecture using CRDTs (Yjs) as Single Source of Truth
+- SQLite WASM + OPFS for persistence in the renderer process
+- Redux Toolkit for UI state management separate from domain data
+- Built-in undo/redo via Y.UndoManager
 
 ## Project Structure
 
 ```
 cadence/
-├── apps/
-│   └── desktop/                # Electron main/preload + Renderer (Vite)
-│       ├── electron/           # Main process and preload scripts
-│       ├── src/               # React renderer process
-│       ├── dist/              # Built renderer files
-│       └── dist-electron/     # Built main process files
-├── packages/
-│   ├── core/                  # Domain types, algorithms (DAG, lanes), validation
-│   ├── state/                 # RTK Stores (UI state management)
-│   ├── crdt/                  # Yjs initialization, persistence, mutation functions, hooks
-│   ├── renderer/              # PixiJS implementation, Worker setup, OffscreenCanvas
-│   ├── platform-services/     # FS access, dialogs (Electron IPC/Web APIs)
-│   └── ui/                    # Reusable React UI components
-├── release/                   # Packaged desktop applications
-└── docs/                      # Design documentation
+  apps/
+    desktop/              # Electron main/preload + Renderer (Vite)
+      electron/           # Main process and preload scripts
+      src/                # React renderer process
+      dist/               # Built renderer files
+      dist-electron/      # Built main process files
+  packages/
+    core/                 # Domain types, algorithms (DAG, lanes), validation
+    state/                # RTK Stores (UI state management)
+    crdt/                 # Yjs initialization, persistence, mutation functions, hooks
+    renderer/             # PixiJS implementation, Worker setup, OffscreenCanvas
+    platform-services/    # FS access, dialogs (Electron IPC/Web APIs)
+    ui/                   # Reusable React UI components
+  release/                # Packaged desktop applications
+  docs/                   # Design documentation
 ```
 
 ## Getting Started
@@ -69,35 +69,35 @@ pnpm run electron:dist-all
 
 The packaged applications will be in the `release/` directory:
 
-- **Windows**: `Cadence-win32-x64/Cadence.exe`
-- **macOS**: `Cadence-darwin-x64/Cadence.app` (when built on macOS)
-- **Linux**: `Cadence-linux-x64/Cadence` (when built on Linux)
+- Windows: `Cadence-win32-x64/Cadence.exe`
+- macOS: `Cadence-darwin-x64/Cadence.app` (when built on macOS)
+- Linux: `Cadence-linux-x64/Cadence` (when built on Linux)
 
 ## Technology Stack
 
 ### Core Technologies
 
-- **Electron** - Desktop app framework
-- **React 18** - UI framework with TypeScript
-- **Vite** - Build tool and dev server
-- **pnpm + Turborepo** - Monorepo management
+- Electron - Desktop app framework
+- React 18 - UI framework with TypeScript
+- Vite - Build tool and dev server
+- pnpm + Turborepo - Monorepo management
 
 ### Planned Features (Per Design.md)
 
-- **PixiJS (WebGL2)** - High-performance timeline canvas rendering
-- **Yjs** - CRDT for offline-first data management
-- **SQLite WASM + OPFS** - Client-side persistence
-- **Redux Toolkit** - UI state management
-- **Zod** - Runtime validation
+- PixiJS (WebGL2) - High-performance timeline canvas rendering
+- Yjs - CRDT for offline-first data management
+- SQLite WASM + OPFS - Client-side persistence
+- Redux Toolkit - UI state management
+- Zod - Runtime validation
 
 ## Package Overview
 
-- **`@cadence/core`** - Domain types, DAG validation, lane assignment algorithms
-- **`@cadence/state`** - Redux Toolkit slices for UI state (viewport, selection)
-- **`@cadence/crdt`** - Yjs document management, mutations, React hooks
-- **`@cadence/renderer`** - PixiJS + OffscreenCanvas implementation
-- **`@cadence/platform-services`** - Abstraction layer for Electron IPC vs Web APIs
-- **`@cadence/ui`** - Reusable React components (Button, TaskCard, TimelineCanvas)
+- `@cadence/core` - Domain types, DAG validation, lane assignment algorithms
+- `@cadence/state` - Redux Toolkit slices for UI state (viewport, selection)
+- `@cadence/crdt` - Yjs document management, mutations, React hooks
+- `@cadence/renderer` - PixiJS + OffscreenCanvas implementation
+- `@cadence/platform-services` - Abstraction layer for Electron IPC vs Web APIs
+- `@cadence/ui` - Reusable React components (Button, TaskCard, TimelineCanvas)
 
 ## Scripts
 
@@ -110,7 +110,7 @@ The packaged applications will be in the `release/` directory:
 
 ## Development Status
 
-✅ **Completed:**
+Completed:
 
 - Monorepo structure with proper workspace configuration
 - Electron + Vite + React + TypeScript setup
@@ -119,7 +119,7 @@ The packaged applications will be in the `release/` directory:
 - Basic UI components and state management setup
 - CRDT foundation with Yjs integration
 
-🚧 **In Development:**
+In Development:
 
 - PixiJS + OffscreenCanvas integration
 - SQLite WASM + OPFS persistence layer
@@ -129,4 +129,3 @@ The packaged applications will be in the `release/` directory:
 ## License
 
 Private project.
-

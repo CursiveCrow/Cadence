@@ -98,3 +98,46 @@ function hasCycleDFS(
   recursionStack.delete(taskId)
   return false
 }
+
+/**
+ * Assign simple lane indices to tasks to support visual layout.
+ * Heuristic:
+ * - Process tasks in topological order.
+ * - If a task has predecessors, pick the minimum predecessor lane to keep chains together.
+ * - If a task has no predecessors, place it in the next available lane, cycling from 0.
+ */
+export function assignLanes(tasks: Task[], dependencies: Dependency[]): Task[] {
+  // Build a quick lookup if needed in future heuristics
+  // const idToTask = new Map<string, Task>(tasks.map(t => [t.id, t]))
+  const topo = topologicalSort(tasks, dependencies)
+
+  // Build reverse edges: dst -> [src]
+  const incoming = new Map<string, string[]>()
+  for (const t of tasks) incoming.set(t.id, [])
+  for (const d of dependencies) {
+    if (!incoming.has(d.dstTaskId)) incoming.set(d.dstTaskId, [])
+    incoming.get(d.dstTaskId)!.push(d.srcTaskId)
+  }
+
+  const laneById = new Map<string, number>()
+  let nextFreeLane = 0
+
+  for (const id of topo) {
+    const preds = incoming.get(id) || []
+    // choose lane: prefer predecessor lane if available
+    const predLanes = preds
+      .map(p => laneById.get(p))
+      .filter((v): v is number => typeof v === 'number')
+    let lane: number
+    if (predLanes.length > 0) {
+      lane = Math.min(...predLanes)
+    } else {
+      lane = nextFreeLane
+      nextFreeLane += 1
+    }
+    laneById.set(id, lane)
+  }
+
+  // Produce new array with laneIndex populated (non-mutating to be safe)
+  return tasks.map(t => ({ ...t, laneIndex: laneById.get(t.id) ?? 0 }))
+}

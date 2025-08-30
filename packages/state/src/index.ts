@@ -5,3 +5,6 @@
 
 export * from './store'
 export * from './slices'
+
+// Ensure a non-empty declaration file is emitted for consumers
+export type __CadenceStateTypes = unknown

@@ -7,18 +7,24 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-dist-electron
-*.local
+# Dependencies and build output
+node_modules/
+dist/
+dist-ssr/
+dist-electron/
+release/
+coverage/
 .turbo/
 *.tsbuildinfo
+
+# Storybook
+*storybook.log
+storybook-static/
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
@@ -26,5 +32,6 @@ dist-electron
 *.sln
 *.sw?
 
-*storybook.log
-storybook-static
+# App-specific
+apps/desktop/.dev_pid
+
