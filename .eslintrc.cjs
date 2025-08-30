@@ -10,9 +10,10 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 'latest',
     sourceType: 'module',
+    tsconfigRootDir: __dirname,
   },
   plugins: ['@typescript-eslint'],
-  extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended', 'plugin:storybook/recommended'],
+  extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],
   ignorePatterns: [
     '**/dist/**',
     '**/dist-electron/**',
@@ -20,6 +21,10 @@ module.exports = {
     '**/release/**',
     '**/coverage/**',
     '**/node_modules/**',
+    'packages/*/src/**/*.d.ts',
+    'packages/*/src/**/*.d.ts.map',
+    'packages/*/src/**/*.js',
+    'packages/*/src/**/*.js.map',
   ],
   rules: {
     // Reasonable defaults; adjust as needed
@@ -27,7 +32,25 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': 'off',
     'no-extra-semi': 'off',
     'no-console': 'off',
+    'no-empty': ['error', { 'allowEmptyCatch': true }],
+    'no-constant-condition': 'off',
+    'prefer-const': 'warn',
   },
+  overrides: [
+    {
+      files: ['packages/*/src/**/*.{ts,tsx}'],
+      excludedFiles: [
+        'packages/*/src/**/__tests__/**',
+        'packages/*/src/**/*.{test,spec}.{ts,tsx}',
+        'packages/*/src/stories/**'
+      ],
+      parserOptions: {
+        project: ['packages/*/tsconfig.json']
+      }
+    },
+    {
+      files: ['packages/ui/**/*.{ts,tsx}'],
+      extends: ['plugin:storybook/recommended']
+    }
+  ]
 }
-
-

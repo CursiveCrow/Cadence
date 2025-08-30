@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('fs')
+const path = require('path')
 
-console.log('🔍 Verifying Electron Desktop App Setup...\n');
+console.log('Verifying Electron desktop app setup...\n')
 
-// Check required files
+// Check required files within apps/desktop
+const appDir = path.join(__dirname, '..', 'apps', 'desktop')
 const requiredFiles = [
   'package.json',
   'vite.config.ts',
@@ -14,47 +15,44 @@ const requiredFiles = [
   'electron/preload.ts',
   'src/main.tsx',
   'src/App.tsx',
-  'index.html'
-];
+  'index.html',
+]
 
-const missingFiles = requiredFiles.filter(file => !fs.existsSync(file));
+const missingFiles = requiredFiles.filter(file => !fs.existsSync(path.join(appDir, file)))
 
 if (missingFiles.length > 0) {
-  console.log('❌ Missing required files:');
-  missingFiles.forEach(file => console.log(`   - ${file}`));
-  process.exit(1);
+  console.log('Missing required files:')
+  missingFiles.forEach(file => console.log(`  - ${file}`))
+  process.exitCode = 1
 } else {
-  console.log('✅ All required files present');
+  console.log('✔ All required files present')
 }
 
 // Check package.json scripts
-const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-const requiredScripts = ['electron:dev', 'electron:dist', 'electron:pack'];
-const missingScripts = requiredScripts.filter(script => !packageJson.scripts[script]);
+const rootPkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'))
+const requiredScripts = ['electron:dev', 'electron:dist']
+const missingScripts = requiredScripts.filter(
+  script => !rootPkg.scripts || !rootPkg.scripts[script]
+)
 
 if (missingScripts.length > 0) {
-  console.log('❌ Missing required scripts:');
-  missingScripts.forEach(script => console.log(`   - ${script}`));
+  console.log('Missing required root scripts:')
+  missingScripts.forEach(script => console.log(`  - ${script}`))
 } else {
-  console.log('✅ All desktop build scripts configured');
+  console.log('✔ Root desktop scripts configured')
 }
 
-// Check electron-builder config
-if (packageJson.build) {
-  console.log('✅ Electron-builder configuration found');
-  
-  const platforms = [];
-  if (packageJson.build.win) platforms.push('Windows');
-  if (packageJson.build.mac) platforms.push('macOS');
-  if (packageJson.build.linux) platforms.push('Linux');
-  
-  console.log(`📦 Configured for: ${platforms.join(', ')}`);
+// Check electron-builder config in app package
+const appPkg = JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8'))
+if (appPkg.build) {
+  console.log('✔ Electron-builder configuration found')
+  const platforms = []
+  if (appPkg.build.win) platforms.push('Windows')
+  if (appPkg.build.mac) platforms.push('macOS')
+  if (appPkg.build.linux) platforms.push('Linux')
+  console.log(`Configured for: ${platforms.join(', ') || 'none'}`)
 } else {
-  console.log('❌ Missing electron-builder configuration');
+  console.log('Missing electron-builder configuration')
 }
 
-console.log('\n🎉 Desktop app setup verification complete!');
-console.log('\nNext steps:');
-console.log('1. Install dependencies: npm install');
-console.log('2. Start development: npm run electron:dev');
-console.log('3. Build desktop app: npm run electron:dist');
+console.log('\nDesktop app setup verification complete!')

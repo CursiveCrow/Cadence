@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tsconfigPaths from 'vite-tsconfig-paths'
 import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
 import path from 'node:path'
@@ -7,30 +8,30 @@ import path from 'node:path'
 // https://vitejs.dev/config/
 export default defineConfig({
   optimizeDeps: {
-    exclude: ['@cadence/renderer', '@cadence/config', '@cadence/contracts', '@cadence/platform-services'],
+    exclude: [
+      '@cadence/renderer',
+      '@cadence/config',
+      '@cadence/contracts',
+      '@cadence/platform-services',
+    ],
     esbuildOptions: {
-      target: 'esnext'
-    }
+      target: 'esnext',
+    },
   },
   build: {
-    target: 'esnext'
+    target: 'esnext',
   },
   resolve: {
     alias: {
-      '@cadence/core': path.resolve(__dirname, '../../packages/core/src'),
-      '@cadence/crdt': path.resolve(__dirname, '../../packages/crdt/src'),
-      '@cadence/renderer': path.resolve(__dirname, '../../packages/renderer/src'),
-      '@cadence/state': path.resolve(__dirname, '../../packages/state/src'),
+      // CSS path alias that tsconfig-paths doesn't catch for styles imports
+      '@cadence/ui/styles': path.resolve(__dirname, '../../packages/ui/src/styles'),
       '@cadence/config': path.resolve(__dirname, '../../packages/config/src'),
-      '@cadence/contracts': path.resolve(__dirname, '../../packages/contracts/src'),
-      '@cadence/platform-services': path.resolve(__dirname, '../../packages/platform-services/src'),
-      '@cadence/fixtures': path.resolve(__dirname, '../../packages/fixtures/src'),
-      '@cadence/ui': path.resolve(__dirname, '../../packages/ui/src')
-      , '@cadence/renderer-react': path.resolve(__dirname, '../../packages/renderer-react/src')
-    }
+      '@cadence/renderer': path.resolve(__dirname, '../../packages/renderer/src'),
+    },
   },
   plugins: [
     react(),
+    tsconfigPaths(),
     electron([
       {
         // Main process entry point
@@ -44,16 +45,12 @@ export default defineConfig({
             minify: process.env.NODE_ENV === 'production',
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['electron']
-            }
+              external: ['electron'],
+            },
           },
-          resolve: {
-            alias: {
-              '@cadence/contracts': path.resolve(__dirname, '../../packages/contracts/src'),
-              '@cadence/config': path.resolve(__dirname, '../../packages/config/src')
-            }
-          }
-        }
+          resolve: {},
+          plugins: [tsconfigPaths()],
+        },
       },
       {
         // Preload script
@@ -70,24 +67,20 @@ export default defineConfig({
             minify: process.env.NODE_ENV === 'production',
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['electron']
-            }
+              external: ['electron'],
+            },
           },
-          resolve: {
-            alias: {
-              '@cadence/contracts': path.resolve(__dirname, '../../packages/contracts/src'),
-              '@cadence/config': path.resolve(__dirname, '../../packages/config/src')
-            }
-          }
-        }
-      }
+          resolve: {},
+          plugins: [tsconfigPaths()],
+        },
+      },
     ]),
     // Use electron-renderer for Node.js integration in renderer
-    renderer()
+    renderer(),
   ],
   server: {
     port: 5173,
-    strictPort: true
+    strictPort: true,
   },
-  clearScreen: false
+  clearScreen: false,
 })

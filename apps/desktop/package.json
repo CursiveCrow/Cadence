@@ -11,9 +11,9 @@
     "preview": "vite preview",
     "electron": "electron .",
     "electron:dev": "vite",
-    "electron:pack": "npm run build && npx @electron/packager . Cadence --platform=win32 --arch=x64 --out=../../release --overwrite",
-    "electron:dist": "npm run build && electron-builder --win --publish never",
-    "electron:dist-all": "npm run build && electron-builder --publish never"
+    "electron:pack": "pnpm run build && pnpm exec electron-packager . Cadence --platform=win32 --arch=x64 --out=../../release --overwrite",
+    "electron:dist": "pnpm run build && electron-builder --win --publish never",
+    "electron:dist-all": "pnpm run build && electron-builder --publish never"
   },
   "dependencies": {
     "@cadence/core": "workspace:*",
@@ -48,6 +48,7 @@
     "vite": "^5.0.8",
     "vite-plugin-electron": "^0.28.1",
     "vite-plugin-electron-renderer": "^0.14.5",
+    "vite-tsconfig-paths": "^4.3.2",
     "wait-on": "^7.2.0"
   },
   "build": {

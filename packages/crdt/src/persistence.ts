@@ -29,6 +29,7 @@ export class SQLiteOPFSProvider implements PersistenceProvider {
 
   async init(): Promise<void> {
     if (this.ready) return
+    const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : 0
     try {
       // Dynamically import the SQLite WASM module
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -49,8 +50,21 @@ export class SQLiteOPFSProvider implements PersistenceProvider {
       );`)
       this.db = db
       this.ready = true
+      const t1 = typeof performance !== 'undefined' && performance.now ? performance.now() : 0
+      try {
+        console.info(`[CRDT] SQLite WASM initialized in ${Math.round(t1 - t0)}ms`)
+      } catch {}
     } catch (e) {
-      console.warn('SQLite WASM init failed, falling back to in-memory persistence:', e)
+      try {
+        const ua = typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'
+        console.warn('[CRDT] SQLite WASM init failed; falling back to in-memory persistence.', {
+          error: (e as any)?.message || String(e),
+          name: (e as any)?.name,
+          ua,
+        })
+      } catch {
+        /* ignore */
+      }
       this.db = null
       this.ready = true
     }
@@ -62,7 +76,9 @@ export class SQLiteOPFSProvider implements PersistenceProvider {
       // Compute next clock for this doc using a simple SELECT
       let nextClock = this._selectNextClockFallback(docId)
       try {
-        const sel = this.db.prepare(`SELECT IFNULL(MAX(clock), -1) + 1 AS nextClock FROM crdt_updates WHERE doc_id = ?`)
+        const sel = this.db.prepare(
+          `SELECT IFNULL(MAX(clock), -1) + 1 AS nextClock FROM crdt_updates WHERE doc_id = ?`
+        )
         sel.bind([docId])
         if (sel.step()) {
           const row = sel.getAsObject()
@@ -70,8 +86,10 @@ export class SQLiteOPFSProvider implements PersistenceProvider {
           if (typeof val === 'number' && Number.isFinite(val)) nextClock = val
         }
         sel.finalize()
-      } catch { }
-      const stmt = this.db.prepare(`INSERT INTO crdt_updates (doc_id, clock, update_data) VALUES (?, ?, ?)`)
+      } catch {}
+      const stmt = this.db.prepare(
+        `INSERT INTO crdt_updates (doc_id, clock, update_data) VALUES (?, ?, ?)`
+      )
       stmt.bind([docId, nextClock, update])
       stmt.step()
       stmt.finalize()
@@ -86,7 +104,9 @@ export class SQLiteOPFSProvider implements PersistenceProvider {
   async loadUpdates(docId: string): Promise<Uint8Array[]> {
     if (!this.ready) await this.init()
     if (this.db) {
-      const stmt = this.db.prepare(`SELECT update_data FROM crdt_updates WHERE doc_id = ? ORDER BY clock ASC`)
+      const stmt = this.db.prepare(
+        `SELECT update_data FROM crdt_updates WHERE doc_id = ? ORDER BY clock ASC`
+      )
       stmt.bind([docId])
       const results: Uint8Array[] = []
       while (stmt.step()) {
@@ -104,7 +124,9 @@ export class SQLiteOPFSProvider implements PersistenceProvider {
   async saveSnapshot(docId: string, snapshot: Uint8Array): Promise<void> {
     if (!this.ready) await this.init()
     if (this.db) {
-      const stmt = this.db.prepare(`REPLACE INTO crdt_snapshots (doc_id, snapshot_data) VALUES (?, ?)`)
+      const stmt = this.db.prepare(
+        `REPLACE INTO crdt_snapshots (doc_id, snapshot_data) VALUES (?, ?)`
+      )
       stmt.bind([docId, snapshot])
       stmt.step()
       stmt.finalize()

@@ -1,22 +1,9 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
-    "noEmit": false,
-    "allowImportingTsExtensions": false,
-    "composite": true,
-    "declaration": true,
-    "declarationMap": true,
-    "types": [],
-    "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "rootDir": "src"
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["src"],
+  "references": []
 }

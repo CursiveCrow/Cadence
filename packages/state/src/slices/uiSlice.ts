@@ -10,7 +10,7 @@ export interface UIProjectState {
 
 const initialState: UIProjectState = { activeProjectId: null }
 
-export const uiSlice = createSlice({
+const uiSlice = createSlice({
   name: 'ui',
   initialState,
   reducers: {

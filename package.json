@@ -13,7 +13,8 @@
     "electron:dist": "pnpm --filter @cadence/desktop electron:dist",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "prepare": "husky install"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.8.0",
@@ -29,7 +30,10 @@
     "jest-environment-jsdom": "^29.7.0",
     "ts-jest": "^29.1.1",
     "turbo": "^1.11.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2",
+    "prettier": "^3.3.3"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -38,5 +42,10 @@
   "packageManager": "pnpm@8.14.1",
   "dependencies": {
     "zod": "^3.22.4"
+  },
+  "lint-staged": {
+    "**/*.{ts,tsx,js,jsx,css,md,json}": [
+      "prettier --write"
+    ]
   }
 }

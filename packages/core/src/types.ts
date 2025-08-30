@@ -22,6 +22,8 @@ export interface Task {
   description?: string
   staffId: string // ID of the staff this task is on
   staffLine: number // Which line on the staff (0 = bottom line, 1 = first space, etc.)
+  /** Optional computed lane index for layout/rendering */
+  laneIndex?: number
   projectId: string
   createdAt: string
   updatedAt: string
@@ -51,14 +53,14 @@ export enum TaskStatus {
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
   BLOCKED = 'blocked',
-  CANCELLED = 'cancelled'
+  CANCELLED = 'cancelled',
 }
 
 export enum DependencyType {
   FINISH_TO_START = 'finish_to_start',
   START_TO_START = 'start_to_start',
   FINISH_TO_FINISH = 'finish_to_finish',
-  START_TO_FINISH = 'start_to_finish'
+  START_TO_FINISH = 'start_to_finish',
 }
 
 export interface Staff {

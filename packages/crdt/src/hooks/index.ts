@@ -64,7 +64,12 @@ export function useTask(projectId: string, taskId: string): TaskData | undefined
 /**
  * Hook to get undo/redo functionality
  */
-export function useUndoRedo(projectId: string) {
+export function useUndoRedo(projectId: string): {
+  canUndo: boolean
+  canRedo: boolean
+  undo: () => void
+  redo: () => void
+} {
   const ydoc = getProjectDoc(projectId)
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
