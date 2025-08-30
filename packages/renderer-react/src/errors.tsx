@@ -1,0 +1,143 @@
+/**
+ * Centralized error handling for Cadence (React-bound)
+ */
+
+import React from 'react'
+
+// Fallback lightweight logger to avoid dependency issues during build
+const createLogger = (scope: string) => ({
+  error: (...args: any[]) => { try { console.error(`[${scope}]`, ...args) } catch { } },
+  warn:  (...args: any[]) => { try { console.warn(`[${scope}]`,  ...args) } catch { } },
+  info:  (...args: any[]) => { try { console.log(`[${scope}]`,   ...args) } catch { } },
+})
+
+const logger = createLogger('ErrorHandler')
+
+export class CadenceError extends Error {
+  public readonly code: string
+  public readonly context?: Record<string, any>
+  public readonly timestamp: Date
+
+  constructor(message: string, code: string, context?: Record<string, any>) {
+    super(message)
+    this.name = this.constructor.name
+    this.code = code
+    this.context = context
+    this.timestamp = new Date()
+    try { (Error as any).captureStackTrace?.(this, this.constructor) } catch { }
+  }
+
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      code: this.code,
+      context: this.context,
+      timestamp: this.timestamp,
+      stack: this.stack,
+    }
+  }
+}
+
+export class ValidationError extends CadenceError {
+  constructor(message: string, context?: Record<string, any>) {
+    super(message, 'VALIDATION_ERROR', context)
+  }
+}
+
+export class NotFoundError extends CadenceError {
+  constructor(resource: string, id?: string) {
+    const message = id ? `${resource} with id '${id}' not found` : `${resource} not found`
+    super(message, 'NOT_FOUND', { resource, id })
+  }
+}
+
+export class UnauthorizedError extends CadenceError {
+  constructor(message = 'Unauthorized access') { super(message, 'UNAUTHORIZED') }
+}
+
+export class ConflictError extends CadenceError {
+  constructor(message: string, context?: Record<string, any>) { super(message, 'CONFLICT', context) }
+}
+
+export class PlatformError extends CadenceError {
+  constructor(message: string, platform: string, context?: Record<string, any>) {
+    super(message, 'PLATFORM_ERROR', { ...context, platform })
+  }
+}
+
+export class NetworkError extends CadenceError {
+  constructor(message: string, context?: Record<string, any>) { super(message, 'NETWORK_ERROR', context) }
+}
+
+export class ErrorHandler {
+  private errorListeners: ((error: Error) => void)[] = []
+  private errorQueue: Error[] = []
+  private maxQueueSize = 100
+
+  handle(error: Error, context?: Record<string, any>): void {
+    logger.error('Error occurred:', { error: error.message, stack: error.stack, context })
+    this.errorQueue.push(error)
+    if (this.errorQueue.length > this.maxQueueSize) this.errorQueue.shift()
+    this.errorListeners.forEach(listener => { try { listener(error) } catch (e) { logger.error('Error in error listener:', e) } })
+  }
+
+  addListener(listener: (error: Error) => void): () => void {
+    this.errorListeners.push(listener)
+    return () => { const i = this.errorListeners.indexOf(listener); if (i > -1) this.errorListeners.splice(i, 1) }
+  }
+
+  getRecentErrors(): Error[] { return [...this.errorQueue] }
+  clearErrors(): void { this.errorQueue = [] }
+
+  isRecoverable(error: Error): boolean {
+    if (error instanceof ValidationError) return true
+    if (error instanceof NotFoundError) return true
+    if (error instanceof UnauthorizedError) return true
+    if (error instanceof ConflictError) return true
+    if (error instanceof NetworkError) return true
+    return false
+  }
+
+  formatForUser(error: Error): string {
+    if (error instanceof CadenceError) {
+      switch (error.code) {
+        case 'VALIDATION_ERROR': return `Invalid input: ${error.message}`
+        case 'NOT_FOUND':       return `Could not find the requested item`
+        case 'UNAUTHORIZED':    return `You don't have permission to perform this action`
+        case 'CONFLICT':        return `There was a conflict: ${error.message}`
+        case 'NETWORK_ERROR':   return `Network error: Please check your connection`
+        case 'PLATFORM_ERROR':  return `Platform error: ${error.message}`
+        default:                return error.message
+      }
+    }
+    return 'An unexpected error occurred'
+  }
+}
+
+export const errorHandler = new ErrorHandler()
+
+export function withErrorBoundary<T extends object>(
+  Component: React.ComponentType<T>,
+  fallback?: React.ComponentType<{ error: Error; reset: () => void }>
+) {
+  return (props: T) => {
+    const [error, setError] = React.useState<Error | null>(null)
+    if (error) {
+      const Fallback = fallback || DefaultErrorFallback
+      return <Fallback error={error} reset={() => setError(null)} />
+    }
+    try { return <Component {...props} /> } catch (err) { setError(err as Error); return null }
+  }
+}
+
+function DefaultErrorFallback({ error, reset }: { error: Error; reset: () => void }) {
+  return (
+    <div style={{ padding: 20, backgroundColor: '#f8d7da', color: '#721c24', borderRadius: 4 }}>
+      <h2>Something went wrong</h2>
+      <p>{errorHandler.formatForUser(error)}</p>
+      <button onClick={reset} style={{ marginTop: 10 }}>Try again</button>
+    </div>
+  )
+}
+

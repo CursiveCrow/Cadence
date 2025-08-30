@@ -103,3 +103,4 @@ SQLite schema (renderer/OPFS)
 ## Notes
 
 - This revision removes encoding artifacts and standardizes text. See repo README for scripts and usage.
+

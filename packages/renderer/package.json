@@ -7,8 +7,18 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "clean": "rimraf dist *.tsbuildinfo",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "jest -c ../../jest.config.js --passWithNoTests"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "dependencies": {
     "pixi.js": "^8.12.0"

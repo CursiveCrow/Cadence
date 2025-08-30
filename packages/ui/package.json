@@ -7,10 +7,20 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "clean": "rimraf dist *.tsbuildinfo",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "jest -c ../../jest.config.js --passWithNoTests",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "devDependencies": {
     "@storybook/addon-docs": "9.1.3",

@@ -247,7 +247,8 @@ export class SecureStorage {
  */
 export function isSecureContext(): boolean {
   // Check if running in Electron (considered secure)
-  if (typeof window !== 'undefined' && (window as any).electronAPI) {
+  // Preload exposes a minimal API as `window.api` (see electron/preload.ts)
+  if (typeof window !== 'undefined' && (window as any).api) {
     return true;
   }
 

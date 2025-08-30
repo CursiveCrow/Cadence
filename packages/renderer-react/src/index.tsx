@@ -135,5 +135,6 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
 }
 
 export default TimelineCanvas
+export * from './errors'
 
 

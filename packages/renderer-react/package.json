@@ -6,7 +6,17 @@
     "types": "dist/index.d.ts",
     "scripts": {
         "build": "tsc",
+        "clean": "rimraf dist *.tsbuildinfo",
         "test": "jest -c ../../jest.config.js --passWithNoTests"
+    },
+    "files": [
+        "dist"
+    ],
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
     },
     "devDependencies": {
         "@types/react": "^18.2.45"
