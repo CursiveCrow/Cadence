@@ -1,22 +1,21 @@
-import { Provider } from 'react-redux'
-import { store } from '@cadence/state'
-import { CadenceMain } from './components/CadenceMain'
+import { StoreProvider } from './app/providers/StoreProvider'
+import { CadenceScreen } from './components/CadenceScreen'
 import './App.css'
-import React from 'react'
-import { PlatformServicesContext, createPlatformServices } from '@cadence/platform-services'
+import { PlatformServicesProvider } from './app/providers/PlatformServicesProvider'
 import '@cadence/ui/styles/tokens.css'
+import { RepositoriesProvider } from './app/providers/RepositoriesProvider'
 
 function App() {
-  const services = React.useMemo(() => createPlatformServices(), [])
-
   return (
-    <Provider store={store}>
-      <PlatformServicesContext.Provider value={services}>
-        <div className="App">
-          <CadenceMain />
-        </div>
-      </PlatformServicesContext.Provider>
-    </Provider>
+    <StoreProvider>
+      <PlatformServicesProvider>
+        <RepositoriesProvider projectId={"demo-project"}>
+          <div className="App">
+            <CadenceScreen projectId={"demo-project"} />
+          </div>
+        </RepositoriesProvider>
+      </PlatformServicesProvider>
+    </StoreProvider>
   )
 }
 

@@ -10,6 +10,7 @@ export default defineConfig({
   optimizeDeps: {
     exclude: [
       '@cadence/renderer',
+      '@cadence/renderer/react',
       '@cadence/config',
       '@cadence/contracts',
       '@cadence/platform-services',
@@ -27,6 +28,7 @@ export default defineConfig({
       '@cadence/ui/styles': path.resolve(__dirname, '../../packages/ui/src/styles'),
       '@cadence/config': path.resolve(__dirname, '../../packages/config/src'),
       '@cadence/renderer': path.resolve(__dirname, '../../packages/renderer/src'),
+      '@cadence/renderer/react': path.resolve(__dirname, '../../packages/renderer/src/react'),
     },
   },
   plugins: [

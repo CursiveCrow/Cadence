@@ -1,3 +1,6 @@
 packages:
-  - "apps/*"
-  - "packages/*"
+  - 'apps/*'
+  - 'packages/*'
+  - '!packages/renderer-react'
+  - '!packages/model'
+  - '!packages/renderer'

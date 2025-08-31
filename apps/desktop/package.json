@@ -21,7 +21,7 @@
     "@cadence/crdt": "workspace:*",
     "@cadence/platform-services": "workspace:*",
     "@cadence/renderer": "workspace:*",
-    "@cadence/state": "workspace:*",
+    "@cadence/model": "workspace:*",
     "@cadence/ui": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

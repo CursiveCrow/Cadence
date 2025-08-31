@@ -1,49 +1,23 @@
 import { useEffect, useState } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
-import { setActiveProject, setStaffs, RootState } from '@cadence/state'
-import { useProjectTasks, createTask, createDependency } from '@cadence/crdt'
-import { seedDemoProject } from '@cadence/fixtures'
-import { Task } from '@cadence/core'
+import { useSelector } from 'react-redux'
+import { RootState } from '@cadence/core/state'
 
 const DEMO_PROJECT_ID = 'demo-project'
 
 export function useDemoProject() {
-  const dispatch = useDispatch()
   const [isInitialized, setIsInitialized] = useState(false)
 
   const activeProjectId = useSelector((state: RootState) => state.ui.activeProjectId)
-  const staffs = useSelector((state: RootState) => state.staffs.list)
-  const tasks = useProjectTasks(DEMO_PROJECT_ID)
+  const tasks = useSelector((state: RootState) => (state as any).tasks.entities as Record<string, any>)
 
-  useEffect(() => {
-    if (!activeProjectId) {
-      dispatch(setActiveProject(DEMO_PROJECT_ID))
-      if (staffs.length === 0) {
-        const defaults = [
-          { id: 'staff-treble', name: 'Treble', numberOfLines: 5, lineSpacing: 12, position: 0, projectId: DEMO_PROJECT_ID, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-          { id: 'staff-bass', name: 'Bass', numberOfLines: 5, lineSpacing: 12, position: 1, projectId: DEMO_PROJECT_ID, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-        ]
-        dispatch(setStaffs(defaults as any))
-      }
-    }
-  }, [activeProjectId, dispatch, staffs.length])
-
+  // Active project and seeding are now handled in RepositoriesProvider
   useEffect(() => {
     if (activeProjectId === DEMO_PROJECT_ID && !isInitialized) {
-      const timer = setTimeout(() => {
-        seedDemoProject(
-          DEMO_PROJECT_ID,
-          {
-            createTask: (projectId, task) => createTask(projectId, task as Task),
-            createDependency
-          },
-          () => Object.keys(tasks).length > 0
-        )
-        setIsInitialized(true)
-      }, 100)
-      return () => clearTimeout(timer)
+      setIsInitialized(Object.keys(tasks).length > 0)
     }
   }, [activeProjectId, tasks, isInitialized])
+
+  // No-op: previously performed seeding here
 
   return {
     demoProjectId: DEMO_PROJECT_ID,

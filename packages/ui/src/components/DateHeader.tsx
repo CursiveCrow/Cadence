@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from 'react'
 import '../styles/tokens.css'
 import '../styles/ui.css'
-import { DAY_THRESHOLD, HOUR_THRESHOLD, computeDateHeaderHeight, computeDateHeaderViewModel } from '@cadence/renderer'
+import { DAY_THRESHOLD, HOUR_THRESHOLD, computeDateHeaderHeight, computeDateHeaderViewModel } from '@cadence/core/renderer'
 
 export { computeDateHeaderHeight }
 

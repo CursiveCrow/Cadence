@@ -30,6 +30,9 @@
       "@cadence/renderer": [
         "../../packages/renderer/src"
       ],
+      "@cadence/renderer/react": [
+        "../../packages/renderer/src/react"
+      ],
       "@cadence/config": [
         "../../packages/config/src"
       ],
@@ -45,8 +48,32 @@
       "@cadence/ui": [
         "../../packages/ui/src"
       ],
-      "@cadence/renderer-react": [
-        "../../packages/renderer-react/src"
+      "@cadence/view": [
+        "../../packages/view/src"
+      ],
+      "@cadence/view/*": [
+        "../../packages/view/src/*"
+      ],
+      "@cadence/model": [
+        "../../packages/model/src"
+      ],
+      "@cadence/model/*": [
+        "../../packages/model/src/*"
+      ],
+      "@cadence/viewmodel": [
+        "../../packages/viewmodel/src"
+      ],
+      "@cadence/viewmodel/*": [
+        "../../packages/viewmodel/src/*"
+      ],
+      "@cadence/repositories": [
+        "../../packages/repositories/src"
+      ],
+      "@cadence/repositories/*": [
+        "../../packages/repositories/src/*"
+      ],
+      "@cadence/crdt": [
+        "../../packages/crdt/src"
       ]
     }
   },

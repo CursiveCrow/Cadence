@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "jsx": "react-jsx",
@@ -18,28 +22,84 @@
     "composite": true,
     "baseUrl": ".",
     "paths": {
-      "@cadence/core": ["packages/core/src"],
-      "@cadence/core/*": ["packages/core/src/*"],
-      "@cadence/state": ["packages/state/src"],
-      "@cadence/state/*": ["packages/state/src/*"],
-      "@cadence/crdt": ["packages/crdt/src"],
-      "@cadence/crdt/*": ["packages/crdt/src/*"],
-      "@cadence/renderer": ["packages/renderer/src"],
-      "@cadence/renderer/*": ["packages/renderer/src/*"],
-      "@cadence/platform-services": ["packages/platform-services/src"],
-      "@cadence/platform-services/*": ["packages/platform-services/src/*"],
-      "@cadence/ui": ["packages/ui/src"],
-      "@cadence/ui/*": ["packages/ui/src/*"],
-      "@cadence/config": ["packages/config/src"],
-      "@cadence/config/*": ["packages/config/src/*"],
-      "@cadence/contracts": ["packages/contracts/src"],
-      "@cadence/contracts/*": ["packages/contracts/src/*"],
-      "@cadence/events": ["packages/events/src"],
-      "@cadence/events/*": ["packages/events/src/*"],
-      "@cadence/renderer-react": ["packages/renderer-react/src"],
-      "@cadence/renderer-react/*": ["packages/renderer-react/src/*"],
-      "@cadence/fixtures": ["packages/fixtures/src"],
-      "@cadence/fixtures/*": ["packages/fixtures/src/*"]
+      "@cadence/core": [
+        "packages/core/src"
+      ],
+      "@cadence/core/*": [
+        "packages/core/src/*"
+      ],
+      "@cadence/model": [
+        "packages/model/src"
+      ],
+      "@cadence/model/*": [
+        "packages/model/src/*"
+      ],
+      "@cadence/crdt": [
+        "packages/crdt/src"
+      ],
+      "@cadence/crdt/*": [
+        "packages/crdt/src/*"
+      ],
+      "@cadence/renderer": [
+        "packages/renderer/src"
+      ],
+      "@cadence/renderer/*": [
+        "packages/renderer/src/*"
+      ],
+      "@cadence/renderer/react": [
+        "packages/renderer/src/react"
+      ],
+      "@cadence/renderer/react/*": [
+        "packages/renderer/src/react/*"
+      ],
+      "@cadence/platform-services": [
+        "packages/platform-services/src"
+      ],
+      "@cadence/platform-services/*": [
+        "packages/platform-services/src/*"
+      ],
+      "@cadence/ui": [
+        "packages/ui/src"
+      ],
+      "@cadence/ui/*": [
+        "packages/ui/src/*"
+      ],
+      "@cadence/config": [
+        "packages/config/src"
+      ],
+      "@cadence/config/*": [
+        "packages/config/src/*"
+      ],
+      "@cadence/contracts": [
+        "packages/contracts/src"
+      ],
+      "@cadence/contracts/*": [
+        "packages/contracts/src/*"
+      ],
+      "@cadence/view": [
+        "packages/view/src"
+      ],
+      "@cadence/view/*": [
+        "packages/view/src/*"
+      ],
+      "@cadence/viewmodel": [
+        "packages/viewmodel/src"
+      ],
+      "@cadence/viewmodel/*": [
+        "packages/viewmodel/src/*"
+      ],
+      "@cadence/repositories": [
+        "packages/repositories/src"
+      ],
+      "@cadence/repositories/*": [
+        "packages/repositories/src/*"
+      ],
+      "@cadence/fixtures": [
+        "packages/fixtures/src"
+      ],
+      "@cadence/fixtures/*": [
+        "packages/fixtures/src/*"
+      ]
     }
   }
 }
