@@ -22,3 +22,4 @@ export function computeTextResolution(scaleX: number = 1, oversample: number = 1
 }
 
 
+

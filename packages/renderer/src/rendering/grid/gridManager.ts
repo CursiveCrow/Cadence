@@ -1,6 +1,6 @@
 import { Container } from 'pixi.js'
-import { drawGridAndStaff } from './scene'
-import type { TimelineConfig } from './scene'
+import { drawGridAndStaff } from '../../core/scene'
+import type { TimelineConfig } from '../../core/scene'
 
 /**
  * Instance-scoped grid manager that replaces function-static caches.
@@ -29,5 +29,4 @@ export class GridManager {
         this.metaMap.set(container, { w: screenWidth, h: screenHeight, z: rz, cfg: cfgKey })
     }
 }
-
 

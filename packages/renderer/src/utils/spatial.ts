@@ -124,3 +124,4 @@ export class SpatialHash {
     return this.query(viewport)
   }
 }
+

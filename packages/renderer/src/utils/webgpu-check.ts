@@ -78,3 +78,4 @@ export function logRendererPreference(status: WebGPUStatus, chosen: 'webgpu' | '
     : 'background: #6b7280; color: white; padding: 2px 6px; border-radius: 4px;'
   console.log('%c Renderer Preference ', style, msg)
 }
+
