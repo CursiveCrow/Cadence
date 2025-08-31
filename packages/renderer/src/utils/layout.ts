@@ -3,7 +3,7 @@
  */
 
 import { Staff } from '@cadence/core'
-import type { TimelineConfig, TaskLike, TaskLayout } from './scene'
+import type { TimelineConfig, TaskLike, TaskLayout } from '../core/scene'
 
 export type TimeScale = 'hour' | 'day' | 'week' | 'month'
 
@@ -292,3 +292,4 @@ export function getMeasureMarkerXsAligned(
 
 // WGSL functions for grid-line location calculations shared with the GPU shader
 // WGSL grid helpers moved to gridShader.ts to decouple shader code from layout.
+

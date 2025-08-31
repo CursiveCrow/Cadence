@@ -1,8 +1,8 @@
 import { Container, Text } from 'pixi.js'
-import { RendererPlugin } from '../scene'
+import { RendererPlugin } from '../core/scene'
 import { STATUS_TO_ACCIDENTAL } from '../config'
-import { computeTextResolution } from '../resolution'
-import { devLog, safeCall } from '../devlog'
+import { computeTextResolution } from '../utils/resolution'
+import { devLog, safeCall } from '../utils/devlog'
 
 /**
  * StatusGlyphPlugin

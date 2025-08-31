@@ -1,4 +1,4 @@
-import { computeViewportAlignment, getTimeScaleForZoom, DAY_THRESHOLD, HOUR_THRESHOLD } from './layout'
+import { computeViewportAlignment, getTimeScaleForZoom, DAY_THRESHOLD, HOUR_THRESHOLD } from '../utils/layout'
 
 export { DAY_THRESHOLD, HOUR_THRESHOLD }
 
@@ -165,4 +165,3 @@ export function computeDateHeaderViewModel(params: DateHeaderParams): DateHeader
 
   return { monthLabels, monthTickXs, dayLabels, hourLabels, dayTickXs, hourTickXs }
 }
-

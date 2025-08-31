@@ -1,5 +1,5 @@
 import { Application, Container } from 'pixi.js'
-import { devLog, safeCall } from './devlog'
+import { devLog, safeCall } from '../utils/devlog'
 
 export interface ViewportState { x: number; y: number; zoom: number }
 export interface PanZoomCallbacks {

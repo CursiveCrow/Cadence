@@ -253,4 +253,3 @@ fn mainFragment(@location(0) uv: vec2<f32>, @builtin(position) position: vec4<f3
 export function createGpuTimeGrid(app: Application): GpuTimeGrid {
   return new GpuTimeGrid(app)
 }
-

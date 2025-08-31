@@ -4,13 +4,13 @@
  */
 
 import { Container, Graphics, Text, Application, Rectangle } from 'pixi.js'
-import { SpatialHash } from './utils/spatial'
-import { drawSelectionHighlight } from './rendering/shapes'
-import { getTimeScaleForZoom, getMeasureMarkerXsAligned, worldDayToContainerX } from './utils/layout'
-import { computeGraphicsResolution, computeTextResolution } from './utils/resolution'
+import { SpatialHash } from '../utils/spatial'
+import { drawSelectionHighlight } from '../rendering/shapes'
+import { getTimeScaleForZoom, getMeasureMarkerXsAligned, worldDayToContainerX } from '../utils/layout'
+import { computeGraphicsResolution, computeTextResolution } from '../utils/resolution'
 import type { Task, Dependency, Staff } from '@cadence/core'
-import type { RendererContext } from './types/context'
-import { devLog } from './utils/devlog'
+import type { RendererContext } from '../types/context'
+import { devLog } from '../utils/devlog'
 
 
 export interface RendererPlugin {

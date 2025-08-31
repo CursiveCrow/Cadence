@@ -1,4 +1,4 @@
-import type { TimelineConfig } from '../scene'
+import type { TimelineConfig } from '../core/scene'
 
 export interface RendererContext {
     getZoom: () => number
