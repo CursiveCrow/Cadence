@@ -2,6 +2,7 @@ import React, { useMemo, useRef } from 'react'
 import '../styles/tokens.css'
 import '../styles/ui.css'
 import { DAY_THRESHOLD, HOUR_THRESHOLD, computeDateHeaderHeight, computeDateHeaderViewModel } from '@cadence/renderer'
+import type { DateHeaderViewModel } from '@cadence/renderer'
 
 export { computeDateHeaderHeight }
 
@@ -30,7 +31,7 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
         zIndex: 2
     }
 
-    const { monthLabels, monthTickXs, dayLabels, hourLabels, dayTickXs, hourTickXs } = useMemo(() => {
+    const { monthLabels, monthTickXs, dayLabels, hourLabels, dayTickXs, hourTickXs } = useMemo<DateHeaderViewModel>(() => {
         const w = containerRef.current?.clientWidth ?? window.innerWidth ?? 1200
         return computeDateHeaderViewModel({ viewport, projectStart: startDate, leftMargin, dayWidth, width: w })
     }, [viewport.x, zoom, leftMargin, dayWidth, startDate])
@@ -112,4 +113,3 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
         </div>
     )
 }
-
