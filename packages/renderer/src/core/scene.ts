@@ -12,7 +12,6 @@ import type { Task, Dependency, Staff } from '@cadence/core'
 import type { RendererContext } from '../types/context'
 import { devLog } from '../utils/devlog'
 
-
 export interface RendererPlugin {
   onLayersCreated?(app: Application, layers: ReturnType<typeof createTimelineLayers>, ctx: RendererContext): void
   onTaskUpserted?(task: TaskLike, container: Container, ctx: { layout: TaskLayout; config: TimelineConfig; zoom: number; selected: boolean }): void
@@ -76,8 +75,6 @@ export interface TaskAnchors {
   rightCenterY: number
 }
 
-// computeTaskLayout moved to layout.ts
-
 export function drawGridAndStaff(
   container: Container,
   config: TimelineConfig,
@@ -92,12 +89,12 @@ export function drawGridAndStaff(
   container.removeChildren()
 
   const graphics = new Graphics()
-    // Keep resolution independent of zoom to maintain constant stroke thickness
-    ; (graphics as any).resolution = computeGraphicsResolution()
+; (graphics as any).resolution = computeGraphicsResolution()
+
   // Avoid creating huge geometry at extreme zoom-out; cap the drawn extent
   const capWidth = Math.min(Math.max(screenWidth * 4, config.DAY_WIDTH * 90), 50000)
   const extendedWidth = Math.max(screenWidth, capWidth)
-  // Height cap no longer needed for vertical lines (GPU grid handles them)
+
 
   // Align to whole pixels (scene is not scaled)
   const pixelAlign = (v: number) => Math.round(v)
@@ -110,8 +107,6 @@ export function drawGridAndStaff(
 
   // Minor step kept for label placement calculations below
   const minorStep = scale === 'hour' ? hourWidth : scale === 'day' ? dayWidth : scale === 'week' ? weekWidth : monthWidth
-
-  // Vertical grid lines and bands are drawn by the GPU grid shader exclusively
 
   let currentY = config.TOP_MARGIN
   staffs.forEach((staff) => {
