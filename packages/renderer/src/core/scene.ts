@@ -4,7 +4,6 @@
  */
 
 import { Container, Graphics, Text, Application, Rectangle } from 'pixi.js'
-<<<<<<<< HEAD:packages/renderer/src/core/scene.ts
 import { SpatialHash } from '../utils/spatial'
 import { drawSelectionHighlight } from '../rendering/shapes'
 import { getTimeScaleForZoom, getMeasureMarkerXsAligned, worldDayToContainerX } from '../utils/layout'
@@ -12,15 +11,7 @@ import { computeGraphicsResolution, computeTextResolution } from '../utils/resol
 import type { Task, Dependency, Staff } from '@cadence/core'
 import type { RendererContext } from '../types/context'
 import { devLog } from '../utils/devlog'
-========
-import { SpatialHash } from './utils/spatial'
-import { drawSelectionHighlight } from './rendering/shapes'
-import { getTimeScaleForZoom, getMeasureMarkerXsAligned, worldDayToContainerX } from './utils/layout'
-import { computeGraphicsResolution, computeTextResolution } from './utils/resolution'
-import type { Task, Dependency, Staff } from '@cadence/core'
-import type { RendererContext } from './types/context'
-import { devLog } from './utils/devlog'
->>>>>>>> b8957b3be2daafe3fbd66db619d27f14be29ba75:packages/renderer/src/scene.ts
+
 
 export interface RendererPlugin {
   onLayersCreated?(app: Application, layers: ReturnType<typeof createTimelineLayers>, ctx: RendererContext): void
