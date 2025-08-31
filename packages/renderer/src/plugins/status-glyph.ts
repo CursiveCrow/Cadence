@@ -2,7 +2,7 @@ import { Container, Text } from 'pixi.js'
 import { RendererPlugin } from '../scene'
 import { STATUS_TO_ACCIDENTAL } from '../config'
 import { computeTextResolution } from '../resolution'
-import { devLog } from '../devlog'
+import { devLog, safeCall } from '../devlog'
 
 /**
  * StatusGlyphPlugin
@@ -28,7 +28,7 @@ export const StatusGlyphPlugin: RendererPlugin = {
             const scaleX = viewport?.scale?.x ?? 1
             const desiredRes = computeTextResolution(scaleX, oversample)
                 ; (t as any).resolution = desiredRes
-            try { (t as any).updateText?.() } catch (err) { devLog.warn('status-glyph updateText failed', err) }
+            safeCall('status-glyph updateText failed', () => { (t as any).updateText?.() })
             const r = ctx.config.TASK_HEIGHT / 2
             t.scale.set(1 / oversample)
             t.x = Math.round(r - t.width / 2)

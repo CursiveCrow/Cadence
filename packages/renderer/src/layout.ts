@@ -7,10 +7,15 @@ import type { TimelineConfig, TaskLike, TaskLayout } from './scene'
 
 export type TimeScale = 'hour' | 'day' | 'week' | 'month'
 
+// Shared zoom thresholds for consistent scale selection across renderer and UI
+export const DAY_THRESHOLD = 0.75
+export const HOUR_THRESHOLD = 2
+
 /**
  * Compute the effective rendering config given zoom (horizontal scale) and verticalScale (Y scaling).
  * Keeps DAY_WIDTH-derived scales consistent across the codebase.
  */
+
 export function computeEffectiveConfig(
   base: TimelineConfig,
   zoom: number,
@@ -31,8 +36,8 @@ export function computeEffectiveConfig(
 }
 
 export function getTimeScaleForZoom(zoom: number): TimeScale {
-  if (zoom >= 2) return 'hour'
-  if (zoom >= 0.75) return 'day'
+  if (zoom >= HOUR_THRESHOLD) return 'hour'
+  if (zoom >= DAY_THRESHOLD) return 'day'
   if (zoom >= 0.35) return 'week'
   return 'month'
 }
@@ -133,15 +138,7 @@ export function dayIndexToIsoDateUTC(dayIndex: number, projectStartDate: Date): 
   return utcDate.toISOString().split('T')[0]
 }
 
-export function offsetMsToIsoDateUTC(offsetMs: number, projectStartDate: Date): string {
-  const base = Date.UTC(
-    projectStartDate.getUTCFullYear(),
-    projectStartDate.getUTCMonth(),
-    projectStartDate.getUTCDate()
-  )
-  const utcDate = new Date(base + offsetMs)
-  return utcDate.toISOString().split('T')[0]
-}
+// Note: offsetMsToIsoDateUTC removed (was unused) to reduce API surface.
 
 /**
  * Compute task layout (moved from scene.ts) using config and staff list.
@@ -211,5 +208,87 @@ export function getGridParamsForZoom(
   return { minorWidthPx, majorWidthPx, minorStepDays, majorStepDays, minorAlpha, majorAlpha, scaleType: scale, baseDow, weekendAlpha, globalAlpha }
 }
 
+/**
+ * Unified viewport alignment used by both CPU drawing and GPU grid.
+ * Returns quantized viewport days (phase) and integer pixel offset for the viewport container.
+ */
+export function computeViewportAlignment(
+  config: TimelineConfig,
+  viewportXDays: number
+): { viewportXDaysQuantized: number; viewportPixelOffsetX: number } {
+  const dayWidth = Math.max(config.DAY_WIDTH, 0.0001)
+  const pixel = Math.round((viewportXDays || 0) * dayWidth)
+  const viewportPixelOffsetX = -pixel
+  const viewportXDaysQuantized = pixel / dayWidth
+  return { viewportXDaysQuantized, viewportPixelOffsetX }
+}
+
+/**
+ * Map a world day index to screen-space x using the unified alignment.
+ */
+export function worldDayToScreenX(
+  config: TimelineConfig,
+  dayIndex: number,
+  align: { viewportXDaysQuantized: number }
+): number {
+  return config.LEFT_MARGIN + (dayIndex - align.viewportXDaysQuantized) * config.DAY_WIDTH
+}
+
+/**
+ * Map a world day index to container-local x using the unified alignment.
+ */
+export function worldDayToContainerX(
+  config: TimelineConfig,
+  dayIndex: number,
+  align: { viewportXDaysQuantized: number; viewportPixelOffsetX: number }
+): number {
+  return worldDayToScreenX(config, dayIndex, align) - align.viewportPixelOffsetX
+}
 
 
+
+
+/**
+ * Compute x positions for vertical measure markers across the visible extent.
+ * Uses config.MEASURE_LENGTH_DAYS and config.MEASURE_OFFSET_DAYS if provided.
+ */
+/**
+ * Compute x positions for vertical measure markers across the visible extent using unified alignment.
+ * Uses config.MEASURE_LENGTH_DAYS and config.MEASURE_OFFSET_DAYS if provided and the provided alignment phase.
+ */
+export function getMeasureMarkerXsAligned(
+  config: TimelineConfig,
+  extendedWidth: number,
+  align: { viewportXDaysQuantized: number; viewportPixelOffsetX: number },
+  opts?: { measureLengthDays?: number; measureOffsetDays?: number }
+): number[] {
+  const measureLen = Math.max(1, Math.round(opts?.measureLengthDays ?? (config as any).MEASURE_LENGTH_DAYS ?? 0))
+  if (measureLen <= 0) return []
+  const dayWidth = Math.max(1, config.DAY_WIDTH)
+  const measureOffsetDays = Math.round(opts?.measureOffsetDays ?? (config as any).MEASURE_OFFSET_DAYS ?? 0)
+  const stepDays = measureLen
+
+  // Determine visible world-day span for container-local X in [0, extendedWidth]
+  const leftWorldDays = align.viewportXDaysQuantized + (align.viewportPixelOffsetX - config.LEFT_MARGIN) / dayWidth
+  const rightWorldDays = align.viewportXDaysQuantized + (align.viewportPixelOffsetX + extendedWidth - config.LEFT_MARGIN) / dayWidth
+
+  // Adjust by measure offset so that dayIndex = k * stepDays + measureOffsetDays
+  const firstK = Math.floor((leftWorldDays - measureOffsetDays) / stepDays) - 1
+  const lastK = Math.ceil((rightWorldDays - measureOffsetDays) / stepDays) + 1
+
+  const xs: number[] = []
+  for (let k = firstK; k <= lastK; k++) {
+    const dayIndex = k * stepDays + measureOffsetDays
+    const x = worldDayToContainerX(config, dayIndex, align)
+    if (x < -2) continue
+    if (x > extendedWidth + 2) break
+    xs.push(x)
+  }
+  return xs
+}
+
+
+
+
+// WGSL functions for grid-line location calculations shared with the GPU shader
+// WGSL grid helpers moved to gridShader.ts to decouple shader code from layout.

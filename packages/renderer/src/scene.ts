@@ -5,7 +5,8 @@
 
 import { Container, Graphics, Text, Application, Rectangle } from 'pixi.js'
 import { SpatialHash } from './spatial'
-import { getTimeScaleForZoom } from './layout'
+import { drawSelectionHighlight } from './shapes'
+import { getTimeScaleForZoom, getMeasureMarkerXsAligned, worldDayToContainerX } from './layout'
 import { computeGraphicsResolution, computeTextResolution } from './resolution'
 import type { Task, Dependency, Staff } from '@cadence/core'
 import type { RendererContext } from './types/context'
@@ -51,6 +52,8 @@ export interface TimelineConfig {
   MEASURE_COLOR?: number
   /** Line width in pixels for measure markers */
   MEASURE_LINE_WIDTH_PX?: number
+  /** Spacing between thick (on grid) and thin (left) measure bars in pixels (even) */
+  MEASURE_PAIR_SPACING_PX?: number
 }
 
 export type StaffLike = Staff
@@ -83,6 +86,7 @@ export function drawGridAndStaff(
   screenWidth: number,
   _screenHeight: number,
   zoom: number = 1,
+  alignment: { viewportXDaysQuantized: number; viewportPixelOffsetX: number },
   _useGpuGrid: boolean = true
 ): void {
   container.removeChildren()
@@ -96,7 +100,7 @@ export function drawGridAndStaff(
   // Height cap no longer needed for vertical lines (GPU grid handles them)
 
   // Align to whole pixels (scene is not scaled)
-  const align = (v: number) => Math.round(v)
+  const pixelAlign = (v: number) => Math.round(v)
 
   const scale = getTimeScaleForZoom(zoom)
   const dayWidth = config.DAY_WIDTH
@@ -112,39 +116,33 @@ export function drawGridAndStaff(
   let currentY = config.TOP_MARGIN
   staffs.forEach((staff) => {
     for (let line = 0; line < staff.numberOfLines; line++) {
-      const y = align(currentY + line * config.STAFF_LINE_SPACING)
+      const y = pixelAlign(currentY + line * config.STAFF_LINE_SPACING)
       graphics.moveTo(config.LEFT_MARGIN, y)
       graphics.lineTo(extendedWidth, y)
       graphics.stroke({ width: 1, color: config.STAFF_LINE_COLOR, alpha: 0.4 })
     }
 
     // Draw vertical measure markers spanning this staff's line band
-    const measureLen = Math.max(1, Math.round((config as any).MEASURE_LENGTH_DAYS || 0))
-    if (measureLen > 0) {
-      const dayWidth = Math.max(1, config.DAY_WIDTH)
-      const staffTop = align(currentY)
-      const staffBottom = align(currentY + (staff.numberOfLines - 1) * config.STAFF_LINE_SPACING)
-      const measureOffset = Math.round((config as any).MEASURE_OFFSET_DAYS || 0)
+    const xs = getMeasureMarkerXsAligned(config as any, extendedWidth, alignment)
+    if (xs.length > 0) {
+      const staffTop = pixelAlign(currentY)
+      const staffBottom = pixelAlign(currentY + (staff.numberOfLines - 1) * config.STAFF_LINE_SPACING)
       const color = (config as any).MEASURE_COLOR ?? 0xffffff
-      const lwThick = Math.max(2, Math.round((config as any).MEASURE_LINE_WIDTH_PX || 2))
-      const lwThin = 1
-      const pairSpacing = 2 // even pixels; center pair on grid line
-      // Compute first visible measure index
-      const maxMeasures = Math.ceil((extendedWidth - config.LEFT_MARGIN) / (measureLen * dayWidth)) + 2
-      for (let i = -1; i < maxMeasures; i++) {
-        const dayIndex = i * measureLen + measureOffset
-        const x = (config.LEFT_MARGIN + dayIndex * dayWidth)
-        if (x < config.LEFT_MARGIN - 2) continue
-        if (x > extendedWidth + 2) break
-        // Thin/Thick centered around the grid line x
-        const xThin = x - pairSpacing / 2
-        const xThick = x + pairSpacing / 2
-        graphics.moveTo(xThin, staffTop)
-        graphics.lineTo(xThin, staffBottom)
-        graphics.stroke({ width: lwThin, color, alpha: 0.35 })
+      const thickW = Math.max(2, Math.round((config as any).MEASURE_LINE_WIDTH_PX || 2))
+      const thinW = 1
+      // Even pixel spacing so the pair is centered about the grid line
+      let pairSpacing = Math.max(2, Math.round((config as any).MEASURE_PAIR_SPACING_PX ?? 2))
+      if (pairSpacing % 2 !== 0) pairSpacing += 1
+      for (const cx of xs) {
+        // Right-anchored: thick line is centered on the grid; thin line is offset to the left by pairSpacing
+        const xThick = Math.round(cx) + (thickW % 2 ? 0.5 : 0)
+        const xThin = Math.round(cx - pairSpacing) + (thinW % 2 ? 0.5 : 0)
         graphics.moveTo(xThick, staffTop)
         graphics.lineTo(xThick, staffBottom)
-        graphics.stroke({ width: lwThick, color, alpha: 0.55 })
+        graphics.stroke({ width: thickW, color, alpha: 0.7 })
+        graphics.moveTo(xThin, staffTop)
+        graphics.lineTo(xThin, staffBottom)
+        graphics.stroke({ width: thinW, color, alpha: 0.4 })
       }
     }
 
@@ -367,95 +365,7 @@ export function drawTaskNote(
  * Draws the task note body path at absolute coordinates into the provided Graphics.
  * This mirrors the rounded-rectangle-with-left-circle shape used for tasks.
  */
-export function drawNoteBodyPathAbsolute(
-  graphics: Graphics,
-  x: number,
-  topY: number,
-  width: number,
-  height: number
-): void {
-  const radius = height / 2
-  graphics.beginPath()
-  graphics.moveTo(x + radius, topY)
-  graphics.lineTo(x + width - 4, topY)
-  graphics.quadraticCurveTo(x + width, topY, x + width, topY + 4)
-  graphics.lineTo(x + width, topY + height - 4)
-  graphics.quadraticCurveTo(x + width, topY + height, x + width - 4, topY + height)
-  graphics.lineTo(x + radius, topY + height)
-  graphics.arc(x + radius, topY + radius, radius, Math.PI / 2, -Math.PI / 2, false)
-  graphics.closePath()
-}
-
-export function drawDependencyArrow(
-  graphics: Graphics,
-  srcX: number,
-  srcY: number,
-  dstX: number,
-  dstY: number,
-  color: number
-): void {
-  graphics.clear()
-  graphics.moveTo(srcX, srcY)
-  const controlOffset = Math.abs(dstX - srcX) * 0.3
-  graphics.bezierCurveTo(
-    srcX + controlOffset, srcY,
-    dstX - controlOffset, dstY,
-    dstX, dstY
-  )
-  graphics.stroke({ width: 2, color, alpha: 0.6 })
-
-  const angle = Math.atan2(dstY - srcY, dstX - srcX)
-  const arrowSize = 8
-  graphics.beginPath()
-  graphics.moveTo(dstX, dstY)
-  graphics.lineTo(
-    dstX - arrowSize * Math.cos(angle - Math.PI / 6),
-    dstY - arrowSize * Math.sin(angle - Math.PI / 6)
-  )
-  graphics.lineTo(
-    dstX - arrowSize * Math.cos(angle + Math.PI / 6),
-    dstY - arrowSize * Math.sin(angle + Math.PI / 6)
-  )
-  graphics.closePath()
-  graphics.fill({ color, alpha: 0.6 })
-}
-
-/**
- * Draw a selection highlight around a task note shape. Returns the created Graphics.
- */
-export function drawSelectionHighlight(
-  container: Container,
-  config: TimelineConfig,
-  layout: TaskLayout
-): Graphics {
-  const selectionGraphics = new Graphics()
-  const selectionPadding = 3
-
-  selectionGraphics.beginPath()
-  const selectionRadius = layout.radius + selectionPadding
-  selectionGraphics.moveTo(layout.startX + layout.radius, layout.topY - selectionPadding)
-  selectionGraphics.lineTo(layout.startX + layout.width - 4, layout.topY - selectionPadding)
-  selectionGraphics.quadraticCurveTo(
-    layout.startX + layout.width + selectionPadding, layout.topY - selectionPadding,
-    layout.startX + layout.width + selectionPadding, layout.topY + 4
-  )
-  selectionGraphics.lineTo(layout.startX + layout.width + selectionPadding, layout.topY + config.TASK_HEIGHT - 4)
-  selectionGraphics.quadraticCurveTo(
-    layout.startX + layout.width + selectionPadding, layout.topY + config.TASK_HEIGHT + selectionPadding,
-    layout.startX + layout.width - 4, layout.topY + config.TASK_HEIGHT + selectionPadding
-  )
-  selectionGraphics.lineTo(layout.startX + layout.radius, layout.topY + config.TASK_HEIGHT + selectionPadding)
-  selectionGraphics.arc(
-    layout.startX + layout.radius, layout.centerY,
-    selectionRadius,
-    Math.PI / 2, -Math.PI / 2,
-    false
-  )
-  selectionGraphics.closePath()
-  selectionGraphics.stroke({ width: 2, color: config.SELECTION_COLOR, alpha: 1 })
-  container.addChild(selectionGraphics)
-  return selectionGraphics
-}
+// Shapes moved to ./shapes
 
 /**
  * Draw a dependency preview arrow between two points into the given container.
@@ -799,7 +709,7 @@ export class TimelineSceneManager {
   /**
    * Draw or update the "today" marker line in background layer. Uses UTC date for consistency.
    */
-  updateTodayMarker(projectStartDate: Date, config: TimelineConfig, screenHeight: number): void {
+  updateTodayMarker(projectStartDate: Date, config: TimelineConfig, alignment: { viewportXDaysQuantized: number; viewportPixelOffsetX: number }, screenHeight: number): void {
     try {
       const baseUTC = Date.UTC(projectStartDate.getUTCFullYear(), projectStartDate.getUTCMonth(), projectStartDate.getUTCDate())
       const now = new Date()
@@ -807,12 +717,11 @@ export class TimelineSceneManager {
       const msPerDay = 24 * 60 * 60 * 1000
       const dayIndex = Math.floor((todayUTC - baseUTC) / msPerDay)
       if (!Number.isFinite(dayIndex)) return
-      const x = config.LEFT_MARGIN + dayIndex * Math.max(0, config.DAY_WIDTH)
+      const x = worldDayToContainerX(config as any, dayIndex, alignment)
       const line = this.todayLine || new Graphics()
       line.clear()
-      const ax = Math.round(x) + 0.5
-      line.moveTo(ax, 0)
-      line.lineTo(ax, Math.max(0, screenHeight))
+      line.moveTo(x, 0)
+      line.lineTo(x, Math.max(0, screenHeight))
       // Warm accent color with higher alpha to be readable across backgrounds
       const accent = (config.TODAY_COLOR ?? config.SELECTION_COLOR ?? 0xF59E0B) as number
       line.stroke({ width: 2, color: accent, alpha: 0.9 })
@@ -979,5 +888,3 @@ export class TimelineSceneManager {
 
 // Example plugin export for consumers to import and register
 export const ExampleStatusGlyphPlugin: RendererPlugin = {}
-
-

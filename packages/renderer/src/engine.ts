@@ -1,14 +1,15 @@
 import { Application, Container, Rectangle } from 'pixi.js'
-import { createTimelineLayers, TimelineSceneManager, drawDependencyArrow, type TimelineConfig, type RendererPlugin } from './scene'
+import { createTimelineLayers, TimelineSceneManager, type TimelineConfig, type RendererPlugin } from './scene'
+import { drawDependencyArrow } from './shapes'
 import { StatusGlyphPlugin } from './plugins/status-glyph'
 import { TimelineDnDController } from './dnd'
 import { PanZoomController, ViewportState } from './panzoom'
 import { checkWebGPUAvailability, logWebGPUStatus, logRendererPreference } from './webgpu-check'
 import { createGpuTimeGrid, GpuTimeGrid } from './gpuGrid'
-import { computeEffectiveConfig, snapXToTimeWithConfig, computeTaskLayout, getGridParamsForZoom } from './layout'
+import { computeEffectiveConfig, snapXToTimeWithConfig, computeTaskLayout, getGridParamsForZoom, computeViewportAlignment } from './layout'
 import { GridManager } from './gridManager'
-import { devLog } from './devlog'
-import { setRendererMetrics } from './index'
+import { devLog, safeCall } from './devlog'
+
 import type { Task, Dependency, Staff, DependencyType } from '@cadence/core'
 
 // Intentionally imported for future dynamic tick density; currently computed in scene
@@ -219,6 +220,7 @@ export class TimelineRendererEngine {
     render(data: { tasks: EngineTasks; dependencies: EngineDependencies; staffs: Staff[]; selection: string[] }, viewport: { x: number; y: number; zoom: number }): void {
         if (!this.app || !this.layers || !this.scene) return;
 
+        this._ensureStageHitArea();
         this._updateDataAndViewport(data, viewport);
         const effectiveCfg = this._updateEffectiveConfig(viewport);
 
@@ -233,6 +235,17 @@ export class TimelineRendererEngine {
         this.scene.rebuildSpatialIndex(effectiveCfg as any);
     }
 
+    private _ensureStageHitArea(): void {
+        const app = this.app
+        if (!app) return
+        const stage: any = app.stage as any
+        const w = Math.max(0, app.screen.width)
+        const h = Math.max(0, app.screen.height)
+        if (!stage.hitArea || stage.hitArea.width !== w || stage.hitArea.height !== h) {
+            try { stage.hitArea = new Rectangle(0, 0, w, h) } catch (err) { devLog.warn('update stage.hitArea failed', err) }
+        }
+    }
+
     private _updateDataAndViewport(data: { tasks: EngineTasks; dependencies: EngineDependencies; staffs: Staff[]; selection: string[] }, viewport: ViewportState): void {
         this.currentData = { tasks: data.tasks, dependencies: data.dependencies, staffs: data.staffs };
         this.getViewport = () => viewport;
@@ -245,22 +258,15 @@ export class TimelineRendererEngine {
         return computeEffectiveConfig(cfg as any, viewport.zoom, this.verticalScale);
     }
 
-    private _updateUIMetrics(effectiveCfg: TimelineConfig): void {
-        try {
-            setRendererMetrics({
-                resolution: (this.app?.renderer as any)?.resolution || (window.devicePixelRatio || 1),
-                dayWidthPx: (effectiveCfg as any).DAY_WIDTH,
-                leftMarginPx: (effectiveCfg as any).LEFT_MARGIN,
-            });
-        } catch (err) {
-            devLog.warn('setRendererMetrics failed', err);
-        }
+    private _updateUIMetrics(_: TimelineConfig): void {
+        // No-op: Previously used to feed UI header via global metrics; header now asks layout for alignment directly.
     }
 
     private _renderGrid(data: { staffs: Staff[] }, viewport: ViewportState, effectiveCfg: TimelineConfig): void {
         if (!this.app) return;
-        this.gridManager?.ensure(this.layers!.background, effectiveCfg as any, data.staffs, this.opts.utils.getProjectStartDate(), this.app.screen.width, this.app.screen.height, viewport.zoom, true);
-        this.scene?.updateTodayMarker(this.opts.utils.getProjectStartDate(), effectiveCfg as any, this.app.screen.height);
+        const alignment = computeViewportAlignment(effectiveCfg as any, viewport.x || 0);
+        this.gridManager?.ensure(this.layers!.background, effectiveCfg as any, data.staffs, this.opts.utils.getProjectStartDate(), this.app.screen.width, this.app.screen.height, viewport.zoom, alignment, true);
+        this.scene?.updateTodayMarker(this.opts.utils.getProjectStartDate(), effectiveCfg as any, alignment, this.app.screen.height);
         this._updateGpuGrid(viewport, effectiveCfg);
     }
 
@@ -277,13 +283,14 @@ export class TimelineRendererEngine {
 
             gpuGrid.container.visible = true;
             gpuGrid.setSize(screenW, screenH);
-            const roundedViewportXDays = Math.round((viewport.x || 0) * cfgEff.DAY_WIDTH) / Math.max(cfgEff.DAY_WIDTH, 0.0001);
+            const alignment = computeViewportAlignment(cfgEff as any, viewport.x || 0);
+            const res = (this.app.renderer as any).resolution ?? (typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1);
             gpuGrid.updateUniforms({
                 screenWidth: screenW,
                 screenHeight: screenH,
-                leftMarginPx: cfgEff.LEFT_MARGIN,
-                viewportXDays: roundedViewportXDays,
-                dayWidthPx: cfgEff.DAY_WIDTH,
+                leftMarginPx: cfgEff.LEFT_MARGIN * res,
+                viewportXDays: alignment.viewportXDaysQuantized,
+                dayWidthPx: cfgEff.DAY_WIDTH * res,
                 minorStepDays: gp.minorStepDays,
                 majorStepDays: gp.majorStepDays,
                 minorColor: cfgEff.GRID_COLOR_MINOR,
@@ -305,8 +312,8 @@ export class TimelineRendererEngine {
 
     private _updateViewportTransform(viewport: ViewportState, effectiveCfg: TimelineConfig): void {
         if (!this.layers) return;
-        const offsetX = -Math.round((viewport.x || 0) * effectiveCfg.DAY_WIDTH);
-        this.layers.viewport.x = Number.isFinite(offsetX) ? offsetX : 0;
+        const alignment = computeViewportAlignment(effectiveCfg as any, viewport.x || 0);
+        this.layers.viewport.x = Number.isFinite(alignment.viewportPixelOffsetX) ? alignment.viewportPixelOffsetX : 0;
         this.layers.viewport.y = Math.round(Number.isFinite(-viewport.y) ? -viewport.y : 0);
         this.layers.viewport.scale.set(1, 1);
     }
@@ -353,17 +360,17 @@ export class TimelineRendererEngine {
     getViewportScale(): number { return this.getViewport().zoom || 1 }
 
     destroy(): void {
-        try { this.dnd?.destroy() } catch (err) { devLog.warn('dnd.destroy failed', err) }
-        try { this.panzoom?.destroy() } catch (err) { devLog.warn('panzoom.destroy failed', err) }
+        safeCall('dnd.destroy failed', () => { this.dnd?.destroy() })
+        safeCall('panzoom.destroy failed', () => { this.panzoom?.destroy() })
         this.dnd = null
         this.panzoom = null
         const app = this.app
         if (app) {
-            try { app.ticker.stop() } catch (err) { devLog.warn('app.ticker.stop failed', err) }
-            try { app.stage.removeAllListeners() } catch (err) { devLog.warn('stage.removeAllListeners failed', err) }
-            try { app.destroy(true, { children: true, texture: true, textureSource: true, context: true }) } catch (err) { devLog.warn('app.destroy failed', err) }
+            safeCall('app.ticker.stop failed', () => { app.ticker.stop() })
+            safeCall('stage.removeAllListeners failed', () => { app.stage.removeAllListeners() })
+            safeCall('app.destroy failed', () => { app.destroy(true, { children: true, texture: true, textureSource: true, context: true }) })
         }
-        try { this.scene?.destroy() } catch (err) { devLog.warn('scene.destroy failed', err) }
+        safeCall('scene.destroy failed', () => { this.scene?.destroy() })
         this.layers = null
         this.scene = null
         this.app = null
@@ -371,5 +378,3 @@ export class TimelineRendererEngine {
         this.tickerAdded = false
     }
 }
-
-

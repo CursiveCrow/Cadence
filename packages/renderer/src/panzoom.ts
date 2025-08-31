@@ -1,5 +1,5 @@
 import { Application, Container } from 'pixi.js'
-import { devLog } from './devlog'
+import { devLog, safeCall } from './devlog'
 
 export interface ViewportState { x: number; y: number; zoom: number }
 export interface PanZoomCallbacks {
@@ -26,16 +26,16 @@ export class PanZoomController {
     }
 
     destroy(): void {
-        try { this.app.stage.off('wheel', this.onWheel as any) } catch (err) { devLog.warn('panzoom: off wheel failed', err) }
+        safeCall('panzoom: off wheel failed', () => { this.app.stage.off('wheel', this.onWheel as any) })
         const viewEl = this.app.view as HTMLCanvasElement | null
-        try { viewEl?.removeEventListener('pointerdown', this.onPointerDownDom as any, { capture: true } as any) } catch (err) { devLog.warn('panzoom: remove pointerdown failed', err) }
-        try { window.removeEventListener('pointermove', this.onPointerMoveWin as any, true) } catch (err) { devLog.warn('panzoom: remove pointermove(win) failed', err) }
-        try { window.removeEventListener('pointermove', this.onPointerMoveZoom as any, true) } catch (err) { devLog.warn('panzoom: remove pointermove(zoom) failed', err) }
-        try { window.removeEventListener('pointerup', this.endPan as any, true) } catch (err) { devLog.warn('panzoom: remove pointerup(endPan) failed', err) }
-        try { window.removeEventListener('pointerup', this.endZoom as any, true) } catch (err) { devLog.warn('panzoom: remove pointerup(endZoom) failed', err) }
-        try { window.removeEventListener('blur', this.endPan as any, true) } catch (err) { devLog.warn('panzoom: remove blur failed', err) }
-        try { window.removeEventListener('keydown', this.onKeyDown as any, true) } catch (err) { devLog.warn('panzoom: remove keydown failed', err) }
-        try { window.removeEventListener('keyup', this.onKeyUp as any, true) } catch (err) { devLog.warn('panzoom: remove keyup failed', err) }
+        safeCall('panzoom: remove pointerdown failed', () => { viewEl?.removeEventListener('pointerdown', this.onPointerDownDom as any, { capture: true } as any) })
+        safeCall('panzoom: remove pointermove(win) failed', () => { window.removeEventListener('pointermove', this.onPointerMoveWin as any, true) })
+        safeCall('panzoom: remove pointermove(zoom) failed', () => { window.removeEventListener('pointermove', this.onPointerMoveZoom as any, true) })
+        safeCall('panzoom: remove pointerup(endPan) failed', () => { window.removeEventListener('pointerup', this.endPan as any, true) })
+        safeCall('panzoom: remove pointerup(endZoom) failed', () => { window.removeEventListener('pointerup', this.endZoom as any, true) })
+        safeCall('panzoom: remove blur failed', () => { window.removeEventListener('blur', this.endPan as any, true) })
+        safeCall('panzoom: remove keydown failed', () => { window.removeEventListener('keydown', this.onKeyDown as any, true) })
+        safeCall('panzoom: remove keyup failed', () => { window.removeEventListener('keyup', this.onKeyUp as any, true) })
     }
 
     private attach(): void {

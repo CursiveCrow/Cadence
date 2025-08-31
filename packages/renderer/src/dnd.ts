@@ -1,5 +1,6 @@
 import { Application, Container, Graphics, Rectangle } from 'pixi.js'
-import { TimelineConfig, TaskLike, TaskLayout, TimelineSceneManager, drawNoteBodyPathAbsolute } from './scene'
+import { TimelineConfig, TaskLike, TaskLayout, TimelineSceneManager } from './scene'
+import { drawNoteBodyPathAbsolute } from './shapes'
 import { DependencyType } from '@cadence/core'
 
 type StaffLike = any

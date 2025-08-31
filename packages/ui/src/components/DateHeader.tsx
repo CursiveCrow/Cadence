@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from 'react'
 import '../styles/tokens.css'
 import '../styles/ui.css'
-import { DAY_THRESHOLD, HOUR_THRESHOLD, computeDateHeaderHeight, computeDateHeaderViewModel } from './dateHeaderUtils'
+import { DAY_THRESHOLD, HOUR_THRESHOLD, computeDateHeaderHeight, computeDateHeaderViewModel } from '@cadence/renderer'
 
 export { computeDateHeaderHeight }
 
@@ -18,6 +18,7 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
     const zoom = viewport.zoom || 1
     const startDate = useMemo(() => projectStart, [projectStart])
     const dragRef = useRef<{ active: boolean; originLocalX: number; startZoom: number }>({ active: false, originLocalX: 0, startZoom: zoom })
+    const containerRef = useRef<HTMLDivElement>(null)
 
     const dynamicHeight = Math.max(height, computeDateHeaderHeight(zoom))
     const containerStyle: React.CSSProperties = {
@@ -30,7 +31,8 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
     }
 
     const { monthLabels, monthTickXs, dayLabels, hourLabels, dayTickXs, hourTickXs } = useMemo(() => {
-        return computeDateHeaderViewModel({ viewport, projectStart: startDate, leftMargin, dayWidth })
+        const w = containerRef.current?.clientWidth ?? window.innerWidth ?? 1200
+        return computeDateHeaderViewModel({ viewport, projectStart: startDate, leftMargin, dayWidth, width: w })
     }, [viewport.x, zoom, leftMargin, dayWidth, startDate])
 
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -74,7 +76,7 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
     const hourTop = bandH + bandH * hoursProgress
 
     return (
-        <div className="ui-datehdr ui-text" style={containerStyle} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerLeave}>
+        <div ref={containerRef} className="ui-datehdr ui-text" style={containerStyle} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerLeave}>
             {/* Months band */}
             <div className="ui-absolute ui-datehdr-band" style={{ left: 0, right: 0, top: monthTop }}>
                 {/* subtle separator */}
@@ -110,5 +112,4 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
         </div>
     )
 }
-
 

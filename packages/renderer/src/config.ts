@@ -5,9 +5,14 @@
 import type { TimelineConfig } from './scene'
 import { PROJECT_START_DATE as SHARED_PROJECT_START_DATE } from '@cadence/config'
 
+const __cssColorCache = new Map<string, number>()
+export function clearCssColorCache(): void { __cssColorCache.clear() }
+
 function cssVarColorToHex(varName: string, fallback: number): number {
   try {
     if (typeof window === 'undefined' || !window.document) return fallback
+    const cached = __cssColorCache.get(varName)
+    if (typeof cached === 'number') return cached
     const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
     if (!value) return fallback
     // Hex format
@@ -22,7 +27,9 @@ function cssVarColorToHex(varName: string, fallback: number): number {
           : hex,
         16
       )
-      return Number.isFinite(n) ? n : fallback
+      const fin = Number.isFinite(n) ? n : fallback
+      __cssColorCache.set(varName, fin)
+      return fin
     }
     // rgb/rgba format
     const m = value.match(/rgba?\(([^)]+)\)/i)
@@ -32,7 +39,9 @@ function cssVarColorToHex(varName: string, fallback: number): number {
         const [r, g, b] = parts
         const n =
           ((Math.round(r) & 0xff) << 16) | ((Math.round(g) & 0xff) << 8) | (Math.round(b) & 0xff)
-        return n >>> 0
+        const fin = n >>> 0
+        __cssColorCache.set(varName, fin)
+        return fin
       }
     }
     return fallback
@@ -66,19 +75,21 @@ export const TIMELINE_CONFIG: TimelineConfig = {
   TODAY_COLOR: cssVarColorToHex('--ui-color-accent', 0xf59e0b),
   DRAW_STAFF_LABELS: false,
   NOTE_START_PADDING: 2,
-  // Measures: default to 7-day bars; align to project start; subtle color/width
+  // Measures: default to 7-day bars; align to project start; double-bar visuals
   MEASURE_LENGTH_DAYS: 7,
   MEASURE_OFFSET_DAYS: 0,
   MEASURE_COLOR: cssVarColorToHex('--ui-color-border', 0xffffff),
-  MEASURE_LINE_WIDTH_PX: 2,
+  MEASURE_LINE_WIDTH_PX: 3,
+  // Spacing between thick (on grid) and thin bar (to the left) in pixels; enforced even
+  MEASURE_PAIR_SPACING_PX: 4,
 }
 
 // Mapping from task status to simple glyphs used in UI
 export const STATUS_TO_ACCIDENTAL: Record<string, string> = {
   not_started: '',
-  in_progress: '…',
-  completed: '✓',
-  blocked: '!',
+  in_progress: '♯',
+  completed: '♮',
+  blocked: '♭',
   cancelled: '×',
 }
 

@@ -29,4 +29,11 @@ export const devLog = {
     error: (...args: any[]) => { if (DEV) { try { console.error('[renderer]', ...args) } catch { } } },
 }
 
+/**
+ * Execute a callback safely, logging any thrown error in dev builds with a label.
+ */
+export function safeCall(label: string, fn: () => void): void {
+    try { fn() } catch (err) { devLog.warn(label, err) }
+}
+
 

@@ -100,14 +100,25 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
                 await engine.init()
                 engineRef.current = engine
                 appRef.current = engine.getApplication() as any
-                    // Expose viewport setter for header zoom handler (local only)
+                // Expose helpers only in dev to avoid leaking globals in production
+                const isDev = (() => {
+                    try { return !!(import.meta as any)?.env?.DEV } catch { }
+                    try {
+                        const p: any = (typeof globalThis !== 'undefined') ? (globalThis as any).process : undefined
+                        return !!p && p.env && p.env.NODE_ENV !== 'production'
+                    } catch { }
+                    return false
+                })()
+                if (isDev) {
                     ; (window as any).__CADENCE_SET_VIEWPORT = (v: { x: number; y: number; zoom: number }) => {
                         try { engineRef.current && engineRef.current.render({ tasks: tasksRef.current, dependencies: depsRef.current, staffs: staffsRef.current, selection: [] }, v) } catch { }
                     }
+                }
+                // Expose vertical scale setter in all builds; UI depends on this for sidebar vertical zoom control
+                ; (window as any).__CADENCE_SET_VERTICAL_SCALE = (s: number) => {
+                    try { engineRef.current?.setVerticalScale(s) } catch { }
+                }
                 if (mounted) setReady(true)
-                    ; (window as any).__CADENCE_SET_VERTICAL_SCALE = (s: number) => {
-                        try { engineRef.current?.setVerticalScale(s) } catch { }
-                    }
             } finally {
                 initializingRef.current = false
             }
@@ -136,5 +147,3 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
 
 export default TimelineCanvas
 export * from './errors'
-
-
