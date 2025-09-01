@@ -1,0 +1,97 @@
+/**
+ * Application Constants
+ * Central location for all application constants
+ */
+
+export const CONSTANTS = {
+    // Timeline rendering
+    DEFAULT_DAY_WIDTH: 30,
+    DEFAULT_TASK_HEIGHT: 20,
+    DEFAULT_TOP_MARGIN: 60,
+    DEFAULT_LEFT_MARGIN: 120,
+    DEFAULT_STAFF_SPACING: 120,
+    DEFAULT_STAFF_LINE_SPACING: 24,
+
+    // Zoom limits
+    MIN_ZOOM: 0.1,
+    MAX_ZOOM: 5,
+    ZOOM_SPEED: 0.1,
+
+    // Pan/zoom configuration
+    PAN_SPEED: 1,
+    WHEEL_SPEED: 1,
+
+    // Vertical scale limits
+    VERTICAL_SCALE_MIN: 0.5,
+    VERTICAL_SCALE_MAX: 2,
+
+    // Colors
+    GRID_COLOR_MINOR: 0xe0e0e0,
+    GRID_COLOR_MAJOR: 0xc0c0c0,
+    TASK_COLOR: 0x4285f4,
+    TASK_COLOR_HOVER: 0x5a95f5,
+    TASK_COLOR_SELECTED: 0x1a73e8,
+    DEPENDENCY_COLOR: 0x666666,
+    SELECTION_COLOR: 0x4285f4,
+    TODAY_LINE_COLOR: 0xff0000,
+    WEEKEND_FILL_COLOR: 0xf5f5f5,
+
+    // Task status colors
+    STATUS_COLOR_NOT_STARTED: 0x757575,
+    STATUS_COLOR_IN_PROGRESS: 0x2196f3,
+    STATUS_COLOR_COMPLETED: 0x4caf50,
+    STATUS_COLOR_BLOCKED: 0xf44336,
+    STATUS_COLOR_CANCELLED: 0x9e9e9e,
+
+    // Animation
+    ANIMATION_DURATION: 300,
+
+    // Storage keys
+    STORAGE_KEY_PROJECT: 'cadence-project',
+    STORAGE_KEY_PREFERENCES: 'cadence-preferences',
+    STORAGE_KEY_RECENT_PROJECTS: 'cadence-recent-projects',
+
+    // API endpoints (if using backend)
+    API_BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:3001',
+
+    // Feature flags
+    ENABLE_COLLABORATION: false,
+    ENABLE_CLOUD_SYNC: false,
+    ENABLE_OFFLINE_MODE: true,
+    ENABLE_UNDO_REDO: true,
+    ENABLE_KEYBOARD_SHORTCUTS: true,
+    ENABLE_TOUCH_GESTURES: true,
+
+    // Limits
+    MAX_TASKS_PER_PROJECT: 1000,
+    MAX_DEPENDENCIES_PER_PROJECT: 2000,
+    MAX_STAFFS_PER_PROJECT: 20,
+    MAX_UNDO_HISTORY: 50,
+    MAX_RECENT_PROJECTS: 10,
+
+    // Performance
+    RENDER_DEBOUNCE_MS: 16, // ~60fps
+    SEARCH_DEBOUNCE_MS: 300,
+    AUTOSAVE_INTERVAL_MS: 30000, // 30 seconds
+
+    // Validation
+    MIN_TASK_DURATION_DAYS: 1,
+    MAX_TASK_DURATION_DAYS: 365,
+    MIN_STAFF_LINES: 1,
+    MAX_STAFF_LINES: 20,
+    MAX_TASK_TITLE_LENGTH: 100,
+    MAX_TASK_DESCRIPTION_LENGTH: 1000,
+    MAX_PROJECT_NAME_LENGTH: 50
+}
+
+export const PAN_ZOOM_CONFIG = {
+    MIN_ZOOM: CONSTANTS.MIN_ZOOM,
+    MAX_ZOOM: CONSTANTS.MAX_ZOOM,
+    ZOOM_SPEED: CONSTANTS.ZOOM_SPEED,
+    PAN_SPEED: CONSTANTS.PAN_SPEED,
+    WHEEL_SPEED: CONSTANTS.WHEEL_SPEED,
+    VERTICAL_SCALE_MIN: CONSTANTS.VERTICAL_SCALE_MIN,
+    VERTICAL_SCALE_MAX: CONSTANTS.VERTICAL_SCALE_MAX
+}
+
+export default CONSTANTS
