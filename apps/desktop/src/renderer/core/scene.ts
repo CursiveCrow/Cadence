@@ -9,6 +9,7 @@ import { drawSelectionHighlight } from '../rendering/shapes'
 import { getTimeScaleForZoom, getMeasureMarkerXsAligned, worldDayToContainerX } from '../utils/layout'
 import { computeGraphicsResolution, computeTextResolution } from '../utils/resolution'
 import { devLog } from '../utils/devlog'
+import { CONSTANTS, UI_CONFIG } from '@cadence/config'
 import type { Task, Dependency, Staff } from '@cadence/core'
 import type { RendererContext } from '../types/context'
 
@@ -458,7 +459,7 @@ export class TimelineSceneManager {
     this.taskAnchors = new Map()
     this.taskData = new Map()
     this.plugins = []
-    this.spatial = new SpatialHash(200)
+    this.spatial = new SpatialHash(CONSTANTS.SPATIAL_HASH_CELL_SIZE)
     this.lastZoom = 1
     this.providerGetConfig = () => ({
       LEFT_MARGIN: 0,
@@ -744,7 +745,7 @@ export class TimelineSceneManager {
       const box = new Container()
       const bg = new Graphics()
       box.addChild(bg)
-      const t = new Text('', { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', fontSize: 12, fill: 0xffffff, align: 'left', wordWrap: true, wordWrapWidth: 280 })
+      const t = new Text('', { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', fontSize: 12, fill: 0xffffff, align: 'left', wordWrap: true, wordWrapWidth: UI_CONFIG.TOOLTIPS.TASK_POPUP_WIDTH })
         ; (t as any).resolution = computeTextResolution(1, 1)
       box.addChild(t)
         ; (box as any).__bg = bg
@@ -758,7 +759,7 @@ export class TimelineSceneManager {
     // Strip markdown for Text measurement only
     const plain = (md || '').replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g, '$1').replace(/[*_`]/g, '')
     textNode.text = plain
-    const padding = 8
+    const padding = UI_CONFIG.TASK_POPUP.PADDING
     const tx = Math.round(x + 10)
     const ty = Math.round(Math.max(0, taskLayout.topY - (textNode.height + padding * 2) - 6))
     tipBox!.x = tx
@@ -817,7 +818,7 @@ export class TimelineSceneManager {
       stem.moveTo(anchorAbsX, anchorAbsY)
       stem.lineTo(headRightX, headY)
       // Match tooltip color (0x111111) and make stem slightly thicker for readability
-      stem.stroke({ width: 3, color: 0x111111, alpha: 0.9 })
+      stem.stroke({ width: UI_CONFIG.TOOLTIPS.STEM_WIDTH, color: 0x111111, alpha: UI_CONFIG.TOOLTIPS.STEM_BACKGROUND_ALPHA })
     }
 
     // Draw faint hover row highlight using the actual staff bounds (from first to last staff line)

@@ -5,6 +5,7 @@ import { TIMELINE_CONFIG, PROJECT_START_DATE } from '@cadence/renderer'
 import type { RendererViewProps } from './CadenceMain'
 import '../styles/CadenceMain.css'
 import '../styles/TimelineRenderer.css'
+import { useTimelineContext } from '../context/TimelineContext'
 
 interface TimelineViewProps {
   RendererView: React.ComponentType<RendererViewProps>
@@ -15,18 +16,12 @@ interface TimelineViewProps {
   viewport: { x: number; y: number; zoom: number }
   staffs: Staff[]
   verticalScale: number
-  onDragStart: () => void
-  onDragEnd: () => void
-  onVerticalScaleChange: (scale: number) => void
   onZoomChange: (zoom: number, anchorLocalX: number) => void
-  onSelect: (ids: string[]) => void
-  onViewportChange: (v: { x: number; y: number; zoom: number }) => void
-  onUpdateTask: (projectId: string, id: string, updates: Partial<Task>) => void
-  onCreateDependency: (projectId: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: any }) => void
 }
 
 export const TimelineView: React.FC<TimelineViewProps> = (props) => {
   const RendererView = props.RendererView
+  const ctx = useTimelineContext()
   return (
     <div className="main-column">
       <UIDateHeader
@@ -46,13 +41,13 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
           staffs={props.staffs}
           verticalScale={props.verticalScale}
           className="timeline-canvas"
-          onSelect={props.onSelect}
-          onViewportChange={props.onViewportChange}
-          onDragStart={props.onDragStart}
-          onDragEnd={props.onDragEnd}
-          onVerticalScaleChange={props.onVerticalScaleChange}
-          onUpdateTask={props.onUpdateTask}
-          onCreateDependency={props.onCreateDependency}
+          onSelect={ctx.onSelect}
+          onViewportChange={ctx.onViewportChange}
+          onDragStart={ctx.onDragStart}
+          onDragEnd={ctx.onDragEnd}
+          onVerticalScaleChange={ctx.onVerticalScaleChange}
+          onUpdateTask={ctx.onUpdateTask}
+          onCreateDependency={ctx.onCreateDependency as any}
         />
       </div>
     </div>

@@ -1,5 +1,7 @@
 import { Provider } from 'react-redux'
+import { PersistGate } from 'redux-persist/integration/react'
 import { store } from '@cadence/state'
+import { persistor } from '@cadence/state'
 import { CadenceMain } from '@cadence/surface'
 import './App.css'
 import React from 'react'
@@ -12,11 +14,13 @@ function App() {
 
   return (
     <Provider store={store}>
-      <PlatformServicesContext.Provider value={services}>
-        <div className="App">
-          <CadenceMain RendererView={TimelineCanvas} />
-        </div>
-      </PlatformServicesContext.Provider>
+      <PersistGate loading={null} persistor={persistor}>
+        <PlatformServicesContext.Provider value={services}>
+          <div className="App">
+            <CadenceMain RendererView={TimelineCanvas} />
+          </div>
+        </PlatformServicesContext.Provider>
+      </PersistGate>
     </Provider>
   )
 }

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import type { RootState } from '@cadence/state'
-import { useProjectTasks, useProjectDependencies, useTask, createDependency, updateTask as crdtUpdateTask, createTask as crdtCreateTask } from '@cadence/state/crdt'
+import { makeSelectSelectedTask, selectTasksByProject, selectDependenciesByProject } from '@cadence/state'
+import { upsertTask, updateTask as rdxUpdateTask, upsertDependency } from '@cadence/state'
 import { TaskStatus, Task, Dependency, Staff } from '@cadence/core'
 import { ProjectHeader as UIProjectHeader } from '@cadence/ui'
 import { StaffManager } from './StaffManager'
@@ -12,6 +13,7 @@ import { Sidebar } from './Sidebar'
 import { TimelineView } from './TimelineView'
 import { TIMELINE_CONFIG } from '@cadence/renderer'
 import { setVerticalScale, setSelection, updateStaff, setViewport, updateViewport } from '@cadence/state'
+import { TimelineContext } from '../context/TimelineContext'
 import '../styles/CadenceMain.css'
 
 export interface RendererViewProps {
@@ -43,15 +45,15 @@ export const CadenceMain: React.FC<CadenceMainProps> = ({ RendererView }) => {
   const verticalZoomSession = useRef<{ startZoom: number; startViewportY: number; anchorPx: number } | null>(null)
 
   const { demoProjectId } = useDemoProject()
-  const tasks = useProjectTasks(demoProjectId)
-  const dependenciesData = useProjectDependencies(demoProjectId)
+  const tasks = useSelector(selectTasksByProject(demoProjectId))
+  const dependenciesData = useSelector(selectDependenciesByProject(demoProjectId))
   const [popupPosition, setPopupPosition] = useState<{ x: number, y: number } | null>(null)
   const [isDragInProgress, setIsDragInProgress] = useState(false)
   const [showStaffManager, setShowStaffManager] = useState(false)
   const { calculatePopupPosition } = useTaskPopupPosition(tasks)
 
-  const selectedTaskId = selection.length > 0 ? selection[0] : null
-  const selectedTask = useTask(demoProjectId, selectedTaskId || '')
+  const selectSelectedTask = React.useMemo(() => makeSelectSelectedTask(), [])
+  const selectedTask = useSelector((state: RootState) => selectSelectedTask(state, demoProjectId))
 
   const handleClosePopup = useCallback(() => { dispatch(setSelection([])); setPopupPosition(null) }, [dispatch])
 
@@ -78,15 +80,12 @@ export const CadenceMain: React.FC<CadenceMainProps> = ({ RendererView }) => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
-    crdtCreateTask(demoProjectId, newTask)
+    dispatch(upsertTask({ projectId: demoProjectId, task: newTask }))
   }
 
-  const handleUpdateTask = (updates: Partial<Task>) => { if (selectedTask) crdtUpdateTask(demoProjectId, selectedTask.id, updates) }
+  const handleUpdateTask = (updates: Partial<Task>) => { if (selectedTask) dispatch(rdxUpdateTask({ projectId: demoProjectId, taskId: selectedTask.id, updates })) }
 
-  const dependencies: Record<string, Dependency> = Object.entries(dependenciesData).reduce((acc, [id, dep]) => {
-    acc[id] = { ...(dep as any), id, projectId: demoProjectId, createdAt: '', updatedAt: '' } as any
-    return acc
-  }, {} as Record<string, Dependency>)
+  const dependencies: Record<string, Dependency> = dependenciesData
 
   return (
     <div className="cadence-main">
@@ -114,31 +113,34 @@ export const CadenceMain: React.FC<CadenceMainProps> = ({ RendererView }) => {
           }}
           onChangeTimeSignature={(staffId, timeSignature) => { dispatch(updateStaff({ id: staffId, updates: { timeSignature } as any })) }}
         />
-        <TimelineView
-          RendererView={RendererView}
-          projectId={demoProjectId}
-          tasks={tasks}
-          dependencies={dependencies}
-          selection={selection}
-          viewport={viewport}
-          staffs={staffs}
-          verticalScale={verticalScaleValue}
-          onDragStart={() => setIsDragInProgress(true)}
-          onDragEnd={() => setIsDragInProgress(false)}
-          onVerticalScaleChange={(s) => { dispatch(setVerticalScale(s)); dispatch(setViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom })) }}
-          onZoomChange={(z, anchorLocalX) => {
-            const ppd0 = TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.0001, viewport.zoom)
-            const ppd1 = TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.1, z)
-            const anchorPxFromGrid = anchorLocalX - TIMELINE_CONFIG.LEFT_MARGIN
-            const worldAtAnchor = viewport.x + (anchorPxFromGrid / ppd0)
-            const newX = Math.max(0, worldAtAnchor - (anchorPxFromGrid / ppd1))
-            dispatch(setViewport({ x: Math.round(newX), y: viewport.y, zoom: z }))
-          }}
-          onSelect={(ids) => dispatch(setSelection(ids))}
-          onViewportChange={(v) => dispatch(updateViewport(v))}
-          onUpdateTask={(pid, id, updates) => crdtUpdateTask(pid, id, updates)}
-          onCreateDependency={(pid, dep) => createDependency(pid, dep as any)}
-        />
+        <TimelineContext.Provider value={{
+          onSelect: (ids) => dispatch(setSelection(ids)),
+          onViewportChange: (v) => dispatch(updateViewport(v)),
+          onDragStart: () => setIsDragInProgress(true),
+          onDragEnd: () => setIsDragInProgress(false),
+          onUpdateTask: (pid, id, updates) => dispatch(rdxUpdateTask({ projectId: pid, taskId: id, updates })),
+          onCreateDependency: (pid, dep) => dispatch(upsertDependency({ projectId: pid, dependency: dep as any })),
+          onVerticalScaleChange: (s) => { dispatch(setVerticalScale(s)); dispatch(setViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom })) },
+        }}>
+          <TimelineView
+            RendererView={RendererView}
+            projectId={demoProjectId}
+            tasks={tasks}
+            dependencies={dependencies}
+            selection={selection}
+            viewport={viewport}
+            staffs={staffs}
+            verticalScale={verticalScaleValue}
+            onZoomChange={(z, anchorLocalX) => {
+              const ppd0 = TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.0001, viewport.zoom)
+              const ppd1 = TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.1, z)
+              const anchorPxFromGrid = anchorLocalX - TIMELINE_CONFIG.LEFT_MARGIN
+              const worldAtAnchor = viewport.x + (anchorPxFromGrid / ppd0)
+              const newX = Math.max(0, worldAtAnchor - (anchorPxFromGrid / ppd1))
+              dispatch(setViewport({ x: Math.round(newX), y: viewport.y, zoom: z }))
+            }}
+          />
+        </TimelineContext.Provider>
       </div>
       {selectedTask && popupPosition && (
         <TaskDetails task={selectedTask} staffs={staffs} selectionCount={selection.length} position={popupPosition} onClose={handleClosePopup} onUpdateTask={handleUpdateTask} />

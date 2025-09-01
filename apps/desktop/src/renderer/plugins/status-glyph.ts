@@ -10,7 +10,7 @@ export const StatusGlyphPlugin: RendererPlugin = {
       const prev = (container as any).__statusGlyph as Text | undefined
       if (prev && container.children.includes(prev)) { container.removeChild(prev) }
       const status = (_task as any).status || 'default'
-      const accidental = STATUS_TO_ACCIDENTAL[status]
+      const accidental = STATUS_TO_ACCIDENTAL[status as keyof typeof STATUS_TO_ACCIDENTAL]
       if (!accidental) return
       const oversample = 1.5
       const baseFont = status === 'cancelled' ? Math.max(10, Math.round(ctx.config.TASK_HEIGHT * 0.72)) : Math.max(10, Math.round(ctx.config.TASK_HEIGHT * 0.64))

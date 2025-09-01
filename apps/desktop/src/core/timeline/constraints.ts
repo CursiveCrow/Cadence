@@ -1,6 +1,8 @@
 import type { Task, Dependency } from '../types'
+import { CONSTANTS } from '../config'
 
-export const DEFAULT_TASK_HEIGHT = 20
+// Re-export for backward compatibility
+export const DEFAULT_TASK_HEIGHT = CONSTANTS.DEFAULT_TASK_HEIGHT
 
 // Compute the minimum allowed start day index for a task, given current tasks and dependencies.
 // Simple heuristic: a task cannot start before all its predecessors finish.

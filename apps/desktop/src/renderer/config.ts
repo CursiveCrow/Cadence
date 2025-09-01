@@ -1,9 +1,10 @@
 /**
  * Shared timeline rendering configuration for PixiJS renderer
+ * Now imports from centralized configuration module
  */
 
 import type { TimelineConfig } from './core/scene'
-import { PROJECT_START_DATE as SHARED_PROJECT_START_DATE } from '@cadence/config'
+import { TIMELINE_CONFIG as CENTRAL_TIMELINE_CONFIG, STATUS_GLYPHS, PROJECT_START_DATE } from '@cadence/config'
 
 const __cssColorCache = new Map<string, number>()
 export function clearCssColorCache(): void { __cssColorCache.clear() }
@@ -21,9 +22,9 @@ function cssVarColorToHex(varName: string, fallback: number): number {
       const n = parseInt(
         hex.length === 3
           ? hex
-              .split('')
-              .map(c => c + c)
-              .join('')
+            .split('')
+            .map(c => c + c)
+            .join('')
           : hex,
         16
       )
@@ -50,49 +51,18 @@ function cssVarColorToHex(varName: string, fallback: number): number {
   }
 }
 
+// Apply CSS variable resolution to the centralized config
 export const TIMELINE_CONFIG: TimelineConfig = {
-  LEFT_MARGIN: 0,
-  TOP_MARGIN: 60,
-  DAY_WIDTH: 60,
-  STAFF_SPACING: 120,
-  STAFF_LINE_SPACING: 18,
-  TASK_HEIGHT: 20,
-  STAFF_LINE_COUNT: 5,
-  BACKGROUND_COLOR: 0x1a1a1a,
-  GRID_COLOR_MAJOR: cssVarColorToHex('--ui-grid-major', 0xffffff),
-  GRID_COLOR_MINOR: cssVarColorToHex('--ui-grid-minor', 0xffffff),
-  STAFF_LINE_COLOR: cssVarColorToHex('--ui-staff-line', 0xd1d5db),
-  TASK_COLORS: {
-    default: 0x8b5cf6,
-    not_started: 0x6366f1,
-    in_progress: 0xc084fc,
-    completed: 0x10b981,
-    blocked: 0xef4444,
-    cancelled: 0x6b7280,
-  },
-  DEPENDENCY_COLOR: 0x666666,
-  SELECTION_COLOR: cssVarColorToHex('--ui-color-accent', 0xf59e0b),
-  TODAY_COLOR: cssVarColorToHex('--ui-color-accent', 0xf59e0b),
-  DRAW_STAFF_LABELS: false,
-  NOTE_START_PADDING: 2,
-  // Measures: default to 7-day bars; align to project start; double-bar visuals
-  MEASURE_LENGTH_DAYS: 7,
-  MEASURE_OFFSET_DAYS: 0,
-  MEASURE_COLOR: cssVarColorToHex('--ui-color-border', 0xffffff),
-  MEASURE_LINE_WIDTH_PX: 3,
-  // Spacing between thick (on grid) and thin bar (to the left) in pixels; enforced even
-  MEASURE_PAIR_SPACING_PX: 4,
-}
+  ...CENTRAL_TIMELINE_CONFIG,
+  GRID_COLOR_MAJOR: cssVarColorToHex(CENTRAL_TIMELINE_CONFIG.GRID_COLOR_MAJOR as string, 0xffffff),
+  GRID_COLOR_MINOR: cssVarColorToHex(CENTRAL_TIMELINE_CONFIG.GRID_COLOR_MINOR as string, 0xffffff),
+  STAFF_LINE_COLOR: cssVarColorToHex(CENTRAL_TIMELINE_CONFIG.STAFF_LINE_COLOR as string, 0xd1d5db),
+  SELECTION_COLOR: cssVarColorToHex(CENTRAL_TIMELINE_CONFIG.SELECTION_COLOR as string, 0xf59e0b),
+  TODAY_COLOR: cssVarColorToHex(CENTRAL_TIMELINE_CONFIG.TODAY_COLOR as string, 0xf59e0b),
+  MEASURE_COLOR: cssVarColorToHex(CENTRAL_TIMELINE_CONFIG.MEASURE_COLOR as string, 0xffffff),
+} as TimelineConfig
 
-// Mapping from task status to simple glyphs used in UI
-export const STATUS_TO_ACCIDENTAL: Record<string, string> = {
-  not_started: '',
-  in_progress: '⟟_',
-  completed: '⟟r',
-  blocked: '⟟-',
-  cancelled: 'A-',
-}
-
-// Centralized project start date used for timeline calculations
-export const PROJECT_START_DATE = SHARED_PROJECT_START_DATE
+// Re-export from centralized config for backward compatibility
+export const STATUS_TO_ACCIDENTAL = STATUS_GLYPHS
+export { PROJECT_START_DATE }
 

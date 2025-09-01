@@ -1,3 +1,5 @@
 export * from './ui'
-export * as crdt from './crdt'
+export * from './slices/tasksSlice'
+export * from './slices/dependenciesSlice'
+export * from './selectors'
 
