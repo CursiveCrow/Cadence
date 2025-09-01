@@ -4,13 +4,13 @@ A streamlined, high-performance, offline-first project management system using E
 
 ## Architecture
 
-Cadence is built as a monorepo following the architecture specified in `docs/Design.md`. The system features:
+Cadence is a single Electron app with internal modules (no monorepo). The system features:
 
 - Desktop-first Electron application with React 18 + TypeScript
-- High-performance rendering via PixiJS with OffscreenCanvas
-- Offline-first architecture using CRDTs (Yjs) as Single Source of Truth
-- SQLite WASM + OPFS for persistence in the renderer process
-- Redux Toolkit for UI state management separate from domain data
+- High-performance rendering via PixiJS (WebGPU/WebGL)
+- Offline-first architecture using CRDTs (Yjs) as the domain store
+- In-memory CRDT persistence (swappable provider)
+- Redux Toolkit for UI state management
 - Built-in undo/redo via Y.UndoManager
 
 ## Project Structure
@@ -18,18 +18,16 @@ Cadence is built as a monorepo following the architecture specified in `docs/Des
 ```
 cadence/
   apps/
-    desktop/              # Electron main/preload + Renderer (Vite)
+    desktop/
       electron/           # Main process and preload scripts
-      src/                # React renderer process
-      dist/               # Built renderer files
-      dist-electron/      # Built main process files
-  packages/
-    core/                 # Domain types, algorithms (DAG, lanes), validation
-    state/                # RTK Stores (UI state management)
-    crdt/                 # Yjs initialization, persistence, mutation functions, hooks
-    renderer/             # PixiJS implementation, Worker setup, OffscreenCanvas
-    platform-services/    # FS access, dialogs (Electron IPC/Web APIs)
-    ui/                   # Reusable React UI components
+      src/
+        core/             # Domain types, algorithms, config
+        renderer/         # PixiJS engine (grid, DnD, pan/zoom, plugins)
+        platform/         # IPC contracts + Electron/Web services
+        surface/          # React UI + UI components + styles
+          state/          # Redux UI store + Yjs CRDT (hooks, mutations, persistence)
+      dist/
+      dist-electron/
   release/                # Packaged desktop applications
   docs/                   # Design documentation
 ```
@@ -75,56 +73,47 @@ The packaged applications will be in the `release/` directory:
 
 ## Technology Stack
 
-### Core Technologies
-
 - Electron - Desktop app framework
-- React 18 - UI framework with TypeScript
+- React 18 + TypeScript
 - Vite - Build tool and dev server
-- pnpm + Turborepo - Monorepo management
-
-### Planned Features (Per Design.md)
-
-- PixiJS (WebGL2) - High-performance timeline canvas rendering
-- Yjs - CRDT for offline-first data management
-- SQLite WASM + OPFS - Client-side persistence
+- PixiJS (WebGPU/WebGL) - High-performance timeline rendering
+- Yjs - CRDT for domain data, undo/redo via UndoManager
 - Redux Toolkit - UI state management
 - Zod - Runtime validation
 
-## Package Overview
+## Internal Modules
 
-- `@cadence/core` - Domain types, DAG validation, lane assignment algorithms
-- `@cadence/state` - Redux Toolkit slices for UI state (viewport, selection)
-- `@cadence/crdt` - Yjs document management, mutations, React hooks
-- `@cadence/renderer` - PixiJS + OffscreenCanvas implementation
-- `@cadence/platform-services` - Abstraction layer for Electron IPC vs Web APIs
-- `@cadence/ui` - Reusable React components (Button, TaskCard, TimelineCanvas)
+- `apps/desktop/src/core` - Domain types, DAG validation, lane assignment algorithms, config
+- `apps/desktop/src/surface` - React UI + components + styles
+- `apps/desktop/src/surface/state` - Redux UI store + Yjs (CRDT) hooks/mutations/persistence
+- `apps/desktop/src/renderer` - PixiJS engine (grid, DnD, pan/zoom, plugins)
+- `apps/desktop/src/platform` - Electron/Web platform services + IPC contracts
 
 ## Scripts
 
 - `pnpm dev` - Start desktop app development
-- `pnpm build` - Build all packages
+- `pnpm build` - Build desktop app
 - `pnpm electron:dev` - Start Electron app with hot reload
 - `pnpm electron:dist` - Build and package desktop app
-- `pnpm lint` - Run linting across all packages
-- `pnpm test` - Run tests across all packages
+- `pnpm clean` - Clean desktop build artifacts
+- `pnpm test` - Run tests (if present)
 
 ## Development Status
 
 Completed:
 
-- Monorepo structure with proper workspace configuration
+- Single-app structure with internal modules
 - Electron + Vite + React + TypeScript setup
-- Desktop app packaging with electron-packager
-- Core domain types and validation schemas
-- Basic UI components and state management setup
-- CRDT foundation with Yjs integration
+- Desktop app packaging
+- Core domain types and validation
+- UI components and Redux state
+- Yjs CRDT integration (in-memory persistence)
 
 In Development:
 
-- PixiJS + OffscreenCanvas integration
-- SQLite WASM + OPFS persistence layer
-- Timeline rendering and interaction
-- Lane assignment and DAG validation algorithms
+- Advanced PixiJS features (GPU grid, plugins)
+- Pluggable persistence (e.g., y-indexeddb or SQLite WASM)
+- Timeline interactions and polish
 
 ## License
 

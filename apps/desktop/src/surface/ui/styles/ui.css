@@ -1,0 +1,44 @@
+.ui-text { color: var(--ui-color-text); }
+.ui-text-muted { color: var(--ui-color-muted); }
+.ui-text-xs { font-size: 11px; }
+.ui-text-sm { font-size: 12px; }
+.ui-text-md { font-size: 14px; }
+.ui-text-lg { font-size: 18px; }
+.ui-font-600 { font-weight: 600; }
+.ui-font-700 { font-weight: 700; }
+.ui-header { background: var(--ui-surface-2); border-bottom: 1px solid var(--ui-surface-1-border); }
+.ui-surface-1 { background: var(--ui-surface-1); border-color: var(--ui-surface-1-border); }
+.ui-rounded-md { border-radius: var(--ui-radius-md); }
+.ui-rounded-lg { border-radius: var(--ui-radius-lg); }
+.ui-rounded-xl { border-radius: var(--ui-radius-xl); }
+.ui-border-r { border-right: 1px solid var(--ui-surface-1-border); }
+.ui-shadow { box-shadow: 0 8px 24px var(--ui-color-shadow); }
+.ui-btn { background: rgba(255,255,255,0.05); color: var(--ui-color-text); border: 1px solid var(--ui-surface-1-border); padding: 8px 10px; cursor: pointer; }
+.ui-btn-primary { background: var(--ui-color-primary-weak); border-color: var(--ui-color-primary-border); }
+.ui-rounded-sm { border-radius: var(--ui-radius-sm); }
+.ui-dialog { min-width: 520px; }
+.ui-dialog-header { display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; }
+.ui-overlay-backdrop { position: fixed; z-index: 999; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; }
+.ui-overlay-backdrop-transparent { position: fixed; z-index: 999; top:0; left:0; right:0; bottom:0; background: transparent; }
+.ui-flex { display: flex; }
+.ui-items-center { align-items: center; }
+.ui-justify-between { justify-content: space-between; }
+.ui-justify-end { justify-content: flex-end; }
+.ui-gap-1 { gap: 4px; }
+.ui-gap-2 { gap: 8px; }
+.ui-gap-4 { gap: 16px; }
+.ui-p-3 { padding: 12px; }
+.ui-px-3 { padding-left: 12px; padding-right: 12px; }
+.ui-py-3 { padding-top: 12px; padding-bottom: 12px; }
+.ui-absolute { position: absolute; }
+.ui-input { width: 100%; background: #333; color: var(--ui-color-text); border: 1px solid var(--ui-surface-1-border); border-radius: 6px; padding: 6px 8px; }
+.ui-focus-ring:focus { outline: 2px solid var(--ui-color-primary); outline-offset: 1px; }
+.ui-datehdr { background: var(--ui-surface-1); border-bottom: 1px solid var(--ui-surface-1-border); }
+.ui-datehdr-band { height: 24px; }
+.ui-datehdr-label { color: var(--ui-color-text); font-size: 12px; }
+.ui-datehdr-tick { position:absolute; top:0; bottom:0; width:1px; background: var(--ui-color-border); opacity: 0.5; }
+.ui-datehdr-tick-strong { position:absolute; top:0; bottom:0; width:2px; background: var(--ui-color-border); opacity: 0.8; }
+.ui-timesig { display:flex; flex-direction:column; align-items:center; justify-content:center; width:24px; height:24px; border:1px solid var(--ui-surface-1-border); border-radius:6px; color:var(--ui-color-text); background: rgba(255,255,255,0.06); }
+.ui-timesig-num { line-height: 1; font-size: 12px; }
+.ui-timesig-den { line-height: 1; font-size: 12px; }
+

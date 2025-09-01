@@ -1,0 +1,2 @@
+.ts-popover { position: fixed; min-width: 240px; border: 1px solid var(--ui-surface-1-border); background: var(--ui-surface-1); z-index: 1100; }
+

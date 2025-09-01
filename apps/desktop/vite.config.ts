@@ -24,9 +24,11 @@ export default defineConfig({
   resolve: {
     alias: {
       // CSS path alias that tsconfig-paths doesn't catch for styles imports
-      '@cadence/ui/styles': path.resolve(__dirname, '../../packages/ui/src/styles'),
-      '@cadence/config': path.resolve(__dirname, '../../packages/config/src'),
-      '@cadence/renderer': path.resolve(__dirname, '../../packages/renderer/src'),
+      '@cadence/ui/styles': path.resolve(__dirname, 'src/surface/ui/styles'),
+      '@cadence/config': path.resolve(__dirname, 'src/core/config'),
+      '@cadence/renderer': path.resolve(__dirname, 'src/renderer'),
+      '@cadence/platform-services': path.resolve(__dirname, 'src/platform'),
+      '@cadence/contracts': path.resolve(__dirname, 'src/platform/contracts'),
     },
   },
   plugins: [

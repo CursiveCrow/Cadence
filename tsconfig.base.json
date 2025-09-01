@@ -15,31 +15,6 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "composite": true,
-    "baseUrl": ".",
-    "paths": {
-      "@cadence/core": ["packages/core/src"],
-      "@cadence/core/*": ["packages/core/src/*"],
-      "@cadence/state": ["packages/state/src"],
-      "@cadence/state/*": ["packages/state/src/*"],
-      "@cadence/crdt": ["packages/crdt/src"],
-      "@cadence/crdt/*": ["packages/crdt/src/*"],
-      "@cadence/renderer": ["packages/renderer/src"],
-      "@cadence/renderer/*": ["packages/renderer/src/*"],
-      "@cadence/platform-services": ["packages/platform-services/src"],
-      "@cadence/platform-services/*": ["packages/platform-services/src/*"],
-      "@cadence/ui": ["packages/ui/src"],
-      "@cadence/ui/*": ["packages/ui/src/*"],
-      "@cadence/config": ["packages/config/src"],
-      "@cadence/config/*": ["packages/config/src/*"],
-      "@cadence/contracts": ["packages/contracts/src"],
-      "@cadence/contracts/*": ["packages/contracts/src/*"],
-      "@cadence/events": ["packages/events/src"],
-      "@cadence/events/*": ["packages/events/src/*"],
-      "@cadence/renderer-react": ["packages/renderer-react/src"],
-      "@cadence/renderer-react/*": ["packages/renderer-react/src/*"],
-      "@cadence/fixtures": ["packages/fixtures/src"],
-      "@cadence/fixtures/*": ["packages/fixtures/src/*"]
-    }
+    "composite": true
   }
 }
