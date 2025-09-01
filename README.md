@@ -45,36 +45,9 @@ The application follows a clean architecture with the following layers:
 
 ### Prerequisites
 
-- **Bun 2.0+** (this project does NOT use Node.js/npm/yarn)
+- **Bun** (this project does NOT use Node.js/npm/yarn)
 - Install Bun: `curl -fsSL https://bun.sh/install | bash`
 - **Important**: This is a Bun-only project. Do not use npm/yarn/node!
-
-### Installation & Usage
-
-```bash
-# Install dependencies (4x faster than npm)
-bun install
-
-# Start development server
-bun run dev          # Vite + Bun (recommended)
-bun run dev:hot      # Bun hot reload (fastest)
-bun run dev:native   # Native Bun server
-
-# Build for production
-bun run build        # Standard build
-bun run build:bun    # Native Bun bundler (fastest)
-
-# Run tests
-bun test             # Built-in test runner
-bun run test:watch   # Watch mode
-bun run test:coverage # With coverage
-
-# Performance benchmarks
-bun run bench
-
-# Verify setup
-bun run verify
-```
 
 > ⚠️ **DO NOT USE**: `npm`, `yarn`, or `node` commands. This project is Bun-exclusive for maximum performance.
 
@@ -102,7 +75,7 @@ source/
 
 ### Key Technologies
 
-- **Bun 2**: Ultra-fast JavaScript runtime and toolkit
+- **Bun**: Ultra-fast JavaScript runtime and toolkit
 - **React 19.1**: Latest React with concurrent features
 - **Redux Toolkit**: State management
 - **PIXI.js v8**: WebGL rendering
