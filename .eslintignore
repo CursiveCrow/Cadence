@@ -1,8 +1,0 @@
-**/dist/**
-**/dist-electron/**
-**/build/**
-**/release/**
-**/coverage/**
-**/node_modules/**
-apps/desktop/dist/**
-apps/desktop/dist-electron/**
