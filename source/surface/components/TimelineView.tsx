@@ -67,9 +67,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         const initEngine = async () => {
             const engine = new RenderEngine({
                 canvas: canvasRef.current!,
-                projectId: project.id,
                 config,
-                plugins: []
+                preferWebGPU: true
             })
 
             await engine.init()
@@ -102,11 +101,12 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                 return acc
             }, {} as Record<string, any>),
             staffs,
-            selection
+            selection,
+            projectStartDate: project?.startDate ? new Date(project.startDate) : new Date()
         }
 
         engineRef.current.render(renderData, viewport)
-    }, [tasks, dependencies, staffs, selection, viewport, isInitialized])
+    }, [tasks, dependencies, staffs, selection, viewport, isInitialized, project])
 
     // Handle window resize
     useEffect(() => {
@@ -138,13 +138,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         const x = event.clientX - rect.left
         const y = event.clientY - rect.top
 
-        // Check if clicking on a task
-        const scene = engineRef.current.getScene()
-        if (!scene) return
-
-        // This would need to be implemented in the scene graph
-        // to find which task is at the given position
         // For now, we'll handle general canvas interactions
+        // Task selection would be handled through PixiJS event system
 
         if (event.button === 1 || (event.button === 0 && event.shiftKey)) {
             // Middle mouse or shift+left for panning

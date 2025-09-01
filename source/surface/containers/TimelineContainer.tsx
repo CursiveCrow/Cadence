@@ -35,10 +35,16 @@ export const TimelineContainer: React.FC<TimelineContainerProps> = ({ projectId 
     const dispatch = useAppDispatch()
 
     // Get data from Redux store
-    const tasks = useAppSelector(selectTasksByProject(projectId))
-    const dependencies = useAppSelector(selectDependenciesByProject(projectId))
-    const staffs = useAppSelector(selectStaffsByProject(projectId))
-    const project = useAppSelector(selectProjectById(projectId))
+    // Memoize selector instances to keep referential stability across renders for a given projectId
+    const tasksSelector = useMemo(() => selectTasksByProject(projectId), [projectId])
+    const depsSelector = useMemo(() => selectDependenciesByProject(projectId), [projectId])
+    const staffsSelector = useMemo(() => selectStaffsByProject(projectId), [projectId])
+    const projectSelector = useMemo(() => selectProjectById(projectId), [projectId])
+
+    const tasks = useAppSelector(tasksSelector)
+    const dependencies = useAppSelector(depsSelector)
+    const staffs = useAppSelector(staffsSelector)
+    const project = useAppSelector(projectSelector)
     const selection = useAppSelector(selectSelectedTaskIds)
     const viewport = useAppSelector(selectViewport)
     const config = useAppSelector(selectTimelineConfig)

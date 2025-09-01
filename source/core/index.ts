@@ -20,6 +20,8 @@ export { TaskService } from './domain/services/TaskService'
 export { DependencyService } from './domain/services/DependencyService'
 export { SchedulingService } from './domain/services/SchedulingService'
 export { ValidationService, type ValidationResult } from './domain/services/ValidationService'
+export { ViewportService, type ViewportState, type ViewportBounds } from './domain/services/ViewportService'
+export { InteractionService, type InteractionConfig, type InteractionCallbacks } from './domain/services/InteractionService'
 
 // Events
 export * from './domain/events/TaskEvents'

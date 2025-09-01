@@ -1,280 +1,315 @@
 /**
  * GridRenderer Component
- * Handles rendering of the timeline grid
+ * Renders timeline grid, staff lines, and background elements
  */
 
-import { Graphics, Container, Text, TextStyle } from 'pixi.js'
-import type { TimelineConfig } from '../../infrastructure/persistence/redux/slices/timelineSlice'
+import { Container, Graphics, Text } from 'pixi.js'
+import { Staff } from '../../core/domain/entities/Staff'
+import { CONSTANTS } from '../../config/constants'
+import { drawGridLine, drawWeekendHighlight, drawTodayMarker } from '../utils/shapes'
 
 export interface GridRendererOptions {
     container: Container
-    config: TimelineConfig
     projectStartDate: Date
-    viewportState: { x: number; y: number; zoom: number }
+    staffs: Staff[]
+    viewportState: { x: number; y: number; zoom: number; verticalScale?: number }
     screenWidth: number
     screenHeight: number
+    config?: Partial<typeof CONSTANTS>
 }
 
 export class GridRenderer {
+    private container: Container
     private gridGraphics: Graphics
+    private staffGraphics: Graphics
     private weekendGraphics: Graphics
-    private todayLine: Graphics
-    private dateLabels: Container
-    private monthLabels: Container
+    private todayGraphics: Graphics
+    private measureGraphics: Graphics
 
-    constructor(private options: GridRendererOptions) {
-        this.gridGraphics = new Graphics()
-        this.gridGraphics.name = 'grid'
+    private options: GridRendererOptions
+    private config: typeof CONSTANTS
 
+    constructor(options: GridRendererOptions) {
+        this.options = options
+        this.config = { ...CONSTANTS, ...options.config }
+        this.container = options.container
+
+        // Create graphics layers
         this.weekendGraphics = new Graphics()
-        this.weekendGraphics.name = 'weekends'
+        this.gridGraphics = new Graphics()
+        this.staffGraphics = new Graphics()
+        this.measureGraphics = new Graphics()
+        this.todayGraphics = new Graphics()
 
-        this.todayLine = new Graphics()
-        this.todayLine.name = 'todayLine'
-
-        this.dateLabels = new Container()
-        this.dateLabels.name = 'dateLabels'
-
-        this.monthLabels = new Container()
-        this.monthLabels.name = 'monthLabels'
-
-        // Add to container in correct order
-        options.container.addChild(this.weekendGraphics)
-        options.container.addChild(this.gridGraphics)
-        options.container.addChild(this.todayLine)
-        options.container.addChild(this.dateLabels)
-        options.container.addChild(this.monthLabels)
+        // Add to container in rendering order
+        this.container.addChild(this.weekendGraphics)
+        this.container.addChild(this.gridGraphics)
+        this.container.addChild(this.staffGraphics)
+        this.container.addChild(this.measureGraphics)
+        this.container.addChild(this.todayGraphics)
     }
 
+    /**
+     * Render the grid
+     */
     render(): void {
-        const { config, projectStartDate, viewportState, screenWidth, screenHeight } = this.options
+        this.clear()
 
-        // Clear existing graphics
-        this.gridGraphics.clear()
-        this.weekendGraphics.clear()
-        this.todayLine.clear()
-        this.dateLabels.removeChildren()
-        this.monthLabels.removeChildren()
+        const { viewportState, screenWidth, screenHeight, projectStartDate, staffs } = this.options
+        const zoom = viewportState.zoom
+        const verticalScale = viewportState.verticalScale || 1
 
-        if (!config.SHOW_GRID) return
+        // Calculate visible day range
+        const dayWidth = this.config.DEFAULT_DAY_WIDTH * zoom
+        const leftMargin = this.config.DEFAULT_LEFT_MARGIN
+        const topMargin = this.config.DEFAULT_TOP_MARGIN * verticalScale
 
-        const dayWidth = config.DAY_WIDTH * viewportState.zoom
+        const startDay = Math.floor(-viewportState.x / dayWidth) - 2
+        const endDay = Math.ceil((-viewportState.x + screenWidth) / dayWidth) + 2
 
-        // Calculate visible date range
-        const startDay = Math.floor(-viewportState.x / dayWidth) - 1
-        const endDay = Math.ceil((screenWidth - viewportState.x) / dayWidth) + 1
+        // Draw weekends
+        this.drawWeekends(startDay, endDay, dayWidth, screenHeight, projectStartDate)
 
-        // Draw weekend backgrounds
-        if (config.SHOW_WEEKENDS) {
-            this.drawWeekends(startDay, endDay, dayWidth, screenHeight)
-        }
+        // Draw vertical grid lines (days)
+        this.drawVerticalGrid(startDay, endDay, dayWidth, screenHeight, projectStartDate)
 
-        // Draw grid lines
-        this.drawGridLines(startDay, endDay, dayWidth, screenHeight)
+        // Draw horizontal grid lines (staff lines)
+        this.drawStaffLines(staffs, verticalScale, screenWidth)
 
-        // Draw date labels
-        if (config.SHOW_LABELS && viewportState.zoom > 0.5) {
-            this.drawDateLabels(startDay, endDay, dayWidth)
-        }
+        // Draw measure markers
+        this.drawMeasureMarkers(startDay, endDay, dayWidth, screenHeight, staffs, verticalScale)
 
-        // Draw month labels
-        if (config.SHOW_LABELS) {
-            this.drawMonthLabels(startDay, endDay, dayWidth)
-        }
-
-        // Draw today line
-        if (config.SHOW_TODAY_LINE) {
-            this.drawTodayLine(dayWidth, screenHeight)
-        }
+        // Draw today marker
+        this.drawTodayMarker(dayWidth, screenHeight, projectStartDate)
     }
 
-    private drawWeekends(startDay: number, endDay: number, dayWidth: number, screenHeight: number): void {
-        const { config, projectStartDate } = this.options
+    /**
+     * Draw weekend highlights
+     */
+    private drawWeekends(
+        startDay: number,
+        endDay: number,
+        dayWidth: number,
+        screenHeight: number,
+        projectStartDate: Date
+    ): void {
+        const leftMargin = this.config.DEFAULT_LEFT_MARGIN
 
         for (let day = startDay; day <= endDay; day++) {
             const date = new Date(projectStartDate)
             date.setDate(date.getDate() + day)
-
             const dayOfWeek = date.getDay()
-            if (dayOfWeek === 0 || dayOfWeek === 6) { // Sunday or Saturday
-                const x = config.LEFT_MARGIN + day * dayWidth
 
-                this.weekendGraphics.rect(x, 0, dayWidth, screenHeight)
-                this.weekendGraphics.fill({ color: config.WEEKEND_FILL_COLOR, alpha: 0.5 })
+            // Saturday = 6, Sunday = 0
+            if (dayOfWeek === 0 || dayOfWeek === 6) {
+                const x = leftMargin + day * dayWidth
+                drawWeekendHighlight(
+                    this.weekendGraphics,
+                    x,
+                    0,
+                    dayWidth,
+                    screenHeight,
+                    this.config.WEEKEND_FILL_COLOR,
+                    0.3
+                )
             }
         }
     }
 
-    private drawGridLines(startDay: number, endDay: number, dayWidth: number, screenHeight: number): void {
-        const { config, projectStartDate } = this.options
+    /**
+     * Draw vertical grid lines
+     */
+    private drawVerticalGrid(
+        startDay: number,
+        endDay: number,
+        dayWidth: number,
+        screenHeight: number,
+        projectStartDate: Date
+    ): void {
+        const leftMargin = this.config.DEFAULT_LEFT_MARGIN
 
         for (let day = startDay; day <= endDay; day++) {
-            const x = config.LEFT_MARGIN + day * dayWidth
-
+            const x = leftMargin + day * dayWidth
             const date = new Date(projectStartDate)
             date.setDate(date.getDate() + day)
 
-            // Determine line style based on date
-            let isMajor = false
-            let color = config.GRID_COLOR_MINOR
-            let width = 0.5
-            let alpha = 0.2
+            // Major grid lines on week boundaries
+            const isMajor = date.getDay() === 1 // Monday
 
-            if (date.getDate() === 1) {
-                // First day of month
-                isMajor = true
-                color = config.GRID_COLOR_MAJOR
-                width = 2
-                alpha = 0.4
-            } else if (date.getDay() === 1) {
-                // Monday (start of week)
-                color = config.GRID_COLOR_MAJOR
-                width = 1
-                alpha = 0.3
+            drawGridLine(
+                this.gridGraphics,
+                x,
+                0,
+                x,
+                screenHeight,
+                isMajor ? this.config.GRID_COLOR_MAJOR : this.config.GRID_COLOR_MINOR,
+                isMajor ? 0.5 : 0.3,
+                isMajor ? 2 : 1
+            )
+        }
+    }
+
+    /**
+     * Draw staff lines
+     */
+    private drawStaffLines(
+        staffs: Staff[],
+        verticalScale: number,
+        screenWidth: number
+    ): void {
+        const topMargin = this.config.DEFAULT_TOP_MARGIN * verticalScale
+        const staffSpacing = this.config.DEFAULT_STAFF_SPACING * verticalScale
+        const lineSpacing = this.config.DEFAULT_STAFF_LINE_SPACING * verticalScale
+
+        staffs.forEach((staff, staffIndex) => {
+            const staffY = topMargin + staffIndex * staffSpacing
+
+            // Draw each staff line
+            for (let lineIndex = 0; lineIndex < staff.numberOfLines; lineIndex++) {
+                const y = staffY + lineIndex * lineSpacing
+
+                drawGridLine(
+                    this.staffGraphics,
+                    0,
+                    y,
+                    screenWidth,
+                    y,
+                    0x888888,
+                    0.6,
+                    1
+                )
             }
-
-            this.gridGraphics.moveTo(x, 0)
-            this.gridGraphics.lineTo(x, screenHeight)
-            this.gridGraphics.stroke({ width, color, alpha })
-        }
-
-        // Draw horizontal lines for staff divisions
-        const numStaffLines = 5 // This should come from staff data
-        for (let i = 0; i <= numStaffLines; i++) {
-            const y = config.TOP_MARGIN + i * config.STAFF_SPACING
-
-            this.gridGraphics.moveTo(0, y)
-            this.gridGraphics.lineTo(screenWidth, y)
-            this.gridGraphics.stroke({
-                width: i === 0 ? 1 : 0.5,
-                color: config.GRID_COLOR_MINOR,
-                alpha: 0.2
-            })
-        }
+        })
     }
 
-    private drawDateLabels(startDay: number, endDay: number, dayWidth: number): void {
-        const { config, projectStartDate, viewportState } = this.options
+    /**
+     * Draw measure markers
+     */
+    private drawMeasureMarkers(
+        startDay: number,
+        endDay: number,
+        dayWidth: number,
+        screenHeight: number,
+        staffs: Staff[],
+        verticalScale: number
+    ): void {
+        const leftMargin = this.config.DEFAULT_LEFT_MARGIN
+        const topMargin = this.config.DEFAULT_TOP_MARGIN * verticalScale
+        const staffSpacing = this.config.DEFAULT_STAFF_SPACING * verticalScale
+        const lineSpacing = this.config.DEFAULT_STAFF_LINE_SPACING * verticalScale
 
-        // Only show labels if zoomed in enough
-        if (dayWidth < 20) return
+        staffs.forEach((staff, staffIndex) => {
+            if (!staff.timeSignature) return
 
-        const style = new TextStyle({
-            fontFamily: 'Arial, sans-serif',
-            fontSize: 10,
-            fill: 0x666666,
-            align: 'center'
-        })
+            const staffY = topMargin + staffIndex * staffSpacing
+            const staffHeight = (staff.numberOfLines - 1) * lineSpacing
 
-        for (let day = startDay; day <= endDay; day++) {
-            const date = new Date(projectStartDate)
-            date.setDate(date.getDate() + day)
+            // Get time signature values (support domain TimeSignature or plain string)
+            let beatsPerMeasure = 4
+            let beatValue = 1
 
-            const x = config.LEFT_MARGIN + day * dayWidth + dayWidth / 2
-            const y = config.TOP_MARGIN - 20
+            const ts: any = staff.timeSignature as any
+            if (typeof ts?.getBeatsPerMeasure === 'function' && typeof ts?.getBeatValue === 'function') {
+                beatsPerMeasure = ts.getBeatsPerMeasure()
+                beatValue = ts.getBeatValue()
+            } else if (typeof ts === 'string') {
+                const parts = ts.split('/')
+                const num = parseInt(parts[0] || '4', 10)
+                const den = parseInt(parts[1] || '4', 10)
+                if (!isNaN(num) && num > 0) beatsPerMeasure = num
+                if (!isNaN(den) && den > 0) beatValue = 4 / den
+            }
+            const measureLength = beatsPerMeasure * beatValue // Days per measure
 
-            const text = new Text({
-                text: date.getDate().toString(),
-                style
-            })
-            text.x = x
-            text.y = y
-            text.anchor.set(0.5, 0.5)
+            // Draw measure lines
+            for (let day = startDay; day <= endDay; day += measureLength) {
+                if (day < 0) continue
 
-            this.dateLabels.addChild(text)
-        }
-    }
+                const x = leftMargin + day * dayWidth
+                const measureNumber = Math.floor(day / measureLength)
+                const isDownbeat = measureNumber % 4 === 0 // Every 4th measure
 
-    private drawMonthLabels(startDay: number, endDay: number, dayWidth: number): void {
-        const { config, projectStartDate } = this.options
-
-        const style = new TextStyle({
-            fontFamily: 'Arial, sans-serif',
-            fontSize: 12,
-            fontWeight: 'bold',
-            fill: 0x333333,
-            align: 'left'
-        })
-
-        const monthNames = [
-            'January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December'
-        ]
-
-        let lastMonth = -1
-
-        for (let day = startDay; day <= endDay; day++) {
-            const date = new Date(projectStartDate)
-            date.setDate(date.getDate() + day)
-
-            const month = date.getMonth()
-            const year = date.getFullYear()
-
-            if (month !== lastMonth) {
-                lastMonth = month
-
-                const x = config.LEFT_MARGIN + day * dayWidth + 5
-                const y = config.TOP_MARGIN - 40
-
-                const text = new Text({
-                    text: `${monthNames[month]} ${year}`,
-                    style
+                // Draw measure line
+                this.measureGraphics.moveTo(x, staffY)
+                this.measureGraphics.lineTo(x, staffY + staffHeight)
+                this.measureGraphics.stroke({
+                    width: isDownbeat ? 2 : 1,
+                    color: 0x666666,
+                    alpha: isDownbeat ? 0.6 : 0.3
                 })
-                text.x = x
-                text.y = y
 
-                this.monthLabels.addChild(text)
+                // Draw double bar for downbeats
+                if (isDownbeat && x > 3) {
+                    this.measureGraphics.moveTo(x - 3, staffY)
+                    this.measureGraphics.lineTo(x - 3, staffY + staffHeight)
+                    this.measureGraphics.stroke({
+                        width: 1,
+                        color: 0x666666,
+                        alpha: 0.3
+                    })
+                }
             }
-        }
+        })
     }
 
-    private drawTodayLine(dayWidth: number, screenHeight: number): void {
-        const { config, projectStartDate } = this.options
-
+    /**
+     * Draw today marker
+     */
+    private drawTodayMarker(
+        dayWidth: number,
+        screenHeight: number,
+        projectStartDate: Date
+    ): void {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
+        projectStartDate.setHours(0, 0, 0, 0)
 
         const daysSinceStart = Math.floor(
             (today.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24)
         )
 
-        const x = config.LEFT_MARGIN + daysSinceStart * dayWidth
+        const x = this.config.DEFAULT_LEFT_MARGIN + daysSinceStart * dayWidth
 
-        // Draw line
-        this.todayLine.moveTo(x, 0)
-        this.todayLine.lineTo(x, screenHeight)
-        this.todayLine.stroke({ width: 2, color: config.TODAY_LINE_COLOR, alpha: 0.8 })
-
-        // Draw label
-        const style = new TextStyle({
-            fontFamily: 'Arial, sans-serif',
-            fontSize: 10,
-            fontWeight: 'bold',
-            fill: config.TODAY_LINE_COLOR,
-            align: 'center'
-        })
-
-        const text = new Text({
-            text: 'TODAY',
-            style
-        })
-        text.x = x
-        text.y = 5
-        text.anchor.set(0.5, 0)
-
-        this.todayLine.addChild(text)
+        drawTodayMarker(
+            this.todayGraphics,
+            x,
+            0,
+            screenHeight,
+            this.config.TODAY_LINE_COLOR,
+            0.8
+        )
     }
 
-    update(options: Partial<GridRendererOptions>): void {
-        Object.assign(this.options, options)
-        this.render()
+    /**
+     * Clear all graphics
+     */
+    clear(): void {
+        this.gridGraphics.clear()
+        this.staffGraphics.clear()
+        this.weekendGraphics.clear()
+        this.todayGraphics.clear()
+        this.measureGraphics.clear()
     }
 
+    /**
+     * Update options
+     */
+    updateOptions(options: Partial<GridRendererOptions>): void {
+        this.options = { ...this.options, ...options }
+        if (options.config) {
+            this.config = { ...CONSTANTS, ...options.config }
+        }
+    }
+
+    /**
+     * Destroy the renderer
+     */
     destroy(): void {
+        this.clear()
         this.gridGraphics.destroy()
+        this.staffGraphics.destroy()
         this.weekendGraphics.destroy()
-        this.todayLine.destroy({ children: true })
-        this.dateLabels.destroy({ children: true })
-        this.monthLabels.destroy({ children: true })
+        this.todayGraphics.destroy()
+        this.measureGraphics.destroy()
     }
 }

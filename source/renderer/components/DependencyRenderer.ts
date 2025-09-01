@@ -1,199 +1,300 @@
 /**
- * DependencyRenderer Component
- * Handles rendering of task dependencies
+ * DependencyRenderer
+ * Renders dependency lines between tasks in the timeline
  */
 
-import { Graphics, Container } from 'pixi.js'
-import type { Dependency } from '../../core/domain/entities/Dependency'
-import type { TaskAnchors } from '../core/SceneGraph'
+import { Container, Graphics } from 'pixi.js'
+import { Dependency } from '../../core/domain/entities/Dependency'
+import { DependencyType } from '../../core/domain/value-objects/DependencyType'
+import { drawCurvedDependencyArrow, drawDependencyArrow } from '../utils/shapes'
+
+export interface TaskAnchors {
+    leftCenterX: number
+    leftCenterY: number
+    rightCenterX: number
+    rightCenterY: number
+}
 
 export interface DependencyRendererOptions {
-    dependency: Dependency
-    srcAnchors: TaskAnchors
-    dstAnchors: TaskAnchors
-    color: number
-    isSelected: boolean
-    isHighlighted: boolean
+    container: Container
+    dependencies: Dependency[]
+    getTaskAnchors: (taskId: string) => TaskAnchors | undefined
+    color?: number
+    selectedIds?: string[]
+    highlightedId?: string | null
 }
 
 export class DependencyRenderer {
-    private graphics: Graphics
-    private arrowHead: Graphics
     private container: Container
+    private graphics: Map<string, Graphics> = new Map()
+    private options: DependencyRendererOptions
 
-    constructor(private options: DependencyRendererOptions) {
-        this.container = new Container()
-        this.container.name = `dependency-${options.dependency.id}`
-
-        this.graphics = new Graphics()
-        this.graphics.name = 'line'
-
-        this.arrowHead = new Graphics()
-        this.arrowHead.name = 'arrow'
-
-        this.container.addChild(this.graphics)
-        this.container.addChild(this.arrowHead)
-
-        this.render()
+    constructor(options: DependencyRendererOptions) {
+        this.options = options
+        this.container = options.container
     }
 
-    private render(): void {
-        const { dependency, srcAnchors, dstAnchors, color, isSelected, isHighlighted } = this.options
+    /**
+     * Render all dependencies
+     */
+    render(): void {
+        const { dependencies, getTaskAnchors, selectedIds = [], highlightedId } = this.options
 
-        // Clear existing graphics
-        this.graphics.clear()
-        this.arrowHead.clear()
+        // Track which dependencies are still valid
+        const validIds = new Set<string>()
 
-        // Determine line style
-        const lineColor = isSelected ? 0x4285f4 : (isHighlighted ? 0xffa500 : color)
-        const lineWidth = isSelected ? 3 : (isHighlighted ? 2 : 1.5)
-        const lineAlpha = isHighlighted ? 1 : 0.6
+        for (const dependency of dependencies) {
+            const srcAnchors = getTaskAnchors(dependency.srcTaskId)
+            const dstAnchors = getTaskAnchors(dependency.dstTaskId)
 
-        // Calculate connection points based on dependency type
-        let startX: number, startY: number, endX: number, endY: number
+            if (!srcAnchors || !dstAnchors) continue
 
-        switch (dependency.type) {
-            case 'finish_to_start':
-                startX = srcAnchors.rightCenterX
-                startY = srcAnchors.rightCenterY
-                endX = dstAnchors.leftCenterX
-                endY = dstAnchors.leftCenterY
+            validIds.add(dependency.id)
+
+            // Get or create graphics for this dependency
+            let graphics = this.graphics.get(dependency.id)
+            if (!graphics) {
+                graphics = new Graphics()
+                graphics.eventMode = 'static'
+                graphics.cursor = 'pointer'
+                this.container.addChild(graphics)
+                this.graphics.set(dependency.id, graphics)
+            }
+
+            // Clear and redraw
+            graphics.clear()
+
+            // Determine color and style
+            const isSelected = selectedIds.includes(dependency.id)
+            const isHighlighted = dependency.id === highlightedId
+            const color = this.getColor(isSelected, isHighlighted)
+            const alpha = this.getAlpha(isSelected, isHighlighted)
+            const width = this.getWidth(isSelected, isHighlighted)
+
+            // Draw based on dependency type
+            this.drawDependencyLine(
+                graphics,
+                dependency.type,
+                srcAnchors,
+                dstAnchors,
+                color,
+                alpha,
+                width
+            )
+
+            // Set hit area for interaction
+            graphics.hitArea = this.createHitArea(srcAnchors, dstAnchors)
+        }
+
+        // Remove graphics for dependencies that no longer exist
+        for (const [id, graphics] of this.graphics) {
+            if (!validIds.has(id)) {
+                this.container.removeChild(graphics)
+                graphics.destroy()
+                this.graphics.delete(id)
+            }
+        }
+    }
+
+    /**
+     * Draw dependency line based on type
+     */
+    private drawDependencyLine(
+        graphics: Graphics,
+        type: DependencyType,
+        srcAnchors: TaskAnchors,
+        dstAnchors: TaskAnchors,
+        color: number,
+        alpha: number,
+        width: number
+    ): void {
+        let srcX: number, srcY: number, dstX: number, dstY: number
+
+        switch (type) {
+            case DependencyType.FINISH_TO_START:
+                // From right of source to left of destination
+                srcX = srcAnchors.rightCenterX
+                srcY = srcAnchors.rightCenterY
+                dstX = dstAnchors.leftCenterX
+                dstY = dstAnchors.leftCenterY
                 break
 
-            case 'start_to_start':
-                startX = srcAnchors.leftCenterX
-                startY = srcAnchors.leftCenterY
-                endX = dstAnchors.leftCenterX
-                endY = dstAnchors.leftCenterY
+            case DependencyType.START_TO_START:
+                // From left of source to left of destination
+                srcX = srcAnchors.leftCenterX
+                srcY = srcAnchors.leftCenterY
+                dstX = dstAnchors.leftCenterX
+                dstY = dstAnchors.leftCenterY
                 break
 
-            case 'finish_to_finish':
-                startX = srcAnchors.rightCenterX
-                startY = srcAnchors.rightCenterY
-                endX = dstAnchors.rightCenterX
-                endY = dstAnchors.rightCenterY
+            case DependencyType.FINISH_TO_FINISH:
+                // From right of source to right of destination
+                srcX = srcAnchors.rightCenterX
+                srcY = srcAnchors.rightCenterY
+                dstX = dstAnchors.rightCenterX
+                dstY = dstAnchors.rightCenterY
                 break
 
-            case 'start_to_finish':
-                startX = srcAnchors.leftCenterX
-                startY = srcAnchors.leftCenterY
-                endX = dstAnchors.rightCenterX
-                endY = dstAnchors.rightCenterY
+            case DependencyType.START_TO_FINISH:
+                // From left of source to right of destination
+                srcX = srcAnchors.leftCenterX
+                srcY = srcAnchors.leftCenterY
+                dstX = dstAnchors.rightCenterX
+                dstY = dstAnchors.rightCenterY
                 break
 
             default:
-                // Default to finish-to-start
-                startX = srcAnchors.rightCenterX
-                startY = srcAnchors.rightCenterY
-                endX = dstAnchors.leftCenterX
-                endY = dstAnchors.leftCenterY
+                srcX = srcAnchors.rightCenterX
+                srcY = srcAnchors.rightCenterY
+                dstX = dstAnchors.leftCenterX
+                dstY = dstAnchors.leftCenterY
         }
 
-        // Draw the dependency line with a curve
-        this.drawCurvedArrow(startX, startY, endX, endY, lineColor, lineWidth, lineAlpha)
-
-        // Make interactive if needed
-        this.container.eventMode = 'static'
-        this.container.cursor = 'pointer'
-    }
-
-    private drawCurvedArrow(
-        x1: number,
-        y1: number,
-        x2: number,
-        y2: number,
-        color: number,
-        width: number,
-        alpha: number
-    ): void {
-        // Calculate control points for bezier curve
-        const dx = x2 - x1
-        const dy = y2 - y1
+        // Use curved arrow for better visibility
+        const dx = dstX - srcX
+        const dy = dstY - srcY
         const distance = Math.sqrt(dx * dx + dy * dy)
 
-        // Determine curve style based on relative positions
-        if (Math.abs(dy) < 10 && dx > 0) {
-            // Straight horizontal line
-            this.graphics.moveTo(x1, y1)
-            this.graphics.lineTo(x2, y2)
+        if (distance > 50) {
+            // Use curved line for longer distances
+            const curvature = 0.2
+            const cpX = srcX + dx / 2 + dy * curvature
+            const cpY = srcY + dy / 2 - dx * curvature
+
+            graphics.moveTo(srcX, srcY)
+            graphics.bezierCurveTo(
+                srcX + dx * 0.25, srcY + dy * 0.25,
+                cpX, cpY,
+                dstX, dstY
+            )
+            graphics.stroke({ width, color, alpha })
+
+            // Draw arrowhead
+            const angle = Math.atan2(dstY - cpY, dstX - cpX)
+            this.drawArrowhead(graphics, dstX, dstY, angle, color, alpha)
         } else {
-            // Curved line
-            const curveStrength = Math.min(distance * 0.3, 50)
+            // Use straight line for short distances
+            graphics.moveTo(srcX, srcY)
+            graphics.lineTo(dstX, dstY)
+            graphics.stroke({ width, color, alpha })
 
-            let cx1: number, cy1: number, cx2: number, cy2: number
-
-            if (dx > 0) {
-                // Forward dependency
-                cx1 = x1 + curveStrength
-                cy1 = y1
-                cx2 = x2 - curveStrength
-                cy2 = y2
-            } else {
-                // Backward dependency or vertical
-                const midX = (x1 + x2) / 2
-                const midY = (y1 + y2) / 2
-
-                cx1 = midX
-                cy1 = y1
-                cx2 = midX
-                cy2 = y2
-            }
-
-            // Draw bezier curve
-            this.graphics.moveTo(x1, y1)
-            this.graphics.bezierCurveTo(cx1, cy1, cx2, cy2, x2, y2)
+            // Draw arrowhead
+            const angle = Math.atan2(dy, dx)
+            this.drawArrowhead(graphics, dstX, dstY, angle, color, alpha)
         }
-
-        this.graphics.stroke({ width, color, alpha })
-
-        // Draw arrowhead
-        this.drawArrowHead(x2, y2, Math.atan2(y2 - y1, x2 - x1), color, alpha)
     }
 
-    private drawArrowHead(
+    /**
+     * Draw arrowhead
+     */
+    private drawArrowhead(
+        graphics: Graphics,
         x: number,
         y: number,
         angle: number,
         color: number,
         alpha: number
     ): void {
-        const arrowLength = 10
+        const arrowLength = 8
         const arrowAngle = Math.PI / 6
 
-        // Calculate arrow points
-        const x1 = x - arrowLength * Math.cos(angle - arrowAngle)
-        const y1 = y - arrowLength * Math.sin(angle - arrowAngle)
-        const x2 = x - arrowLength * Math.cos(angle + arrowAngle)
-        const y2 = y - arrowLength * Math.sin(angle + arrowAngle)
-
-        // Draw filled arrow
-        this.arrowHead.moveTo(x, y)
-        this.arrowHead.lineTo(x1, y1)
-        this.arrowHead.lineTo(x2, y2)
-        this.arrowHead.lineTo(x, y)
-        this.arrowHead.fill({ color, alpha })
+        graphics.moveTo(x, y)
+        graphics.lineTo(
+            x - arrowLength * Math.cos(angle - arrowAngle),
+            y - arrowLength * Math.sin(angle - arrowAngle)
+        )
+        graphics.lineTo(
+            x - arrowLength * Math.cos(angle + arrowAngle),
+            y - arrowLength * Math.sin(angle + arrowAngle)
+        )
+        graphics.closePath()
+        graphics.fill({ color, alpha })
     }
 
-    update(options: Partial<DependencyRendererOptions>): void {
-        Object.assign(this.options, options)
+    /**
+     * Create hit area for interaction
+     */
+    private createHitArea(srcAnchors: TaskAnchors, dstAnchors: TaskAnchors): any {
+        // Create a simple rectangular hit area between the two tasks
+        const minX = Math.min(srcAnchors.rightCenterX, dstAnchors.leftCenterX) - 10
+        const maxX = Math.max(srcAnchors.rightCenterX, dstAnchors.leftCenterX) + 10
+        const minY = Math.min(srcAnchors.rightCenterY, dstAnchors.leftCenterY) - 10
+        const maxY = Math.max(srcAnchors.rightCenterY, dstAnchors.leftCenterY) + 10
+
+        return {
+            contains: (x: number, y: number) => {
+                return x >= minX && x <= maxX && y >= minY && y <= maxY
+            }
+        }
+    }
+
+    /**
+     * Get color for dependency
+     */
+    private getColor(isSelected: boolean, isHighlighted: boolean): number {
+        if (isSelected) return 0x4285f4
+        if (isHighlighted) return 0x5a95f5
+        return this.options.color || 0x666666
+    }
+
+    /**
+     * Get alpha for dependency
+     */
+    private getAlpha(isSelected: boolean, isHighlighted: boolean): number {
+        if (isSelected) return 1
+        if (isHighlighted) return 0.9
+        return 0.6
+    }
+
+    /**
+     * Get line width for dependency
+     */
+    private getWidth(isSelected: boolean, isHighlighted: boolean): number {
+        if (isSelected) return 3
+        if (isHighlighted) return 2.5
+        return 2
+    }
+
+    /**
+     * Highlight a dependency
+     */
+    highlight(dependencyId: string | null): void {
+        this.options.highlightedId = dependencyId
         this.render()
     }
 
-    highlight(enabled: boolean): void {
-        this.options.isHighlighted = enabled
+    /**
+     * Select dependencies
+     */
+    select(dependencyIds: string[]): void {
+        this.options.selectedIds = dependencyIds
         this.render()
     }
 
-    select(selected: boolean): void {
-        this.options.isSelected = selected
-        this.render()
+    /**
+     * Update options
+     */
+    updateOptions(options: Partial<DependencyRendererOptions>): void {
+        this.options = { ...this.options, ...options }
     }
 
-    getContainer(): Container {
-        return this.container
+    /**
+     * Clear all graphics
+     */
+    clear(): void {
+        for (const graphics of this.graphics.values()) {
+            graphics.clear()
+        }
     }
 
+    /**
+     * Destroy the renderer
+     */
     destroy(): void {
-        this.container.destroy({ children: true })
+        for (const graphics of this.graphics.values()) {
+            this.container.removeChild(graphics)
+            graphics.destroy()
+        }
+        this.graphics.clear()
     }
 }

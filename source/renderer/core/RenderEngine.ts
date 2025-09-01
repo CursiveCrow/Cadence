@@ -1,232 +1,306 @@
 /**
  * RenderEngine Core
- * Main rendering engine for the timeline visualization
+ * Low-level PixiJS rendering engine for timeline visualization
+ * This module ONLY handles canvas rendering, not UI interactions
  */
 
-import { Application, Container, Rectangle } from 'pixi.js'
-import { SceneGraph } from './SceneGraph'
-import { Viewport } from './Viewport'
-import type { Task, Dependency, Staff } from '../../core/domain/entities/Task'
+import { Application, Container, Graphics, Rectangle, Renderer } from 'pixi.js'
 import type { TimelineConfig } from '../../infrastructure/persistence/redux/slices/timelineSlice'
+import { GridRenderer } from '../components/GridRenderer'
+import { DependencyRenderer } from '../components/DependencyRenderer'
+import { TaskRenderer } from '../components/TaskRenderer'
+import type { Task } from '../../core/domain/entities/Task'
+import type { Dependency } from '../../core/domain/entities/Dependency'
+import type { Staff } from '../../core/domain/entities/Staff'
 
 export interface RenderEngineOptions {
     canvas: HTMLCanvasElement
-    projectId: string
     config: TimelineConfig
-    plugins?: RendererPlugin[]
+    preferWebGPU?: boolean
 }
 
-export interface RendererPlugin {
-    name: string
-    init(engine: RenderEngine): void
-    destroy(): void
+export interface ViewportState {
+    x: number
+    y: number
+    zoom: number
+    verticalScale?: number
 }
 
 export interface RenderData {
-    tasks: Record<string, any>
-    dependencies: Record<string, any>
-    staffs: any[]
-    selection: string[]
+    tasks: Record<string, Task>
+    dependencies: Record<string, Dependency>
+    staffs: Staff[]
+    selection?: string[]
+    projectStartDate?: Date
 }
 
+/**
+ * Core rendering engine using PixiJS
+ * Handles only low-level canvas operations
+ */
 export class RenderEngine {
     private app: Application | null = null
-    private scene: SceneGraph | null = null
-    private viewport: Viewport | null = null
     private layers: {
-        viewport: Container
-        background: Container
-        dependencies: Container
+        root: Container
+        grid: Container
+        staffLines: Container
         tasks: Container
-        selection: Container
-        dragLayer: Container
+        dependencies: Container
+        overlay: Container
     } | null = null
 
-    private plugins: RendererPlugin[] = []
-    private isInitialized = false
-    private initializing = false
-    private currentData: RenderData = {
-        tasks: {},
-        dependencies: {},
-        staffs: [],
-        selection: []
-    }
+    private initialized = false
+    private viewportState: ViewportState = { x: 0, y: 0, zoom: 1 }
 
-    constructor(private readonly options: RenderEngineOptions) {
-        this.plugins = options.plugins || []
-    }
+    // Renderers
+    private gridRenderer: GridRenderer | null = null
+    private taskRenderer: TaskRenderer | null = null
+    private dependencyRenderer: DependencyRenderer | null = null
 
+    constructor(private options: RenderEngineOptions) { }
+
+    /**
+     * Initialize the PixiJS application with WebGPU support if available
+     */
     async init(): Promise<void> {
-        if (this.initializing || this.isInitialized) return
-        this.initializing = true
+        if (this.initialized) return
 
         try {
+            // Check for WebGPU availability
+            const preferWebGPU = this.options.preferWebGPU !== false
+            let rendererType: 'webgpu' | 'webgl' = 'webgl'
+
+            if (preferWebGPU && 'gpu' in navigator) {
+                try {
+                    const adapter = await (navigator as any).gpu.requestAdapter()
+                    if (adapter) {
+                        rendererType = 'webgpu'
+                        console.log('Using WebGPU renderer')
+                    }
+                } catch (e) {
+                    console.log('WebGPU not available, falling back to WebGL')
+                }
+            }
+
             // Create PIXI Application
             this.app = new Application()
+
             await this.app.init({
                 canvas: this.options.canvas,
-                backgroundColor: 0xffffff,
+                backgroundColor: 0xf5f5f5,
                 antialias: true,
                 resolution: window.devicePixelRatio || 1,
                 autoDensity: true,
+                preference: rendererType,
+                powerPreference: 'high-performance',
                 resizeTo: this.options.canvas.parentElement as HTMLElement
             })
 
-            // Create layers
-            this.layers = this.createLayers()
+            // Create layer hierarchy
+            this.createLayers()
 
-            // Create scene graph
-            this.scene = new SceneGraph({
-                app: this.app,
-                layers: this.layers,
-                config: this.options.config
-            })
+            // Set up stage interaction
+            this.app.stage.eventMode = 'static'
+            this.app.stage.hitArea = new Rectangle(
+                0, 0,
+                this.app.screen.width,
+                this.app.screen.height
+            )
 
-            // Create viewport
-            this.viewport = new Viewport({
-                app: this.app,
-                container: this.layers.viewport,
-                config: this.options.config
-            })
-
-            // Initialize plugins
-            for (const plugin of this.plugins) {
-                plugin.init(this)
-            }
-
-            // Set up stage hit area
-            this.updateStageHitArea()
-
-            // Start render loop
-            this.app.ticker.add(() => {
-                // Render loop is handled by PIXI automatically
-                // We can add custom logic here if needed
-            })
-
-            this.isInitialized = true
-        } finally {
-            this.initializing = false
+            this.initialized = true
+        } catch (error) {
+            console.error('Failed to initialize render engine:', error)
+            throw error
         }
     }
 
-    private createLayers(): typeof this.layers {
-        const viewport = new Container()
-        viewport.name = 'viewport'
-        this.app!.stage.addChild(viewport)
-
-        const background = new Container()
-        background.name = 'background'
-        viewport.addChild(background)
-
-        const dependencies = new Container()
-        dependencies.name = 'dependencies'
-        viewport.addChild(dependencies)
-
-        const tasks = new Container()
-        tasks.name = 'tasks'
-        viewport.addChild(tasks)
-
-        const selection = new Container()
-        selection.name = 'selection'
-        viewport.addChild(selection)
-
-        const dragLayer = new Container()
-        dragLayer.name = 'dragLayer'
-        viewport.addChild(dragLayer)
-
-        return {
-            viewport,
-            background,
-            dependencies,
-            tasks,
-            selection,
-            dragLayer
-        }
-    }
-
-    private updateStageHitArea(): void {
+    /**
+     * Create rendering layers
+     */
+    private createLayers(): void {
         if (!this.app) return
 
-        const stage = this.app.stage as any
-        const w = Math.max(0, this.app.screen.width)
-        const h = Math.max(0, this.app.screen.height)
+        const root = new Container()
+            ; (root as any).label = 'root'
 
-        if (!stage.hitArea || stage.hitArea.width !== w || stage.hitArea.height !== h) {
-            try {
-                stage.hitArea = new Rectangle(0, 0, w, h)
-            } catch (err) {
-                console.warn('Failed to update stage hit area:', err)
-            }
+        const grid = new Container()
+            ; (grid as any).label = 'grid'
+
+        const staffLines = new Container()
+            ; (staffLines as any).label = 'staffLines'
+
+        const tasks = new Container()
+            ; (tasks as any).label = 'tasks'
+
+        const dependencies = new Container()
+            ; (dependencies as any).label = 'dependencies'
+
+        const overlay = new Container()
+            ; (overlay as any).label = 'overlay'
+
+        // Add layers in rendering order
+        root.addChild(grid)
+        root.addChild(staffLines)
+        root.addChild(dependencies)
+        root.addChild(tasks)
+        root.addChild(overlay)
+
+        this.app.stage.addChild(root)
+
+        this.layers = {
+            root,
+            grid,
+            staffLines,
+            tasks,
+            dependencies,
+            overlay
         }
+
+        // Initialize renderers with their respective containers
+        this.gridRenderer = new GridRenderer({
+            container: grid,
+            projectStartDate: new Date(),
+            staffs: [],
+            viewportState: this.viewportState,
+            screenWidth: this.app.screen.width,
+            screenHeight: this.app.screen.height,
+            config: this.options.config as any
+        })
+
+        this.taskRenderer = new TaskRenderer({
+            container: tasks,
+            config: this.options.config as any
+        })
+
+        this.dependencyRenderer = new DependencyRenderer({
+            container: dependencies,
+            dependencies: [],
+            getTaskAnchors: (taskId) => this.taskRenderer?.getTaskAnchors(taskId)
+        })
     }
 
-    render(data: RenderData, viewportState: { x: number; y: number; zoom: number }): void {
-        if (!this.app || !this.layers || !this.scene || !this.viewport) return
+    /**
+     * Update viewport transformation
+     */
+    updateViewport(state: ViewportState): void {
+        if (!this.layers) return
 
-        // Update current data
-        this.currentData = data
+        this.viewportState = state
 
-        // Update stage hit area
-        this.updateStageHitArea()
-
-        // Update viewport
-        this.viewport.update(viewportState)
-
-        // Update scene
-        this.scene.update(data, viewportState)
+        // Apply transformation to root container
+        this.layers.root.position.set(state.x, state.y)
+        this.layers.root.scale.set(state.zoom, state.zoom * (state.verticalScale || 1))
     }
 
-    getApplication(): Application | null {
-        return this.app
-    }
-
-    getViewportContainer(): Container | null {
-        return this.layers?.viewport || null
-    }
-
-    getScene(): SceneGraph | null {
-        return this.scene
-    }
-
-    getViewport(): Viewport | null {
-        return this.viewport
-    }
-
-    getLayers(): typeof this.layers {
+    /**
+     * Get layer containers for external rendering
+     */
+    getLayers() {
         return this.layers
     }
 
-    getCurrentData(): RenderData {
-        return this.currentData
+    /**
+     * Get PIXI application instance
+     */
+    getApp() {
+        return this.app
     }
 
+    /**
+     * Get current viewport state
+     */
+    getViewportState() {
+        return this.viewportState
+    }
+
+    /**
+     * Main render method - renders all visual elements
+     */
+    render(data: RenderData, viewport?: ViewportState): void {
+        if (!this.app || !this.layers) return
+
+        // Update viewport if provided
+        if (viewport) {
+            this.updateViewport(viewport)
+        }
+
+        // Extract data
+        const tasks = Object.values(data.tasks || {})
+        const dependencies = Object.values(data.dependencies || {})
+        const staffs = data.staffs || []
+        const projectStartDate = data.projectStartDate || new Date()
+
+        // Update and render grid
+        if (this.gridRenderer) {
+            this.gridRenderer.updateOptions({
+                projectStartDate,
+                staffs,
+                viewportState: this.viewportState,
+                screenWidth: this.app.screen.width,
+                screenHeight: this.app.screen.height
+            })
+            this.gridRenderer.render()
+        }
+
+        // Update and render tasks
+        if (this.taskRenderer) {
+            this.taskRenderer.updateTasks(tasks)
+            this.taskRenderer.render({
+                projectStartDate,
+                staffs,
+                viewportState: this.viewportState,
+                selectedTaskIds: data.selection || []
+            })
+        }
+
+        // Update and render dependencies
+        if (this.dependencyRenderer) {
+            this.dependencyRenderer.updateOptions({
+                dependencies,
+                selectedIds: data.selection || []
+            })
+            this.dependencyRenderer.render()
+        }
+    }
+
+    /**
+     * Handle canvas resize
+     */
     resize(width: number, height: number): void {
         if (!this.app) return
 
         this.app.renderer.resize(width, height)
-        this.updateStageHitArea()
 
-        // Notify viewport of resize
-        this.viewport?.handleResize(width, height)
+        // Update stage hit area
+        this.app.stage.hitArea = new Rectangle(0, 0, width, height)
     }
 
+    /**
+     * Check if engine is initialized
+     */
+    isInitialized(): boolean {
+        return this.initialized
+    }
+
+    /**
+     * Destroy the rendering engine
+     */
     destroy(): void {
-        // Destroy plugins
-        for (const plugin of this.plugins) {
-            try {
-                plugin.destroy()
-            } catch (err) {
-                console.warn(`Failed to destroy plugin ${plugin.name}:`, err)
-            }
+        // Destroy renderers
+        if (this.gridRenderer) {
+            this.gridRenderer.destroy()
+            this.gridRenderer = null
         }
 
-        // Destroy viewport
-        this.viewport?.destroy()
-        this.viewport = null
+        if (this.taskRenderer) {
+            this.taskRenderer.destroy()
+            this.taskRenderer = null
+        }
 
-        // Destroy scene
-        this.scene?.destroy()
-        this.scene = null
+        if (this.dependencyRenderer) {
+            this.dependencyRenderer.destroy()
+            this.dependencyRenderer = null
+        }
 
         // Destroy layers
         if (this.layers) {
@@ -238,17 +312,15 @@ export class RenderEngine {
 
         // Destroy PIXI app
         if (this.app) {
-            this.app.ticker.stop()
-            this.app.stage.removeAllListeners()
             this.app.destroy(true, {
                 children: true,
-                texture: true,
-                textureSource: true,
-                context: true
+                texture: true
             })
             this.app = null
         }
 
-        this.isInitialized = false
+        this.initialized = false
     }
 }
+
+export default RenderEngine

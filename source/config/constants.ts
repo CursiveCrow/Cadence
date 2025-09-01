@@ -51,8 +51,8 @@ export const CONSTANTS = {
     STORAGE_KEY_PREFERENCES: 'cadence-preferences',
     STORAGE_KEY_RECENT_PROJECTS: 'cadence-recent-projects',
 
-    // API endpoints (if using backend)
-    API_BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:3001',
+    // API endpoints (if using backend)  
+    API_BASE_URL: import.meta.env?.VITE_API_URL || 'http://localhost:3001',
 
     // Feature flags
     ENABLE_COLLABORATION: false,

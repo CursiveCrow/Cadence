@@ -14,6 +14,9 @@ import selectionReducer from './slices/selectionSlice'
 import viewportReducer from './slices/viewportSlice'
 import timelineReducer from './slices/timelineSlice'
 
+// Stable empty references to avoid creating new objects/arrays in selectors
+const EMPTY_OBJECT: Readonly<Record<string, never>> = Object.freeze({})
+
 export const store = configureStore({
     reducer: {
         // Domain state
@@ -50,15 +53,15 @@ export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector
 
 // Selectors
 export const selectTasksByProject = (projectId: string) => (state: RootState) => {
-    return state.tasks.byProjectId[projectId] || {}
+    return state.tasks.byProjectId[projectId] || EMPTY_OBJECT
 }
 
 export const selectDependenciesByProject = (projectId: string) => (state: RootState) => {
-    return state.dependencies.byProjectId[projectId] || {}
+    return state.dependencies.byProjectId[projectId] || EMPTY_OBJECT
 }
 
 export const selectStaffsByProject = (projectId: string) => (state: RootState) => {
-    return state.staffs.byProjectId[projectId] || {}
+    return state.staffs.byProjectId[projectId] || EMPTY_OBJECT
 }
 
 export const selectProjectById = (projectId: string) => (state: RootState) => {

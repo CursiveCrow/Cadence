@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is the refactored version of the Cadence Timeline Manager, rebuilt using Clean Architecture principles, Domain-Driven Design (DDD), and modern React patterns. **Now powered by Bun 2 runtime for 4-10x performance improvements!**
+This is the refactored version of the Cadence Timeline Manager, rebuilt using Clean Architecture principles, Domain-Driven Design (DDD), and modern React patterns.
 
 ## Architecture
 
@@ -45,11 +45,8 @@ The application follows a clean architecture with the following layers:
 
 ### Prerequisites
 
-- **Bun** (this project does NOT use Node.js/npm/yarn)
-- Install Bun: `curl -fsSL https://bun.sh/install | bash`
-- **Important**: This is a Bun-only project. Do not use npm/yarn/node!
-
-> ⚠️ **DO NOT USE**: `npm`, `yarn`, or `node` commands. This project is Bun-exclusive for maximum performance.
+- **Node.js (v18+) and npm**
+- Install Node.js: https://nodejs.org/en/download
 
 ## Development
 
@@ -75,12 +72,12 @@ source/
 
 ### Key Technologies
 
-- **Bun**: Ultra-fast JavaScript runtime and toolkit
+- **Node + Electron**: Desktop application framework
 - **React 19.1**: Latest React with concurrent features
 - **Redux Toolkit**: State management
 - **PIXI.js v8**: WebGL rendering
 - **TypeScript 5.3+**: Type safety
-- **Vite**: Fast build tooling (with Bun integration)
+- **Vite**: Fast build tooling
 
 ## Testing
 
