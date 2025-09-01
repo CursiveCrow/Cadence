@@ -17,6 +17,12 @@ export interface RenderEngineOptions {
     canvas: HTMLCanvasElement
     config: TimelineConfig
     preferWebGPU?: boolean
+    taskInteractions?: {
+        onPointerDown?: (args: { taskId: string; globalX: number; globalY: number; localX: number; localY: number; button?: number; layoutWidth?: number }) => void
+        onPointerUp?: (args: { taskId: string; globalX: number; globalY: number }) => void
+        onPointerEnter?: (args: { taskId: string }) => void
+        onPointerLeave?: (args: { taskId: string }) => void
+    }
 }
 
 export interface ViewportState {
@@ -56,6 +62,7 @@ export class RenderEngine {
     private gridRenderer: GridRenderer | null = null
     private taskRenderer: TaskRenderer | null = null
     private dependencyRenderer: DependencyRenderer | null = null
+    private overlayRefs: { drag?: Graphics; dep?: Graphics } = {}
 
     constructor(private options: RenderEngineOptions) { }
 
@@ -85,9 +92,11 @@ export class RenderEngine {
             // Create PIXI Application
             this.app = new Application()
 
+            const bg = (this.options.config as any)?.BACKGROUND_COLOR ?? 0x0f1115
             await this.app.init({
                 canvas: this.options.canvas,
-                backgroundColor: 0xf5f5f5,
+                backgroundColor: bg,
+                backgroundAlpha: 1,
                 antialias: true,
                 resolution: window.devicePixelRatio || 1,
                 autoDensity: true,
@@ -171,6 +180,9 @@ export class RenderEngine {
             container: tasks,
             config: this.options.config as any
         })
+        if (this.options.taskInteractions) {
+            this.taskRenderer.setInteractionHandlers(this.options.taskInteractions)
+        }
 
         this.dependencyRenderer = new DependencyRenderer({
             container: dependencies,
@@ -185,11 +197,9 @@ export class RenderEngine {
     updateViewport(state: ViewportState): void {
         if (!this.layers) return
 
+        // Store state; renderers use zoom/verticalScale to compute positions and sizes.
+        // We intentionally avoid scaling/offsetting the stage so left margin and UI remain crisp.
         this.viewportState = state
-
-        // Apply transformation to root container
-        this.layers.root.position.set(state.x, state.y)
-        this.layers.root.scale.set(state.zoom, state.zoom * (state.verticalScale || 1))
     }
 
     /**
@@ -211,6 +221,67 @@ export class RenderEngine {
      */
     getViewportState() {
         return this.viewportState
+    }
+
+    /**
+     * Overlays: drag preview rectangle
+     */
+    showDragPreview(x: number, y: number, width: number, height: number): void {
+        if (!this.layers) return
+        const g = this.overlayRefs.drag || new Graphics()
+        g.clear()
+        g.roundRect(x - 1, y - 1, Math.max(1, width) + 2, Math.max(1, height) + 2, Math.min(height / 2 + 2, 20))
+        g.stroke({ width: 2, color: 0x8b5cf6, alpha: 0.95 })
+        g.fill({ color: 0x8b5cf6, alpha: 0.14 })
+        if (!this.overlayRefs.drag) {
+            this.layers.overlay.addChild(g)
+            this.overlayRefs.drag = g
+        }
+    }
+
+    /**
+     * Overlays: dependency preview from a source task to a point
+     */
+    showDependencyPreview(srcTaskId: string, dstX: number, dstY: number): void {
+        if (!this.layers) return
+        const anchors = this.taskRenderer?.getTaskAnchors(srcTaskId)
+        if (!anchors) return
+        const g = this.overlayRefs.dep || new Graphics()
+        g.clear()
+        // Line from right-center to target
+        g.moveTo(anchors.rightCenterX, anchors.rightCenterY)
+        g.lineTo(dstX, dstY)
+        g.stroke({ width: 2, color: 0x8b5cf6, alpha: 0.9 })
+        // Arrowhead
+        const angle = Math.atan2(dstY - anchors.rightCenterY, dstX - anchors.rightCenterX)
+        const arrow = 8
+        g.moveTo(dstX, dstY)
+        g.lineTo(dstX - arrow * Math.cos(angle - Math.PI / 6), dstY - arrow * Math.sin(angle - Math.PI / 6))
+        g.lineTo(dstX - arrow * Math.cos(angle + Math.PI / 6), dstY - arrow * Math.sin(angle + Math.PI / 6))
+        g.closePath()
+        g.fill({ color: 0x8b5cf6, alpha: 0.85 })
+        if (!this.overlayRefs.dep) {
+            this.layers.overlay.addChild(g)
+            this.overlayRefs.dep = g
+        }
+    }
+
+    clearOverlayPreviews(): void {
+        if (!this.layers) return
+        if (this.overlayRefs.drag) {
+            this.layers.overlay.removeChild(this.overlayRefs.drag)
+            this.overlayRefs.drag.destroy()
+            this.overlayRefs.drag = undefined
+        }
+        if (this.overlayRefs.dep) {
+            this.layers.overlay.removeChild(this.overlayRefs.dep)
+            this.overlayRefs.dep.destroy()
+            this.overlayRefs.dep = undefined
+        }
+    }
+
+    getTaskAnchors(taskId: string) {
+        return this.taskRenderer?.getTaskAnchors(taskId)
     }
 
     /**

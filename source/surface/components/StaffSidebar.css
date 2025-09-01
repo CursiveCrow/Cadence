@@ -5,8 +5,8 @@
 
 .staff-sidebar {
   position: relative;
-  background: #fafafa;
-  border-right: 2px solid #e0e0e0;
+  background: var(--ui-surface-2, rgba(45, 55, 72, 0.9));
+  border-right: 1px solid var(--ui-surface-1-border, rgba(75, 85, 99, 0.8));
   overflow: hidden;
   user-select: none;
   cursor: grab;
@@ -23,14 +23,16 @@
 .staff-label {
   font-size: 12px;
   font-weight: 600;
-  color: #424242;
+  color: var(--ui-color-text, #e5e7eb);
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
+  padding: 2px 6px;
+  border-radius: 6px;
   transition: all 0.2s;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  background: rgba(30, 30, 30, 0.6);
+  border: 1px solid rgba(75, 85, 99, 0.8);
 }
 
 .staff-label:hover {
@@ -41,9 +43,9 @@
 .time-signature {
   width: 28px;
   height: 28px;
-  background: white;
-  border: 1px solid #c0c0c0;
-  border-radius: 4px;
+  background: rgba(30, 30, 30, 0.6);
+  border: 1px solid rgba(75, 85, 99, 0.8);
+  border-radius: 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -63,6 +65,7 @@
   flex-direction: column;
   align-items: center;
   line-height: 1;
+  color: var(--ui-color-text, #e5e7eb);
 }
 
 .time-signature-num,
@@ -97,16 +100,16 @@
   right: 10px;
   width: 32px;
   height: 32px;
-  background: #4285f4;
-  color: white;
-  border: none;
+  background: var(--ui-color-primary-weak, rgba(139, 92, 246, 0.1));
+  color: var(--ui-color-text, #e5e7eb);
+  border: 1px solid var(--ui-color-primary-border, rgba(139, 92, 246, 0.3));
   border-radius: 50%;
   font-size: 20px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   transition: all 0.2s;
 }
 

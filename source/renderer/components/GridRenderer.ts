@@ -6,6 +6,9 @@
 import { Container, Graphics, Text } from 'pixi.js'
 import { Staff } from '../../core/domain/entities/Staff'
 import { CONSTANTS } from '../../config/constants'
+import type { TimelineConfig } from '../../infrastructure/persistence/redux/slices/timelineSlice'
+import { computeViewportAlignment, worldDayToScreenX } from '../utils/alignment'
+import type { ViewportAlignment } from '../utils/alignment'
 import { drawGridLine, drawWeekendHighlight, drawTodayMarker } from '../utils/shapes'
 
 export interface GridRendererOptions {
@@ -27,11 +30,13 @@ export class GridRenderer {
     private measureGraphics: Graphics
 
     private options: GridRendererOptions
-    private config: typeof CONSTANTS
+    // Accept either legacy CONSTANTS keys (DEFAULT_*) or TimelineConfig keys
+    private config: (typeof CONSTANTS) & Partial<TimelineConfig>
 
     constructor(options: GridRendererOptions) {
         this.options = options
-        this.config = { ...CONSTANTS, ...options.config }
+        // Merge runtime config on top of legacy constants; supports both key shapes
+        this.config = { ...CONSTANTS, ...(options.config as any) }
         this.container = options.container
 
         // Create graphics layers
@@ -60,27 +65,32 @@ export class GridRenderer {
         const verticalScale = viewportState.verticalScale || 1
 
         // Calculate visible day range
-        const dayWidth = this.config.DEFAULT_DAY_WIDTH * zoom
-        const leftMargin = this.config.DEFAULT_LEFT_MARGIN
-        const topMargin = this.config.DEFAULT_TOP_MARGIN * verticalScale
+        const dayWidthBase = (this.config.DAY_WIDTH ?? this.config.DEFAULT_DAY_WIDTH)
+        const leftMargin = (this.config.LEFT_MARGIN ?? this.config.DEFAULT_LEFT_MARGIN)
+        const topMargin = (this.config.TOP_MARGIN ?? this.config.DEFAULT_TOP_MARGIN) * verticalScale
+        const dayWidth = dayWidthBase * zoom
 
-        const startDay = Math.floor(-viewportState.x / dayWidth) - 2
-        const endDay = Math.ceil((-viewportState.x + screenWidth) / dayWidth) + 2
+        const align = computeViewportAlignment({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, this.options.viewportState.x / Math.max(1, dayWidth))
 
-        // Draw weekends
-        this.drawWeekends(startDay, endDay, dayWidth, screenHeight, projectStartDate)
+        const leftMostDays = Math.floor(align.viewportXDaysQuantized - leftMargin / Math.max(dayWidth, 0.0001))
+        const visibleDays = Math.ceil(screenWidth / Math.max(dayWidth, 0.0001))
+        const startDay = leftMostDays - 5
+        const endDay = leftMostDays + visibleDays + 5
+
+        // Draw weekends (low alpha on dark)
+        this.drawWeekends(startDay, endDay, dayWidth, screenHeight, projectStartDate, align)
 
         // Draw vertical grid lines (days)
-        this.drawVerticalGrid(startDay, endDay, dayWidth, screenHeight, projectStartDate)
+        this.drawVerticalGrid(startDay, endDay, dayWidth, screenHeight, projectStartDate, align)
 
         // Draw horizontal grid lines (staff lines)
         this.drawStaffLines(staffs, verticalScale, screenWidth)
 
         // Draw measure markers
-        this.drawMeasureMarkers(startDay, endDay, dayWidth, screenHeight, staffs, verticalScale)
+        this.drawMeasureMarkers(startDay, endDay, dayWidth, screenHeight, staffs, verticalScale, align)
 
         // Draw today marker
-        this.drawTodayMarker(dayWidth, screenHeight, projectStartDate)
+        this.drawTodayMarker(dayWidth, screenHeight, projectStartDate, align)
     }
 
     /**
@@ -91,9 +101,10 @@ export class GridRenderer {
         endDay: number,
         dayWidth: number,
         screenHeight: number,
-        projectStartDate: Date
+        projectStartDate: Date,
+        align: ViewportAlignment
     ): void {
-        const leftMargin = this.config.DEFAULT_LEFT_MARGIN
+        const leftMargin = (this.config.LEFT_MARGIN ?? this.config.DEFAULT_LEFT_MARGIN)
 
         for (let day = startDay; day <= endDay; day++) {
             const date = new Date(projectStartDate)
@@ -102,11 +113,11 @@ export class GridRenderer {
 
             // Saturday = 6, Sunday = 0
             if (dayOfWeek === 0 || dayOfWeek === 6) {
-                const x = leftMargin + day * dayWidth
+                const x = Math.round(worldDayToScreenX({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, day, align))
                 drawWeekendHighlight(
                     this.weekendGraphics,
                     x,
-                    0,
+                    this.options.viewportState.y,
                     dayWidth,
                     screenHeight,
                     this.config.WEEKEND_FILL_COLOR,
@@ -124,27 +135,28 @@ export class GridRenderer {
         endDay: number,
         dayWidth: number,
         screenHeight: number,
-        projectStartDate: Date
+        projectStartDate: Date,
+        align: ViewportAlignment
     ): void {
-        const leftMargin = this.config.DEFAULT_LEFT_MARGIN
+        const leftMargin = (this.config.LEFT_MARGIN ?? this.config.DEFAULT_LEFT_MARGIN)
 
         for (let day = startDay; day <= endDay; day++) {
-            const x = leftMargin + day * dayWidth
+            const x = Math.round(worldDayToScreenX({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, day, align))
             const date = new Date(projectStartDate)
             date.setDate(date.getDate() + day)
 
-            // Major grid lines on week boundaries
-            const isMajor = date.getDay() === 1 // Monday
+            // Major grid lines on week boundaries (Sunday) to match DateHeader
+            const isMajor = date.getDay() === 0
 
             drawGridLine(
                 this.gridGraphics,
-                x,
-                0,
-                x,
-                screenHeight,
+                Math.round(x) + 0.5,
+                this.options.viewportState.y,
+                Math.round(x) + 0.5,
+                this.options.viewportState.y + screenHeight,
                 isMajor ? this.config.GRID_COLOR_MAJOR : this.config.GRID_COLOR_MINOR,
-                isMajor ? 0.5 : 0.3,
-                isMajor ? 2 : 1
+                isMajor ? 0.35 : 0.18,
+                isMajor ? 1 : 1
             )
         }
     }
@@ -157,9 +169,9 @@ export class GridRenderer {
         verticalScale: number,
         screenWidth: number
     ): void {
-        const topMargin = this.config.DEFAULT_TOP_MARGIN * verticalScale
-        const staffSpacing = this.config.DEFAULT_STAFF_SPACING * verticalScale
-        const lineSpacing = this.config.DEFAULT_STAFF_LINE_SPACING * verticalScale
+        const topMargin = (this.config.TOP_MARGIN ?? this.config.DEFAULT_TOP_MARGIN) * verticalScale + this.options.viewportState.y
+        const staffSpacing = (this.config.STAFF_SPACING ?? this.config.DEFAULT_STAFF_SPACING) * verticalScale
+        const lineSpacing = (this.config.STAFF_LINE_SPACING ?? this.config.DEFAULT_STAFF_LINE_SPACING) * verticalScale
 
         staffs.forEach((staff, staffIndex) => {
             const staffY = topMargin + staffIndex * staffSpacing
@@ -171,11 +183,11 @@ export class GridRenderer {
                 drawGridLine(
                     this.staffGraphics,
                     0,
-                    y,
+                    Math.round(y) + 0.5,
                     screenWidth,
-                    y,
-                    0x888888,
-                    0.6,
+                    Math.round(y) + 0.5,
+                    0x9aa0a6,
+                    0.22,
                     1
                 )
             }
@@ -191,12 +203,13 @@ export class GridRenderer {
         dayWidth: number,
         screenHeight: number,
         staffs: Staff[],
-        verticalScale: number
+        verticalScale: number,
+        align: ViewportAlignment
     ): void {
-        const leftMargin = this.config.DEFAULT_LEFT_MARGIN
-        const topMargin = this.config.DEFAULT_TOP_MARGIN * verticalScale
-        const staffSpacing = this.config.DEFAULT_STAFF_SPACING * verticalScale
-        const lineSpacing = this.config.DEFAULT_STAFF_LINE_SPACING * verticalScale
+        const leftMargin = (this.config.LEFT_MARGIN ?? this.config.DEFAULT_LEFT_MARGIN)
+        const topMargin = (this.config.TOP_MARGIN ?? this.config.DEFAULT_TOP_MARGIN) * verticalScale + this.options.viewportState.y
+        const staffSpacing = (this.config.STAFF_SPACING ?? this.config.DEFAULT_STAFF_SPACING) * verticalScale
+        const lineSpacing = (this.config.STAFF_LINE_SPACING ?? this.config.DEFAULT_STAFF_LINE_SPACING) * verticalScale
 
         staffs.forEach((staff, staffIndex) => {
             if (!staff.timeSignature) return
@@ -225,7 +238,7 @@ export class GridRenderer {
             for (let day = startDay; day <= endDay; day += measureLength) {
                 if (day < 0) continue
 
-                const x = leftMargin + day * dayWidth
+                const x = Math.round(worldDayToScreenX({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, day, align))
                 const measureNumber = Math.floor(day / measureLength)
                 const isDownbeat = measureNumber % 4 === 0 // Every 4th measure
 
@@ -233,9 +246,9 @@ export class GridRenderer {
                 this.measureGraphics.moveTo(x, staffY)
                 this.measureGraphics.lineTo(x, staffY + staffHeight)
                 this.measureGraphics.stroke({
-                    width: isDownbeat ? 2 : 1,
-                    color: 0x666666,
-                    alpha: isDownbeat ? 0.6 : 0.3
+                    width: isDownbeat ? 1 : 1,
+                    color: 0xb0b6ba,
+                    alpha: isDownbeat ? 0.28 : 0.14
                 })
 
                 // Draw double bar for downbeats
@@ -244,8 +257,8 @@ export class GridRenderer {
                     this.measureGraphics.lineTo(x - 3, staffY + staffHeight)
                     this.measureGraphics.stroke({
                         width: 1,
-                        color: 0x666666,
-                        alpha: 0.3
+                        color: 0xb0b6ba,
+                        alpha: 0.12
                     })
                 }
             }
@@ -258,7 +271,8 @@ export class GridRenderer {
     private drawTodayMarker(
         dayWidth: number,
         screenHeight: number,
-        projectStartDate: Date
+        projectStartDate: Date,
+        align: ViewportAlignment
     ): void {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
@@ -268,12 +282,13 @@ export class GridRenderer {
             (today.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24)
         )
 
-        const x = this.config.DEFAULT_LEFT_MARGIN + daysSinceStart * dayWidth
+        const leftMargin = (this.config.LEFT_MARGIN ?? this.config.DEFAULT_LEFT_MARGIN)
+        const x = Math.round(worldDayToScreenX({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, daysSinceStart, align))
 
         drawTodayMarker(
             this.todayGraphics,
             x,
-            0,
+            this.options.viewportState.y,
             screenHeight,
             this.config.TODAY_LINE_COLOR,
             0.8

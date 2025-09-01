@@ -4,8 +4,9 @@
  */
 
 import React, { useRef, useMemo } from 'react'
-import { CONSTANTS } from '../../config/constants'
+import type { TimelineConfig } from '../../infrastructure/persistence/redux/slices/timelineSlice'
 import './DateHeader.css'
+import { computeViewportAlignment, worldDayToScreenX } from '../../renderer/utils/alignment'
 
 export interface DateHeaderProps {
     projectStartDate: string
@@ -13,6 +14,7 @@ export interface DateHeaderProps {
     width: number
     height?: number
     onZoomChange?: (newZoom: number, anchorX: number) => void
+    config: TimelineConfig
 }
 
 type TimeScale = 'hour' | 'day' | 'week' | 'month'
@@ -27,7 +29,8 @@ export const DateHeader: React.FC<DateHeaderProps> = ({
     viewport,
     width,
     height = 48,
-    onZoomChange
+    onZoomChange,
+    config
 }) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const dragRef = useRef({
@@ -47,108 +50,97 @@ export const DateHeader: React.FC<DateHeaderProps> = ({
     }, [viewport.zoom])
 
     // Calculate visible dates
-    const visibleDates = useMemo(() => {
+    // Compute arrays per scale like archive version
+    const { months, weeks, days, hours } = useMemo(() => {
         const startDate = new Date(projectStartDate)
-        const dayWidth = CONSTANTS.DEFAULT_DAY_WIDTH * viewport.zoom
-        const leftMargin = CONSTANTS.DEFAULT_LEFT_MARGIN
+        const dayWidth = (config.DAY_WIDTH || 30) * viewport.zoom
+        const leftMargin = config.LEFT_MARGIN || 120
+        const containerWidth = containerRef.current?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : width)
+        const align = computeViewportAlignment({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, (viewport.x || 0) / Math.max(1, dayWidth))
+        const leftMostDays = Math.floor(align.viewportXDaysQuantized - leftMargin / Math.max(dayWidth, 0.0001))
+        const visibleDays = Math.ceil(containerWidth / Math.max(dayWidth, 0.0001))
+        const startDay = leftMostDays - 5
+        const endDay = leftMostDays + visibleDays + 5
 
-        // Calculate visible range
-        const startDay = Math.floor(-viewport.x / dayWidth) - 1
-        const endDay = Math.ceil((-viewport.x + width) / dayWidth) + 1
+        const months: Array<{ x: number; text: string }> = []
+        const weeks: Array<{ x: number; text: string }> = []
+        const days: Array<{ x: number; text: string }> = []
+        const hours: Array<{ x: number; text: string }> = []
 
-        const dates: Array<{
-            label: string
-            sublabel?: string
-            x: number
-            isMajor: boolean
-        }> = []
-
-        if (timeScale === 'hour') {
-            // Show hours
-            for (let day = startDay; day <= endDay; day++) {
-                const date = new Date(startDate)
-                date.setDate(date.getDate() + day)
-
-                for (let hour = 0; hour < 24; hour += 3) {
-                    const x = leftMargin + (day * 24 + hour) * (dayWidth / 24) + viewport.x
-                    dates.push({
-                        label: `${hour}:00`,
-                        sublabel: hour === 0 ? date.toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric'
-                        }) : undefined,
-                        x,
-                        isMajor: hour === 0
-                    })
-                }
-            }
-        } else if (timeScale === 'day') {
-            // Show days
-            for (let day = startDay; day <= endDay; day++) {
-                const date = new Date(startDate)
-                date.setDate(date.getDate() + day)
-                const x = leftMargin + day * dayWidth + viewport.x
-
-                dates.push({
-                    label: date.getDate().toString(),
-                    sublabel: date.getDate() === 1 ? date.toLocaleDateString('en-US', {
-                        month: 'short',
-                        year: 'numeric'
-                    }) : undefined,
-                    x,
-                    isMajor: date.getDate() === 1
-                })
-            }
-        } else if (timeScale === 'week') {
-            // Show weeks
-            let currentDate = new Date(startDate)
-            currentDate.setDate(currentDate.getDate() + startDay * 7)
-
-            for (let week = 0; week <= Math.ceil((endDay - startDay) / 7) + 1; week++) {
-                const weekStart = new Date(currentDate)
-                weekStart.setDate(weekStart.getDate() - weekStart.getDay()) // Start of week
-
-                const x = leftMargin +
-                    Math.floor((weekStart.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) *
-                    dayWidth + viewport.x
-
-                dates.push({
-                    label: `Week ${Math.ceil((weekStart.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 7))}`,
-                    sublabel: weekStart.toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric'
-                    }),
-                    x,
-                    isMajor: weekStart.getMonth() !== currentDate.getMonth()
-                })
-
-                currentDate.setDate(currentDate.getDate() + 7)
-            }
-        } else {
-            // Show months
-            let currentDate = new Date(startDate)
-            currentDate.setMonth(currentDate.getMonth() + Math.floor(startDay / 30))
-
-            for (let month = 0; month <= Math.ceil((endDay - startDay) / 30) + 1; month++) {
-                const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-
-                const x = leftMargin +
-                    Math.floor((monthStart.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) *
-                    dayWidth + viewport.x
-
-                dates.push({
-                    label: monthStart.toLocaleDateString('en-US', { month: 'short' }),
-                    sublabel: monthStart.getMonth() === 0 ? monthStart.getFullYear().toString() : undefined,
-                    x,
-                    isMajor: monthStart.getMonth() === 0
-                })
-
-                currentDate.setMonth(currentDate.getMonth() + 1)
+        // Months
+        for (let day = startDay; day <= endDay + 31; day++) {
+            const d = new Date(startDate)
+            d.setDate(d.getDate() + day)
+            if (d.getDate() === 1) {
+                const x = Math.round(worldDayToScreenX({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, day, align))
+                months.push({ x, text: d.toLocaleDateString('en-US', { month: 'short', year: d.getMonth() === 0 ? 'numeric' : undefined as any }) })
             }
         }
 
-        return dates.filter(d => d.x >= -100 && d.x <= width + 100)
-    }, [projectStartDate, viewport, width, timeScale])
+        // Weeks (start on Sunday)
+        for (let day = startDay; day <= endDay; day++) {
+            const d = new Date(startDate)
+            d.setDate(d.getDate() + day)
+            if (d.getDay() === 0) {
+                const x = Math.round(worldDayToScreenX({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, day, align))
+                weeks.push({ x, text: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) })
+            }
+        }
+
+        // Days (later culled by spacing)
+        for (let day = startDay; day <= endDay; day++) {
+            const d = new Date(startDate)
+            d.setDate(d.getDate() + day)
+            const x = Math.round(worldDayToScreenX({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, day, align))
+            days.push({ x, text: d.getDate().toString() })
+        }
+
+        // Hours (every 3 hours, later culled by spacing)
+        if (dayWidth > 60) {
+            const hoursPerScreen = Math.ceil(containerWidth / Math.max(1, dayWidth / 24))
+            for (let day = startDay; day <= endDay; day++) {
+                for (let h = 0; h < 24; h += 3) {
+                    const x = Math.round(worldDayToScreenX({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, day + h / 24, align))
+                    hours.push({ x, text: `${h}:00` })
+                }
+            }
+        }
+
+        // Helper to cull labels by minimum spacing to avoid overlap
+        const cullBySpacing = <T extends { x: number }>(items: T[], minSpacing: number): T[] => {
+            const result: T[] = []
+            let lastX = -Infinity
+            for (const item of items) {
+                if (item.x - lastX >= minSpacing) {
+                    result.push(item)
+                    lastX = item.x
+                }
+            }
+            return result
+        }
+
+        // Determine conservative spacings
+        const minDaySpacing = Math.max(28, Math.min(72, dayWidth * 0.65))
+        const minHourSpacing = Math.max(24, Math.min(48, (dayWidth / 24) * 3 * 0.9))
+
+        return {
+            months: months.filter(m => m.x >= -100 && m.x <= containerWidth + 100),
+            weeks: weeks.filter(w => w.x >= -100 && w.x <= containerWidth + 100),
+            days: cullBySpacing(days.filter(d => d.x >= -100 && d.x <= containerWidth + 100), minDaySpacing),
+            hours: cullBySpacing(hours.filter(h => h.x >= -100 && h.x <= containerWidth + 100), minHourSpacing)
+        }
+    }, [projectStartDate, viewport, width, config])
+
+    const todayMarkerX = useMemo(() => {
+        const dayWidth = (config.DAY_WIDTH || 30) * viewport.zoom
+        const leftMargin = config.LEFT_MARGIN || 120
+        const startDate = new Date(projectStartDate)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        startDate.setHours(0, 0, 0, 0)
+        const daysSinceStart = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+        return Math.round(leftMargin + daysSinceStart * dayWidth + viewport.x)
+    }, [projectStartDate, viewport, config])
 
     // Handle middle-mouse drag for zooming
     const handlePointerDown = (e: React.PointerEvent) => {
@@ -184,11 +176,18 @@ export const DateHeader: React.FC<DateHeaderProps> = ({
     }
 
     // Dynamic height based on zoom level
+    // Bands are ordered from top->bottom: month > week > day > hour
     const dynamicHeight = useMemo(() => {
-        if (timeScale === 'hour') return 72
-        if (timeScale === 'day') return 48
-        if (timeScale === 'week') return 56
-        return 64
+        switch (timeScale) {
+            case 'hour':
+                return 32 /* hour */ + 24 /* day */ + 24 /* week */ + 28 /* month */
+            case 'day':
+                return 0 /* hour hidden */ + 24 /* day */ + 24 /* week */ + 28 /* month */
+            case 'week':
+                return 0 /* hour */ + 0 /* day */ + 24 /* week */ + 28 /* month */
+            default:
+                return 0 /* hour */ + 0 /* day */ + 0 /* week */ + 28 /* month */
+        }
     }, [timeScale])
 
     return (
@@ -201,35 +200,51 @@ export const DateHeader: React.FC<DateHeaderProps> = ({
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
         >
-            {/* Main labels */}
-            <div className="date-header-main">
-                {visibleDates.map((date, index) => (
-                    <div
-                        key={`${date.label}-${index}`}
-                        className={`date-label ${date.isMajor ? 'major' : ''}`}
-                        style={{ left: `${date.x}px` }}
-                    >
-                        <span className="date-label-text">{date.label}</span>
-                        {date.x > 0 && date.x < width && (
-                            <div className="date-tick" />
-                        )}
-                    </div>
-                ))}
-            </div>
+            {/* Weekend highlight removed from header; handled by canvas grid for perfect sync */}
 
-            {/* Sub-labels (months/years) */}
-            <div className="date-header-sub">
-                {visibleDates
-                    .filter(d => d.sublabel)
-                    .map((date, index) => (
-                        <div
-                            key={`sub-${date.sublabel}-${index}`}
-                            className="date-sublabel"
-                            style={{ left: `${date.x}px` }}
-                        >
-                            {date.sublabel}
+            {/* Bands: month > week > day > hour */}
+            <div className="date-header-bands" style={{ position: 'absolute', inset: 0 }}>
+                {/* Month band */}
+                <div className="date-band" style={{ height: 28 }}>
+                    {months.map((m, idx) => (
+                        <div key={`mon-${idx}`} className="date-sublabel" style={{ left: `${m.x}px` }}>
+                            {m.text}
                         </div>
                     ))}
+                </div>
+                {/* Week band */}
+                {['week', 'day', 'hour'].includes(timeScale) && (
+                    <div className="date-band" style={{ height: 24 }}>
+                        {weeks.map((w, idx) => (
+                            <div key={`wk-${idx}`} className="date-label major" style={{ left: `${w.x}px` }}>
+                                <span className="date-label-text">{w.text}</span>
+                                <div className="date-tick" />
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {/* Day band */}
+                {['day', 'hour'].includes(timeScale) && (
+                    <div className="date-band" style={{ height: 24 }}>
+                        {days.map((d, idx) => (
+                            <div key={`day-${idx}`} className="date-label" style={{ left: `${d.x}px` }}>
+                                <span className="date-label-text">{d.text}</span>
+                                <div className="date-tick" />
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {/* Hour band */}
+                {timeScale === 'hour' && (
+                    <div className="date-band" style={{ height: 32 }}>
+                        {hours.map((h, idx) => (
+                            <div key={`hr-${idx}`} className="date-label" style={{ left: `${h.x}px` }}>
+                                <span className="date-label-text">{h.text}</span>
+                                <div className="date-tick" />
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Zoom indicator */}
@@ -241,6 +256,10 @@ export const DateHeader: React.FC<DateHeaderProps> = ({
                     {timeScale}
                 </span>
             </div>
+
+            {/* Today marker */}
+            <div className="today-marker" style={{ position: 'absolute', top: 0, left: todayMarkerX, width: 2, height: '100%' }} />
+            <div className="today-label" style={{ position: 'absolute', top: 0, left: todayMarkerX + 4 }}>Today</div>
         </div>
     )
 }

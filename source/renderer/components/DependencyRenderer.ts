@@ -108,6 +108,8 @@ export class DependencyRenderer {
         alpha: number,
         width: number
     ): void {
+        const strokeWidth = Math.max(1, width - 1)
+        const strokeAlpha = Math.min(0.6, alpha)
         let srcX: number, srcY: number, dstX: number, dstY: number
 
         switch (type) {
@@ -167,20 +169,20 @@ export class DependencyRenderer {
                 cpX, cpY,
                 dstX, dstY
             )
-            graphics.stroke({ width, color, alpha })
+            graphics.stroke({ width: strokeWidth, color, alpha: strokeAlpha })
 
             // Draw arrowhead
             const angle = Math.atan2(dstY - cpY, dstX - cpX)
-            this.drawArrowhead(graphics, dstX, dstY, angle, color, alpha)
+            this.drawArrowhead(graphics, dstX, dstY, angle, color, Math.min(0.7, strokeAlpha + 0.1))
         } else {
             // Use straight line for short distances
             graphics.moveTo(srcX, srcY)
             graphics.lineTo(dstX, dstY)
-            graphics.stroke({ width, color, alpha })
+            graphics.stroke({ width: strokeWidth, color, alpha: strokeAlpha })
 
             // Draw arrowhead
             const angle = Math.atan2(dy, dx)
-            this.drawArrowhead(graphics, dstX, dstY, angle, color, alpha)
+            this.drawArrowhead(graphics, dstX, dstY, angle, color, Math.min(0.7, strokeAlpha + 0.1))
         }
     }
 

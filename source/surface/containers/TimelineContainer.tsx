@@ -6,6 +6,8 @@
 import React, { useEffect, useCallback, useMemo } from 'react'
 import { useAppSelector, useAppDispatch } from '../../infrastructure/persistence/redux/store'
 import { TimelineView } from '../components/TimelineView'
+import { DateHeader } from '../components/DateHeader'
+import { StaffSidebar } from '../components/StaffSidebar'
 import { CreateTaskCommand } from '../../core/use-cases/commands/CreateTaskCommand'
 import { UpdateTaskCommand } from '../../core/use-cases/commands/UpdateTaskCommand'
 import { CreateDependencyCommand } from '../../core/use-cases/commands/CreateDependencyCommand'
@@ -20,7 +22,7 @@ import {
     selectViewport,
     selectTimelineConfig
 } from '../../infrastructure/persistence/redux/store'
-import { setViewport, pan, zoom } from '../../infrastructure/persistence/redux/slices/viewportSlice'
+import { setViewport, pan, zoom, setVerticalScale } from '../../infrastructure/persistence/redux/slices/viewportSlice'
 import { selectTasks, clearSelection } from '../../infrastructure/persistence/redux/slices/selectionSlice'
 import { setHoveredTask, setDraggedTask } from '../../infrastructure/persistence/redux/slices/timelineSlice'
 import { useRepositories } from '../hooks/useRepositories'
@@ -187,6 +189,12 @@ export const TimelineContainer: React.FC<TimelineContainerProps> = ({ projectId 
         dispatch(zoom({ delta, centerX, centerY }))
     }, [dispatch])
 
+    const handleVerticalScale = useCallback((factor: number, anchorY: number) => {
+        // Map factor to absolute scale using current viewport; for now we reuse zoom semantics
+        // If viewport slice had a dedicated action, use it directly
+        dispatch(setVerticalScale(Math.max(0.5, Math.min(2, (viewport.verticalScale || 1) * (1 + factor)))))
+    }, [dispatch, viewport.verticalScale])
+
     // Hover and drag operations
     const handleTaskHover = useCallback((taskId: string | null) => {
         dispatch(setHoveredTask(taskId))
@@ -224,28 +232,61 @@ export const TimelineContainer: React.FC<TimelineContainerProps> = ({ projectId 
         return <div>Project not found</div>
     }
 
+    const staffSidebarWidth = 120
+
+    const handleHeaderZoomChange = (newZoom: number, anchorX: number) => {
+        const factor = Math.max(0.1, Math.min(5, newZoom))
+        const delta = factor / Math.max(0.1, viewport.zoom || 1) - 1
+        dispatch(zoom({ delta, centerX: anchorX, centerY: 0 }))
+    }
+
     return (
-        <TimelineView
-            project={project}
-            tasks={Object.values(tasks)}
-            dependencies={Object.values(dependencies)}
-            staffs={Object.values(staffs)}
-            selection={selection}
-            viewport={viewport}
-            config={config}
-            onCreateTask={handleCreateTask}
-            onUpdateTask={handleUpdateTask}
-            onDeleteTask={handleDeleteTask}
-            onCreateDependency={handleCreateDependency}
-            onDeleteDependency={handleDeleteDependency}
-            onSelectTasks={handleSelectTasks}
-            onClearSelection={handleClearSelection}
-            onViewportChange={handleViewportChange}
-            onPan={handlePan}
-            onZoom={handleZoom}
-            onTaskHover={handleTaskHover}
-            onTaskDragStart={handleTaskDragStart}
-            onTaskDragEnd={handleTaskDragEnd}
-        />
+        <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateRows: `auto 1fr`, gridTemplateColumns: `${staffSidebarWidth}px 1fr` }}>
+            {/* Date header aligned to canvas grid */}
+            <div style={{ gridRow: '1 / 2', gridColumn: '2 / 3', position: 'relative', background: 'white', borderBottom: '1px solid #eee' }}>
+                <DateHeader
+                    projectStartDate={project.startDate}
+                    viewport={{ x: viewport.x, y: viewport.y, zoom: viewport.zoom }}
+                    width={0}
+                    onZoomChange={handleHeaderZoomChange}
+                    config={config}
+                />
+            </div>
+            {/* Staff sidebar aligned with canvas */}
+            <div style={{ gridRow: '2 / 3', gridColumn: '1 / 2', position: 'relative', background: 'white', borderRight: '1px solid #eee' }}>
+                <StaffSidebar
+                    staffs={Object.values(staffs)}
+                    viewport={{ x: viewport.x, y: viewport.y, zoom: viewport.zoom, verticalScale: (viewport as any).verticalScale }}
+                    width={staffSidebarWidth}
+                    onVerticalZoomChange={(scale) => dispatch(setVerticalScale(scale))}
+                />
+            </div>
+            {/* Canvas */}
+            <div style={{ gridRow: '2 / 3', gridColumn: '2 / 3', position: 'relative' }}>
+                <TimelineView
+                    project={project}
+                    tasks={Object.values(tasks)}
+                    dependencies={Object.values(dependencies)}
+                    staffs={Object.values(staffs)}
+                    selection={selection}
+                    viewport={viewport}
+                    config={config}
+                    onCreateTask={handleCreateTask}
+                    onUpdateTask={handleUpdateTask}
+                    onDeleteTask={handleDeleteTask}
+                    onCreateDependency={handleCreateDependency}
+                    onDeleteDependency={handleDeleteDependency}
+                    onSelectTasks={handleSelectTasks}
+                    onClearSelection={handleClearSelection}
+                    onViewportChange={handleViewportChange}
+                    onPan={handlePan}
+                    onZoom={handleZoom}
+                    onVerticalScale={handleVerticalScale}
+                    onTaskHover={handleTaskHover}
+                    onTaskDragStart={handleTaskDragStart}
+                    onTaskDragEnd={handleTaskDragEnd}
+                />
+            </div>
+        </div>
     )
 }

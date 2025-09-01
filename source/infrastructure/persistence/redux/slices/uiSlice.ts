@@ -23,7 +23,7 @@ export interface UIState {
 }
 
 const initialState: UIState = {
-    sidebarOpen: true,
+    sidebarOpen: false,
     sidebarWidth: 320,
     taskDetailsOpen: false,
     selectedTaskId: null,

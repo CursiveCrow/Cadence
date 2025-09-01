@@ -8,6 +8,7 @@ import type { Task } from '../../core/domain/entities/Task'
 import type { Staff } from '../../core/domain/entities/Staff'
 import { TaskStatus } from '../../core/domain/value-objects/TaskStatus'
 import { drawNoteBodyPathAbsolute } from '../utils/shapes'
+import { computeViewportAlignment, worldDayToScreenX } from '../utils/alignment'
 import { CONSTANTS } from '../../config/constants'
 
 export interface TaskAnchors {
@@ -36,6 +37,12 @@ export class TaskRenderer {
     private taskAnchors: Map<string, TaskAnchors> = new Map()
     private tasks: Task[] = []
     private config: typeof CONSTANTS
+    private interactions?: {
+        onPointerDown?: (args: { taskId: string; globalX: number; globalY: number; localX: number; localY: number }) => void
+        onPointerUp?: (args: { taskId: string; globalX: number; globalY: number }) => void
+        onPointerEnter?: (args: { taskId: string }) => void
+        onPointerLeave?: (args: { taskId: string }) => void
+    }
 
     constructor(options: TaskRendererOptions) {
         this.container = options.container
@@ -58,11 +65,16 @@ export class TaskRenderer {
         // Track which tasks are still valid
         const validIds = new Set<string>()
 
+        // Compute horizontal alignment once, shared with GridRenderer
+        const dayWidth = this.config.DEFAULT_DAY_WIDTH * viewportState.zoom
+        const leftMargin = this.config.DEFAULT_LEFT_MARGIN
+        const align = computeViewportAlignment({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, (viewportState.x || 0) / Math.max(1, dayWidth))
+
         for (const task of this.tasks) {
             validIds.add(task.id)
 
             // Calculate task position
-            const layout = this.calculateTaskLayout(task, projectStartDate, staffs, viewportState)
+            const layout = this.calculateTaskLayout(task, projectStartDate, staffs, viewportState, align)
             if (!layout) continue
 
             // Store anchors for dependency rendering
@@ -82,6 +94,38 @@ export class TaskRenderer {
                 taskContainer.cursor = 'pointer'
                 this.container.addChild(taskContainer)
                 this.taskGraphics.set(task.id, taskContainer)
+                // Attach interactions once
+                if (!(taskContainer as any).__wired) {
+                    taskContainer.on('pointerdown', (e: any) => {
+                        const global = (e as any).global || { x: 0, y: 0 }
+                        const local = taskContainer!.toLocal(global)
+                        this.interactions?.onPointerDown?.({
+                            taskId: (taskContainer as any).taskId || task.id,
+                            globalX: global.x,
+                            globalY: global.y,
+                            localX: local.x,
+                            localY: local.y,
+                            // Extended payload fields passed through loosely
+                            ...(typeof (e as any).button !== 'undefined' ? { button: (e as any).button } : {}),
+                            ...((taskContainer as any).__layoutWidth ? { layoutWidth: (taskContainer as any).__layoutWidth } : {})
+                        })
+                    })
+                    taskContainer.on('pointerup', (e: any) => {
+                        const global = (e as any).global || { x: 0, y: 0 }
+                        this.interactions?.onPointerUp?.({
+                            taskId: (taskContainer as any).taskId || task.id,
+                            globalX: global.x,
+                            globalY: global.y
+                        })
+                    })
+                    taskContainer.on('pointerenter', () => {
+                        this.interactions?.onPointerEnter?.({ taskId: task.id })
+                    })
+                    taskContainer.on('pointerleave', () => {
+                        this.interactions?.onPointerLeave?.({ taskId: task.id })
+                    })
+                        ; (taskContainer as any).__wired = true
+                }
             }
 
             // Clear and redraw
@@ -91,7 +135,8 @@ export class TaskRenderer {
             const isSelected = selectedTaskIds.includes(task.id)
             const isHighlighted = task.id === highlightedTaskId
 
-            // Draw task
+                // Draw task
+                ; (taskContainer as any).__layoutWidth = layout.width
             this.drawTask(taskContainer, task, layout, isSelected, isHighlighted)
         }
 
@@ -113,7 +158,8 @@ export class TaskRenderer {
         task: Task,
         projectStartDate: Date,
         staffs: Staff[],
-        viewportState: { x: number; y: number; zoom: number; verticalScale?: number }
+        viewportState: { x: number; y: number; zoom: number; verticalScale?: number },
+        align?: { viewportXDaysQuantized: number; viewportPixelOffsetX: number }
     ): { x: number; y: number; width: number; height: number; radius: number } | null {
         // Find staff
         const staffIndex = staffs.findIndex(s => s.id === task.staffId)
@@ -129,7 +175,11 @@ export class TaskRenderer {
         )
 
         const dayWidth = this.config.DEFAULT_DAY_WIDTH * viewportState.zoom
-        const x = this.config.DEFAULT_LEFT_MARGIN + daysSinceStart * dayWidth
+        const leftMargin = this.config.DEFAULT_LEFT_MARGIN
+        // Use quantized alignment if provided to avoid drift when panning
+        const x = align
+            ? worldDayToScreenX({ LEFT_MARGIN: leftMargin, DAY_WIDTH: dayWidth }, daysSinceStart, align)
+            : leftMargin + daysSinceStart * dayWidth + viewportState.x
         const width = task.durationDays * dayWidth
 
         // Calculate vertical position
@@ -138,7 +188,7 @@ export class TaskRenderer {
         const lineSpacing = this.config.DEFAULT_STAFF_LINE_SPACING * verticalScale
 
         const staffY = topMargin + staffIndex * staffSpacing
-        const y = staffY + task.staffLine * lineSpacing
+        const y = staffY + task.staffLine * lineSpacing + viewportState.y
 
         const height = this.config.DEFAULT_TASK_HEIGHT * verticalScale
         const radius = height / 2
@@ -159,26 +209,37 @@ export class TaskRenderer {
         // Create graphics
         const graphics = new Graphics()
 
-        // Get color based on status
+        // Get color based on status (dark theme tuned)
         const color = this.getTaskColor(task.status)
-        const borderColor = isSelected ? 0x4285f4 : (isHighlighted ? 0x5a95f5 : 0x333333)
+        const borderColor = isSelected ? 0x8b5cf6 : (isHighlighted ? 0x8b5cf6 : 0x2a2f36)
         const borderWidth = isSelected ? 2 : 1
-        const borderAlpha = isSelected ? 1 : (isHighlighted ? 0.8 : 0.5)
+        const borderAlpha = isSelected ? 0.9 : (isHighlighted ? 0.7 : 0.4)
 
         // Draw task body using the note shape
         drawNoteBodyPathAbsolute(graphics, layout.x, layout.y, layout.width, layout.height)
-        graphics.fill({ color, alpha: 0.9 })
+        graphics.fill({ color, alpha: 0.95 })
         graphics.stroke({ width: borderWidth, color: borderColor, alpha: borderAlpha })
 
+        // Add body first so glyph and label render above
+        container.addChild(graphics)
+
+        // Selection highlight ring (overlay outline), matching archive behavior
+        if (isSelected) {
+            const sel = new Graphics()
+            sel.roundRect(layout.x - 2, layout.y - 2, layout.width + 4, layout.height + 4, layout.radius + 2)
+            sel.stroke({ width: 2, color: 0x4285f4, alpha: 0.9 })
+            container.addChild(sel)
+        }
+
         // Draw status glyph in the circular end
-        this.drawStatusGlyph(container, task.status, layout.x + layout.radius, layout.y + layout.radius, layout.radius)
+        this.drawStatusGlyph(container, task.status, layout.x + layout.radius, layout.y + layout.radius, Math.max(10, layout.radius * 0.9))
 
         // Add task label
         if (layout.width > 50) {
             const style = new TextStyle({
                 fontFamily: 'Arial',
-                fontSize: Math.min(12, layout.height * 0.4),
-                fill: 0x000000,
+                fontSize: Math.min(12, layout.height * 0.38),
+                fill: 0xe5e7eb,
                 align: 'left'
             })
 
@@ -200,10 +261,24 @@ export class TaskRenderer {
             container.addChild(text)
         }
 
-        container.addChild(graphics);
-
         // Set interaction data
         (container as any).taskId = task.id
+        // Update cursor on hover near edges for resize affordance
+        const threshold = 10
+        if (!(container as any).__cursorWired) {
+            container.on('pointermove', (e: any) => {
+                const global = (e as any).global || { x: 0, y: 0 }
+                const local = container.toLocal(global)
+                const widthNow = (container as any).__layoutWidth || layout.width
+                const nearLeft = local.x >= 0 && local.x <= threshold
+                const nearRight = local.x >= 0 && widthNow - local.x <= threshold
+                container.cursor = (nearLeft || nearRight) ? 'ew-resize' : 'pointer'
+            })
+            container.on('pointerout', () => {
+                container.cursor = 'pointer'
+            })
+                ; (container as any).__cursorWired = true
+        }
     }
 
     /**
@@ -226,7 +301,7 @@ export class TaskRenderer {
         let glyph = ''
         switch (status) {
             case TaskStatus.NOT_STARTED:
-                glyph = '♮' // Natural
+                glyph = '•' // dot for not-started
                 break
             case TaskStatus.IN_PROGRESS:
                 glyph = '♯' // Sharp
@@ -235,7 +310,7 @@ export class TaskRenderer {
                 glyph = '♭' // Flat
                 break
             case TaskStatus.BLOCKED:
-                glyph = '𝄪' // Double sharp
+                glyph = '!'
                 break
             case TaskStatus.CANCELLED:
                 glyph = '𝄪'
@@ -261,17 +336,17 @@ export class TaskRenderer {
     private getTaskColor(status: TaskStatus): number {
         switch (status) {
             case TaskStatus.NOT_STARTED:
-                return 0xf0f0f0
+                return 0x2b3138 // neutral pill on dark
             case TaskStatus.IN_PROGRESS:
-                return 0x4285f4
+                return 0x1e3a8a // blue
             case TaskStatus.COMPLETED:
-                return 0x34a853
+                return 0x14532d // green
             case TaskStatus.BLOCKED:
-                return 0xea4335
+                return 0x7f1d1d // red
             case TaskStatus.CANCELLED:
-                return 0x9e9e9e
+                return 0x374151 // grey
             default:
-                return 0xf0f0f0
+                return 0x2b3138
         }
     }
 
@@ -315,5 +390,17 @@ export class TaskRenderer {
         }
         this.taskGraphics.clear()
         this.taskAnchors.clear()
+    }
+
+    /**
+     * Wire interaction handlers provided by engine options
+     */
+    setInteractionHandlers(handlers: {
+        onPointerDown?: (args: { taskId: string; globalX: number; globalY: number; localX: number; localY: number }) => void
+        onPointerUp?: (args: { taskId: string; globalX: number; globalY: number }) => void
+        onPointerEnter?: (args: { taskId: string }) => void
+        onPointerLeave?: (args: { taskId: string }) => void
+    }): void {
+        this.interactions = handlers
     }
 }

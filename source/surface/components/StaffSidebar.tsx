@@ -4,17 +4,24 @@
  */
 
 import React, { useRef, useState } from 'react'
-import { Staff } from '../../core/domain/entities/Staff'
 import { TimeSignature } from '../../core/domain/value-objects/TimeSignature'
 import { CONSTANTS } from '../../config/constants'
 import './StaffSidebar.css'
 
+type StaffLike = {
+    id: string
+    name: string
+    numberOfLines: number
+    lineSpacing: number
+    timeSignature?: string
+}
+
 export interface StaffSidebarProps {
-    staffs: Staff[]
+    staffs: StaffLike[]
     viewport: { x: number; y: number; zoom: number; verticalScale?: number }
     width?: number
     onAddStaff?: () => void
-    onEditStaff?: (staff: Staff) => void
+    onEditStaff?: (staff: StaffLike) => void
     onTimeSignatureChange?: (staffId: string, timeSignature: string | undefined) => void
     onVerticalZoomChange?: (newScale: number, anchorY: number) => void
 }
@@ -77,7 +84,7 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
         containerRef.current?.releasePointerCapture(e.pointerId)
     }
 
-    const handleTimeSignatureClick = (staff: Staff) => {
+    const handleTimeSignatureClick = (staff: StaffLike) => {
         setEditingStaffId(staff.id)
         setTimeSignatureInput(staff.timeSignature || '4/4')
     }
@@ -100,7 +107,7 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
         setTimeSignatureInput('')
     }
 
-    const renderStaffLines = (staff: Staff, yOffset: number) => {
+    const renderStaffLines = (staff: StaffLike, yOffset: number) => {
         const lines = []
         for (let i = 0; i < staff.numberOfLines; i++) {
             const y = yOffset + i * scaledLineSpacing
@@ -123,7 +130,7 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
         <div
             ref={containerRef}
             className="staff-sidebar"
-            style={{ width }}
+            style={{ width, height: '100%', overflow: 'hidden' }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -145,9 +152,19 @@ export const StaffSidebar: React.FC<StaffSidebarProps> = ({
                             {/* Staff lines */}
                             {renderStaffLines(staff, yOffset)}
 
+                            {/* Clef icon placeholder (treble by default) */}
+                            <foreignObject
+                                x={4}
+                                y={yOffset + (staff.numberOfLines - 1) * scaledLineSpacing / 2 - 12}
+                                width={24}
+                                height={24}
+                            >
+                                <div className="staff-clef treble" />
+                            </foreignObject>
+
                             {/* Staff label */}
                             <foreignObject
-                                x={5}
+                                x={30}
                                 y={yOffset - 20}
                                 width={width - 10}
                                 height={20}

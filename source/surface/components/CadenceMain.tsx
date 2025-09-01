@@ -7,11 +7,11 @@ import React, { useState, useEffect } from 'react'
 import { Provider } from 'react-redux'
 import { store } from '../../infrastructure/persistence/redux/store'
 import { TimelineContainer } from '../containers/TimelineContainer'
-import { Sidebar } from './Sidebar'
+// Removed non-canvas task list sidebar to match legacy UI
 import { TaskDetails } from './TaskDetails'
 import { StaffManager } from './StaffManager'
 import { useAppSelector, useAppDispatch } from '../../infrastructure/persistence/redux/store'
-import { setSidebarWidth, toggleSidebar } from '../../infrastructure/persistence/redux/slices/uiSlice'
+// import { toggleSidebar } from '../../infrastructure/persistence/redux/slices/uiSlice'
 import { setCurrentProject } from '../../infrastructure/persistence/redux/slices/projectsSlice'
 import { PlatformService } from '../../infrastructure/platform/PlatformService'
 import './CadenceMain.css'
@@ -22,13 +22,12 @@ export interface CadenceMainProps {
 
 const CadenceMainContent: React.FC<CadenceMainProps> = ({ initialProjectId }) => {
     const dispatch = useAppDispatch()
-    const sidebarOpen = useAppSelector(state => state.ui.sidebarOpen)
-    const sidebarWidth = useAppSelector(state => state.ui.sidebarWidth)
+    // Sidebar removed from layout
     const currentProjectId = useAppSelector(state => state.projects.currentProjectId)
     const taskDetailsOpen = useAppSelector(state => state.ui.taskDetailsOpen)
     const selectedTaskId = useAppSelector(state => state.ui.selectedTaskId)
 
-    const [isResizingSidebar, setIsResizingSidebar] = useState(false)
+    // Sidebar resize removed
     const platformService = new PlatformService()
 
     // Set initial project
@@ -44,47 +43,9 @@ const CadenceMainContent: React.FC<CadenceMainProps> = ({ initialProjectId }) =>
         platformService.setTitle(`${projectName} - Cadence Timeline Manager`)
     }, [currentProjectId])
 
-    // Handle sidebar resize
-    const handleSidebarResizeStart = () => {
-        setIsResizingSidebar(true)
-    }
+    // Sidebar resize removed
 
-    const handleSidebarResize = (event: MouseEvent) => {
-        if (!isResizingSidebar) return
-
-        const newWidth = Math.max(200, Math.min(600, event.clientX))
-        dispatch(setSidebarWidth(newWidth))
-    }
-
-    const handleSidebarResizeEnd = () => {
-        setIsResizingSidebar(false)
-    }
-
-    useEffect(() => {
-        if (isResizingSidebar) {
-            document.addEventListener('mousemove', handleSidebarResize)
-            document.addEventListener('mouseup', handleSidebarResizeEnd)
-
-            return () => {
-                document.removeEventListener('mousemove', handleSidebarResize)
-                document.removeEventListener('mouseup', handleSidebarResizeEnd)
-            }
-        }
-    }, [isResizingSidebar])
-
-    // Handle keyboard shortcuts
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            // Toggle sidebar with Cmd/Ctrl+B
-            if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
-                event.preventDefault()
-                dispatch(toggleSidebar())
-            }
-        }
-
-        window.addEventListener('keydown', handleKeyDown)
-        return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [dispatch])
+    // Keyboard shortcut for sidebar removed
 
     if (!currentProjectId) {
         return (
@@ -101,30 +62,10 @@ const CadenceMainContent: React.FC<CadenceMainProps> = ({ initialProjectId }) =>
 
     return (
         <div className="cadence-main">
-            {sidebarOpen && (
-                <>
-                    <div className="cadence-sidebar" style={{ width: sidebarWidth }}>
-                        <Sidebar projectId={currentProjectId} />
-                    </div>
-                    <div
-                        className="sidebar-resize-handle"
-                        onMouseDown={handleSidebarResizeStart}
-                        style={{ left: sidebarWidth - 2 }}
-                    />
-                </>
-            )}
+            {/* App sidebar removed */}
 
-            <div className="cadence-content" style={{
-                marginLeft: sidebarOpen ? sidebarWidth : 0
-            }}>
+            <div className="cadence-content" style={{ marginLeft: 0 }}>
                 <div className="cadence-header">
-                    <button
-                        className="sidebar-toggle"
-                        onClick={() => dispatch(toggleSidebar())}
-                        title="Toggle Sidebar (Ctrl+B)"
-                    >
-                        ☰
-                    </button>
                     <h2>Timeline</h2>
                     <div className="header-actions">
                         <button className="btn btn-sm">Add Task</button>
