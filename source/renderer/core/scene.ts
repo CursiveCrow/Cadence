@@ -277,7 +277,7 @@ export function drawGridAndStaff(
   container.addChildAt(graphics, Math.min(1, container.children.length))
 }
 
-export function drawTaskNote(
+function drawTaskNote(
   container: Container,
   config: TimelineConfig,
   layout: TaskLayout,
@@ -366,30 +366,7 @@ export function drawTaskNote(
 /**
  * Draw a dependency preview arrow between two points into the given container.
  */
-export function drawDependencyPreview(
-  container: Container,
-  srcX: number,
-  srcY: number,
-  dstX: number,
-  dstY: number,
-  color: number = 0x10B981
-): Graphics {
-  const preview = new Graphics()
-  preview.moveTo(srcX, srcY)
-  preview.lineTo(dstX, dstY)
-  preview.stroke({ width: 2, color, alpha: 0.9 })
-
-  const angle = Math.atan2(dstY - srcY, dstX - srcX)
-  const arrow = 8
-  preview.beginPath()
-  preview.moveTo(dstX, dstY)
-  preview.lineTo(dstX - arrow * Math.cos(angle - Math.PI / 6), dstY - arrow * Math.sin(angle - Math.PI / 6))
-  preview.lineTo(dstX - arrow * Math.cos(angle + Math.PI / 6), dstY - arrow * Math.sin(angle + Math.PI / 6))
-  preview.closePath()
-  preview.fill({ color, alpha: 0.8 })
-  container.addChild(preview)
-  return preview
-}
+// drawDependencyPreview removed (unused)
 
 /**
  * Build timeline layers (viewport/background/dependencies/tasks/selection/drag).
@@ -882,5 +859,4 @@ export class TimelineSceneManager {
   }
 }
 
-// Example plugin export for consumers to import and register
-export const ExampleStatusGlyphPlugin: RendererPlugin = {}
+// Removed ExampleStatusGlyphPlugin (unused)

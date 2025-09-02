@@ -226,7 +226,7 @@ export function computeViewportAlignment(
 /**
  * Map a world day index to screen-space x using the unified alignment.
  */
-export function worldDayToScreenX(
+function worldDayToScreenX(
   config: TimelineConfig,
   dayIndex: number,
   align: { viewportXDaysQuantized: number }

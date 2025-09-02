@@ -18,6 +18,5 @@ export * from './core/panzoom'
 export * from './components/rendering/shapes'
 
 
-// Re-export select PixiJS classes to centralize the Pixi API surface
-// and reduce the risk of multiple Pixi instances across the monorepo.
-export { Application, RendererType, Rectangle, Container } from 'pixi.js'
+// Re-export Application for consumers that use '@cadence/renderer'
+export { Application } from 'pixi.js'

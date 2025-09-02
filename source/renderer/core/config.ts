@@ -6,7 +6,6 @@ import type { TimelineConfig } from './scene'
 import { PROJECT_START_DATE as SHARED_PROJECT_START_DATE } from '@cadence/config'
 
 const __cssColorCache = new Map<string, number>()
-export function clearCssColorCache(): void { __cssColorCache.clear() }
 
 function cssVarColorToHex(varName: string, fallback: number): number {
   try {
