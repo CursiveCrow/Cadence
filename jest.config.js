@@ -4,20 +4,19 @@ module.exports = {
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/test-setup.ts'],
   moduleNameMapper: {
-    '^@cadence/core$': '<rootDir>/packages/core/src',
-    '^@cadence/state$': '<rootDir>/packages/state/src', 
-    '^@cadence/crdt$': '<rootDir>/packages/crdt/src',
-    '^@cadence/renderer$': '<rootDir>/packages/renderer/src',
-    '^@cadence/platform-services$': '<rootDir>/packages/platform-services/src',
-    '^@cadence/ui$': '<rootDir>/packages/ui/src',
+    '^@cadence/core$': '<rootDir>/source/core',
+    '^@cadence/state$': '<rootDir>/source/infrastructure/persistence', 
+    '^@cadence/crdt$': '<rootDir>/source/infrastructure/persistence/crdt',
+    '^@cadence/renderer$': '<rootDir>/source/renderer',
+    '^@cadence/platform-services$': '<rootDir>/source/infrastructure/platform/services',
+    '^@cadence/ui$': '<rootDir>/source/surface/components',
   },
   testMatch: [
     '**/__tests__/**/*.(ts|tsx|js)',
     '**/*.(test|spec).(ts|tsx|js)'
   ],
   collectCoverageFrom: [
-    'packages/*/src/**/*.{ts,tsx}',
-    'apps/desktop/src/**/*.{ts,tsx}',
+    'source/**/*.{ts,tsx}',
     '!**/*.d.ts',
     '!**/node_modules/**',
     '!**/dist/**',

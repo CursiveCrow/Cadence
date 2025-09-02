@@ -1,10 +1,53 @@
 {
-  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true,
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    /* Bundler mode */
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "isolatedModules": true
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@cadence/core": ["./source/core"],
+      "@cadence/renderer": ["./source/renderer"],
+      "@cadence/state": ["./source/infrastructure/persistence"],
+      "@cadence/crdt": ["./source/infrastructure/persistence/crdt"],
+      "@cadence/config": ["./source/config"],
+      "@cadence/contracts": ["./source/infrastructure/platform/contracts"],
+      "@cadence/platform-services": ["./source/infrastructure/platform/services"],
+      "@cadence/fixtures": ["./source/config/fixtures"],
+      "@cadence/ui": ["./source/surface/components"],
+      "@cadence/renderer-react": ["./source/surface/components/renderer-react"]
+    }
   },
-  "include": [],
-  "exclude": ["node_modules", "**/node_modules", "**/*.js"]
+  "include": [
+    "./source/**/*",
+    "electron",
+    "index.html"
+  ],
+  "exclude": [
+    "./source/**/__tests__/**",
+    "./source/**/__mocks__/**"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
 }
