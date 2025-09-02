@@ -20,9 +20,9 @@ function cssVarColorToHex(varName: string, fallback: number): number {
       const n = parseInt(
         hex.length === 3
           ? hex
-              .split('')
-              .map(c => c + c)
-              .join('')
+            .split('')
+            .map(c => c + c)
+            .join('')
           : hex,
         16
       )
@@ -89,7 +89,7 @@ export const STATUS_TO_ACCIDENTAL: Record<string, string> = {
   in_progress: '♯',
   completed: '♮',
   blocked: '♭',
-  cancelled: '×',
+  cancelled: '𝄪',
 }
 
 // Centralized project start date used for timeline calculations

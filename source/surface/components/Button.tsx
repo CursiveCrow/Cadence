@@ -21,18 +21,18 @@ export function Button({
   disabled = false,
   className = '',
 }: ButtonProps) {
-  const baseClasses = 'inline-flex items-center justify-center rounded-md font-medium transition-colors'
-  
+  const baseClasses = 'ui-inline-flex ui-items-center ui-justify-center ui-rounded-md ui-font-500 ui-transition-colors'
+
   const variantClasses = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300',
-    secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 disabled:bg-gray-100',
-    danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-300'
+    primary: 'ui-btn ui-btn-primary',
+    secondary: 'ui-btn',
+    danger: 'ui-btn ui-btn-danger'
   }
-  
+
   const sizeClasses = {
-    small: 'px-3 py-1.5 text-sm',
-    medium: 'px-4 py-2 text-base',
-    large: 'px-6 py-3 text-lg'
+    small: 'ui-px-3 ui-py-1_5 ui-text-sm',
+    medium: 'ui-px-4 ui-py-2 ui-text-base',
+    large: 'ui-px-6 ui-py-3 ui-text-lg'
   }
 
   const classes = [
