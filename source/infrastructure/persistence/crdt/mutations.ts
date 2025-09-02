@@ -4,7 +4,7 @@
  */
 
 import { getProjectDoc, TaskData, DependencyData } from './ydoc'
-import { Task, TaskStatus, validateDAG, Dependency as CoreDependency } from '@cadence/core'
+import { Task, validateDAG, Dependency as CoreDependency } from '@cadence/core'
 
 /**
  * Create a new task in a project
@@ -54,20 +54,7 @@ export function deleteTask(projectId: string, taskId: string): void {
   }, 'local')
 }
 
-export function moveTask(
-  projectId: string,
-  taskId: string,
-  newStartDate: string
-): void {
-  const ydoc = getProjectDoc(projectId)
-
-  ydoc.ydoc.transact(() => {
-    const task = ydoc.tasks.get(taskId)
-    if (task) {
-      ydoc.tasks.set(taskId, { ...task, startDate: newStartDate, updatedAt: new Date().toISOString() })
-    }
-  }, 'local')
-}
+export {}
 
 export function createDependency(
   projectId: string,
@@ -113,10 +100,4 @@ export function deleteDependency(projectId: string, dependencyId: string): void 
   }, 'local')
 }
 
-export function updateTaskStatus(
-  projectId: string,
-  taskId: string,
-  status: TaskStatus
-): void {
-  updateTask(projectId, taskId, { status })
-}
+export {}

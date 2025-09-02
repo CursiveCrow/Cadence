@@ -1,13 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "entry": [
-    // Vite HTML entry
     "index.html",
-    // App entry (renderer)
     "source/surface/containers/main.tsx",
-    // Library-style entry that aggregates renderer exports
     "source/renderer/index.ts",
-    // Electron main & preload
     "source/infrastructure/platform/electron/main.ts",
     "source/infrastructure/platform/electron/preload.ts"
   ],
@@ -16,7 +12,6 @@
     "vite.config.ts",
     "index.html"
   ],
-  // Avoid noise from tests/mocks (even though we are removing them)
   "ignore": [
     "source/**/__tests__/**",
     "source/**/__mocks__/**"

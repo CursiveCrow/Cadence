@@ -15,5 +15,5 @@ const viewportSlice = createSlice({
   },
 })
 
-export const { setViewport, updateViewport } = viewportSlice.actions
+export const { updateViewport } = viewportSlice.actions
 export default viewportSlice.reducer

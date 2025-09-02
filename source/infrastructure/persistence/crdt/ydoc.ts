@@ -135,10 +135,4 @@ export function getProjectDoc(projectId: string): ProjectDocument {
 /**
  * Remove project document from registry
  */
-export function removeProjectDoc(projectId: string): void {
-  const doc = projectDocuments.get(projectId)
-  if (doc) {
-    doc.destroy()
-    projectDocuments.delete(projectId)
-  }
-}
+export {}

@@ -21,7 +21,7 @@ export interface PersistenceProvider {
  * - crdt_updates table for Yjs update stream
  * - crdt_snapshots table for optimized loading
  */
-export class SQLiteOPFSProvider implements PersistenceProvider {
+class SQLiteOPFSProvider implements PersistenceProvider {
   private db: any = null
   private ready = false
   private memoryUpdates = new Map<string, Uint8Array[]>()

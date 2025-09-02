@@ -26,8 +26,3 @@ export function createPlatformServices(): PlatformServices | null {
   }
 }
 
-export function usePlatformServices(): PlatformServices {
-  const ctx = React.useContext(PlatformServicesContext)
-  if (!ctx) throw new Error('PlatformServicesContext not provided')
-  return ctx
-}
