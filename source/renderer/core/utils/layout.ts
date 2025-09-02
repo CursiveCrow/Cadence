@@ -3,7 +3,7 @@
  */
 
 import { Staff } from '@cadence/core'
-import type { TimelineConfig, TaskLike, TaskLayout } from '../scene'
+import type { TimelineConfig, TaskLike, TaskLayout } from '../types/renderer'
 
 export type TimeScale = 'hour' | 'day' | 'week' | 'month'
 

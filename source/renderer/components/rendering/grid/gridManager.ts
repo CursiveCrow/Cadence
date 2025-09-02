@@ -1,6 +1,6 @@
 import { Container } from 'pixi.js'
 import { drawGridAndStaff } from '../../../core/scene'
-import type { TimelineConfig } from '../../../core/scene'
+import type { TimelineConfig } from '../../../core/types/renderer'
 
 /**
  * Instance-scoped grid manager that replaces function-static caches.

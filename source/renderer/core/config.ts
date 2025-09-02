@@ -2,7 +2,7 @@
  * Shared timeline rendering configuration for PixiJS renderer
  */
 
-import type { TimelineConfig } from './scene'
+import type { TimelineConfig } from './types/renderer'
 import { PROJECT_START_DATE as SHARED_PROJECT_START_DATE } from '@cadence/config'
 
 const __cssColorCache = new Map<string, number>()

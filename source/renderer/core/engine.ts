@@ -1,5 +1,6 @@
 import { Application, Container, Rectangle } from 'pixi.js'
-import { createTimelineLayers, TimelineSceneManager, type TimelineConfig, type RendererPlugin } from './scene'
+import { createTimelineLayers, TimelineSceneManager } from './scene'
+import type { TimelineConfig, RendererPlugin } from './types/renderer'
 import { drawDependencyArrow } from '../components/rendering/shapes'
 import { StatusGlyphPlugin } from '../components/plugins/status-glyph'
 import { TimelineDnDController } from './dnd'

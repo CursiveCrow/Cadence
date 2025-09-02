@@ -1,5 +1,5 @@
 import { Container, Text } from 'pixi.js'
-import { RendererPlugin } from '../../core/scene'
+import { RendererPlugin } from '../../core/types/renderer'
 import { STATUS_TO_ACCIDENTAL } from '../../core/config'
 import { computeTextResolution } from '../../core/utils/resolution'
 import { devLog, safeCall } from '../../core/utils/devlog'

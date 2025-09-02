@@ -1,5 +1,5 @@
 import { Container, Graphics } from 'pixi.js'
-import type { TimelineConfig, TaskLayout } from '../../core/scene'
+import type { TimelineConfig, TaskLayout } from '../../core/types/renderer'
 
 /**
  * Draws the task note body path at absolute coordinates into the provided Graphics.

@@ -3,7 +3,8 @@ import { store } from '@cadence/state'
 import { CadenceMain } from './CadenceMain'
 import './App.css'
 import React from 'react'
-import { PlatformServicesContext, createPlatformServices } from '@cadence/platform-services'
+import { createPlatformServices } from '@cadence/platform-services'
+import { PlatformServicesContext } from './platform/PlatformServicesContext'
 import '@cadence/ui/styles/tokens.css'
 
 function App() {

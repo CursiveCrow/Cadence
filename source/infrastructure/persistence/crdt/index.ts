@@ -5,5 +5,5 @@
 
 export * from './ydoc'
 export * from './mutations'
-export * from './hooks'
+// React hooks moved to surface; no longer exported from infrastructure
 export * from './persistence'

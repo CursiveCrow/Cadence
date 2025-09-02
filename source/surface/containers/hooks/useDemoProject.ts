@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { setActiveProject, setStaffs, RootState } from '@cadence/state'
-import { useProjectTasks, createTask, createDependency } from '@cadence/crdt'
+import { createTask, createDependency } from '@cadence/crdt'
+import { useProjectTasks } from './crdt'
 import { seedDemoProject } from '@cadence/fixtures'
 import { Task } from '@cadence/core'
 
