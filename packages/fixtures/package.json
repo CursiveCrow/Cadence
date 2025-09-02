@@ -1,28 +1,28 @@
 {
-  "name": "@cadence/fixtures",
-  "version": "0.0.1",
-  "private": true,
-  "description": "Demo data seeding and fixtures for Cadence",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc",
-    "clean": "rimraf dist *.tsbuildinfo"
-  },
-  "files": [
-    "dist"
-  ],
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "peerDependencies": {
-    "@cadence/core": "workspace:*",
-    "@cadence/crdt": "workspace:*"
-  },
-  "devDependencies": {
-    "typescript": "^5.3.3"
-  }
+    "name":  "@cadence/fixtures",
+    "version":  "0.0.1",
+    "private":  true,
+    "description":  "Demo data seeding and fixtures for Cadence",
+    "main":  "dist/index.js",
+    "types":  "dist/index.d.ts",
+    "scripts":  {
+                    "build":  "tsc -b",
+                    "clean":  "rimraf dist *.tsbuildinfo"
+                },
+    "files":  [
+                  "dist"
+              ],
+    "exports":  {
+                    ".":  {
+                              "types":  "./dist/index.d.ts",
+                              "import":  "./dist/index.js"
+                          }
+                },
+    "peerDependencies":  {
+                             "@cadence/core":  "workspace:*",
+                             "@cadence/crdt":  "workspace:*"
+                         },
+    "devDependencies":  {
+                            "typescript":  "^5.3.3"
+                        }
 }

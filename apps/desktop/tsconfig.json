@@ -30,6 +30,12 @@
       "@cadence/renderer": [
         "../../packages/renderer/src"
       ],
+      "@cadence/state": [
+        "../../packages/state/src"
+      ],
+      "@cadence/crdt": [
+        "../../packages/crdt/src"
+      ],
       "@cadence/config": [
         "../../packages/config/src"
       ],

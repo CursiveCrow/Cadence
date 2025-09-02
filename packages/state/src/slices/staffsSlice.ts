@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit'
+﻿import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import type { Staff } from '@cadence/core'
 
 export interface StaffsState {
@@ -12,37 +12,37 @@ const staffsSlice = createSlice({
   initialState,
   reducers: {
     setStaffs: (_state, action: PayloadAction<Staff[]>) => ({
-      list: [...action.payload].sort((a, b) => a.position - b.position),
+      list: [...action.payload].sort((a: Staff, b: Staff) => a.position - b.position),
     }),
     addStaff: (state, action: PayloadAction<Staff>) => {
       state.list.push(action.payload)
-      state.list.sort((a, b) => a.position - b.position)
+      state.list.sort((a: Staff, b: Staff) => a.position - b.position)
     },
     updateStaff: (state, action: PayloadAction<{ id: string; updates: Partial<Staff> }>) => {
-      const index = state.list.findIndex(s => s.id === action.payload.id)
+      const index = state.list.findIndex((s: Staff) => s.id === action.payload.id)
       if (index !== -1) {
         state.list[index] = {
           ...state.list[index],
           ...action.payload.updates,
           updatedAt: new Date().toISOString(),
         }
-        state.list.sort((a, b) => a.position - b.position)
+        state.list.sort((a: Staff, b: Staff) => a.position - b.position)
       }
     },
     deleteStaff: (state, action: PayloadAction<string>) => {
-      state.list = state.list.filter(s => s.id !== action.payload)
-      state.list.forEach((s, i) => {
+      state.list = state.list.filter((s: Staff) => s.id !== action.payload)
+      state.list.forEach((s: Staff, i: number) => {
         s.position = i
       })
     },
     reorderStaffs: (state, action: PayloadAction<{ staffId: string; newPosition: number }>) => {
       const { staffId, newPosition } = action.payload
-      const idx = state.list.findIndex(s => s.id === staffId)
+      const idx = state.list.findIndex((s: Staff) => s.id === staffId)
       if (idx !== -1) {
         const item = state.list[idx]
         state.list.splice(idx, 1)
         state.list.splice(newPosition, 0, item)
-        state.list.forEach((s, i) => {
+        state.list.forEach((s: Staff, i: number) => {
           s.position = i
         })
       }
@@ -52,3 +52,4 @@ const staffsSlice = createSlice({
 
 export const { setStaffs, addStaff, updateStaff, deleteStaff, reorderStaffs } = staffsSlice.actions
 export default staffsSlice.reducer
+
