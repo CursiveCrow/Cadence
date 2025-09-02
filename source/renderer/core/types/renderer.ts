@@ -1,5 +1,5 @@
 import type { Application, Container } from 'pixi.js'
-import type { Task, Dependency, Staff } from '@cadence/core'
+import type { Task } from '@cadence/core'
 import type { RendererContext } from './context'
 
 export interface TimelineConfig {

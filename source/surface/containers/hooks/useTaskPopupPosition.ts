@@ -1,7 +1,8 @@
 import { useCallback } from 'react'
 import { useSelector } from 'react-redux'
 import { RootState } from '@cadence/state'
-import { TIMELINE_CONFIG, PROJECT_START_DATE } from '@cadence/renderer'
+import { TIMELINE_CONFIG } from '@cadence/renderer'
+import { PROJECT_START_DATE } from '@cadence/config'
 import { Task } from '@cadence/core'
 
 export function useTaskPopupPosition(tasks: Record<string, Task>) {

@@ -18,14 +18,14 @@ export class GridManager {
         screenHeight: number,
         zoom: number,
         alignment: { viewportXDaysQuantized: number; viewportPixelOffsetX: number },
-        useGpuGrid: boolean
+        _useGpuGrid: boolean
     ): void {
         const meta = this.metaMap.get(container)
         const rz = Math.round((zoom || 1) * 100) / 100
         const cfgKey = `${config.TOP_MARGIN}|${config.STAFF_SPACING}|${config.STAFF_LINE_SPACING}|${staffs.length}|${alignment.viewportXDaysQuantized}|${alignment.viewportPixelOffsetX}`
         if (container.children.length > 0 && meta?.w === screenWidth && meta?.h === screenHeight && meta?.z === rz && meta?.cfg === cfgKey) return
         container.removeChildren()
-        drawGridAndStaff(container, config, staffs as any, projectStartDate, screenWidth, screenHeight, rz, alignment, useGpuGrid)
+        drawGridAndStaff(container, config, staffs as any, projectStartDate, screenWidth, screenHeight, rz, alignment)
         this.metaMap.set(container, { w: screenWidth, h: screenHeight, z: rz, cfg: cfgKey })
     }
 }

@@ -2,7 +2,8 @@ import React from 'react'
 import { DateHeader as UIDateHeader } from '@cadence/ui'
 import { TimelineRenderer } from './TimelineRenderer'
 import { Task, Dependency, Staff } from '@cadence/core'
-import { TIMELINE_CONFIG, PROJECT_START_DATE } from '@cadence/renderer'
+import { TIMELINE_CONFIG } from '@cadence/renderer'
+import { PROJECT_START_DATE } from '@cadence/config'
 
 interface TimelineViewProps {
     projectId: string

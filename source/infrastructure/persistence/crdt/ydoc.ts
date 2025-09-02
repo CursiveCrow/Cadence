@@ -3,7 +3,7 @@
  */
 
 import * as Y from 'yjs'
-import { Task, Dependency, TaskStatus, DependencyType } from '@cadence/core'
+import { Task, Dependency } from '@cadence/core'
 import { getPersistenceProvider, initializePersistence } from './persistence'
 
 export type TaskData = Omit<Task, 'laneIndex'>

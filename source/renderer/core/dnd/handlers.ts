@@ -1,8 +1,10 @@
-import { Container } from 'pixi.js'
-import type { TaskLike, TaskLayout } from '../types/renderer'
+import { Container, Graphics } from 'pixi.js'
+import type { TaskLayout } from '../types/renderer'
 import { TimelineDnDController } from './controller'
+import { drawNoteBodyPathAbsolute } from '../../components/rendering/shapes'
+import { DependencyType, Task } from '@cadence/core'
 
-export function onDownTask(this: TimelineDnDController, event: any, task: TaskLike, container: Container) {
+export function onDownTask(this: TimelineDnDController, event: any, task: Task, container: Container) {
     const globalPos = event.global
     const viewportPos = this.layers.viewport ? this.layers.viewport.toLocal(globalPos) : globalPos
     const localPos = container.toLocal(globalPos)
@@ -316,7 +318,7 @@ export function onUpWindow(this: TimelineDnDController, e: PointerEvent | MouseE
     const x = (e.clientX - rect.left) * (view.width / rect.width)
     const y = (e.clientY - rect.top) * (view.height / rect.height)
     const global = { x: x, y: y }
-    this.onUp({ global } as any)
+    this.onUpHandler({ global } as any)
 }
 
 export function onContextMenu(this: TimelineDnDController, e: Event) {

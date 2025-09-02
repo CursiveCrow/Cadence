@@ -54,7 +54,7 @@ export function deleteTask(projectId: string, taskId: string): void {
   }, 'local')
 }
 
-export {}
+export { }
 
 export function createDependency(
   projectId: string,
@@ -100,4 +100,4 @@ export function deleteDependency(projectId: string, dependencyId: string): void 
   }, 'local')
 }
 
-export {}
+export { }

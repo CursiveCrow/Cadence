@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Application, TimelineRendererEngine, TIMELINE_CONFIG, PROJECT_START_DATE, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC, StatusGlyphPlugin } from '@cadence/renderer'
+import { Application, TimelineRendererEngine, TIMELINE_CONFIG, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC, StatusGlyphPlugin } from '@cadence/renderer'
+import { PROJECT_START_DATE } from '@cadence/config'
 import type { Task, Dependency, Staff, DependencyType } from '@cadence/core'
 
 export interface RendererReactProps {

@@ -416,6 +416,18 @@ export class TimelineSceneManager {
         }
         return null
     }
+
+    destroy(): void {
+        this.taskContainers.forEach(c => c.destroy({ children: true }))
+        this.dependencyGraphics.forEach(g => g.destroy())
+        this.layers.viewport.destroy({ children: true })
+        this.taskContainers.clear()
+        this.dependencyGraphics.clear()
+        this.taskLayouts.clear()
+        this.taskAnchors.clear()
+        this.taskData.clear()
+        this.spatial.clear()
+    }
 }
 
 

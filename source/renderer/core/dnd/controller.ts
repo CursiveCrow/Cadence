@@ -1,10 +1,11 @@
 import { Application, Container, Graphics, Rectangle } from 'pixi.js'
 import { TimelineSceneManager } from '../scene'
-import type { TimelineConfig, TaskLike, TaskLayout } from '../types/renderer'
+import type { TimelineConfig, TaskLayout } from '../types/renderer'
 import { DndState, createInitialState } from './state'
 import { DnDOptions, Layers, Utils, DataProviders, Callbacks } from './types'
 import { onDownTask, onMove, onUp, onTap, onUpWindow, onContextMenu, onStageDown } from './handlers'
 import { computeMinAllowedDayIndex, findNearestStaffLineScaled, findTaskAtGlobal, resolveTaskIdFromHit } from './utils'
+import { Task } from '@cadence/core'
 
 export class TimelineDnDController {
     app: Application
@@ -26,13 +27,13 @@ export class TimelineDnDController {
     state: DndState
 
     // Re-bindable handler instances
-    private onDownTaskHandler = onDownTask.bind(this)
-    private onMoveHandler = onMove.bind(this)
-    private onUpHandler = onUp.bind(this)
-    private onTapHandler = onTap.bind(this)
-    private onUpWindowHandler = onUpWindow.bind(this)
-    private onContextMenuHandler = onContextMenu.bind(this)
-    private onStageDownHandler = onStageDown.bind(this)
+    onDownTaskHandler = onDownTask.bind(this)
+    onMoveHandler = onMove.bind(this)
+    onUpHandler = onUp.bind(this)
+    onTapHandler = onTap.bind(this)
+    onUpWindowHandler = onUpWindow.bind(this)
+    onContextMenuHandler = onContextMenu.bind(this)
+    onStageDownHandler = onStageDown.bind(this)
 
     constructor(opts: DnDOptions) {
         this.app = opts.app
@@ -71,7 +72,7 @@ export class TimelineDnDController {
         }
     }
 
-    registerTask(task: TaskLike, container: Container, layout: TaskLayout): void {
+    registerTask(task: Task, container: Container, layout: TaskLayout): void {
         container.eventMode = 'static'
         container.cursor = 'pointer'
         const taskHReg = this.getTaskHeightFn ? this.getTaskHeightFn() : this.config.TASK_HEIGHT

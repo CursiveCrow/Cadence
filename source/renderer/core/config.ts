@@ -3,7 +3,6 @@
  */
 
 import type { TimelineConfig } from './types/renderer'
-import { PROJECT_START_DATE as SHARED_PROJECT_START_DATE } from '@cadence/config'
 
 const __cssColorCache = new Map<string, number>()
 
