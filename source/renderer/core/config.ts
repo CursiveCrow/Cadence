@@ -81,12 +81,3 @@ export const TIMELINE_CONFIG: TimelineConfig = {
   // Spacing between thick (on grid) and thin bar (to the left) in pixels; enforced even
   MEASURE_PAIR_SPACING_PX: 4,
 }
-
-// Mapping from task status to simple glyphs used in UI
-export const STATUS_TO_ACCIDENTAL: Record<string, string> = {
-  not_started: '',
-  in_progress: '♯',
-  completed: '♮',
-  blocked: '♭',
-  cancelled: '𝄪',
-}

@@ -4,36 +4,11 @@
 
 import * as Y from 'yjs'
 import { Task, Dependency } from '@cadence/core'
-import { getPersistenceProvider, initializePersistence } from './persistence'
+import { ProjectPersistenceController } from './persistence-controller'
 
 export type TaskData = Omit<Task, 'laneIndex'>
 export type DependencyData = Dependency
 
-/**
- * Persistence controller encapsulates persistence lifecycle per project
- */
-class ProjectPersistenceController {
-  private bound = false
-
-  constructor(private readonly projectId: string, private readonly ydoc: Y.Doc) { }
-
-  async init(): Promise<void> {
-    await initializePersistence()
-    const provider = getPersistenceProvider()
-    // Load historical updates
-    const updates = await provider.loadUpdates(this.projectId)
-    for (const u of updates) {
-      try { Y.applyUpdate(this.ydoc, u) } catch { }
-    }
-    // Bind persister once
-    if (!this.bound) {
-      this.ydoc.on('update', (update: Uint8Array) => {
-        provider.saveUpdate(this.projectId, update).catch(() => { })
-      })
-      this.bound = true
-    }
-  }
-}
 
 /**
  * YDoc Structure as defined in Design.md:
@@ -116,3 +91,10 @@ export function getProjectDoc(projectId: string): ProjectDocument {
 /**
  * Remove project document from registry
  */
+export function removeProjectDoc(projectId: string): void {
+  const doc = projectDocuments.get(projectId)
+  if (doc) {
+    try { doc.destroy() } catch { }
+    projectDocuments.delete(projectId)
+  }
+}

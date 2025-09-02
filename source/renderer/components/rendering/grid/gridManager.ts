@@ -1,6 +1,7 @@
 import { Container } from 'pixi.js'
 import { drawGridAndStaff } from '../../../core/scene'
 import type { TimelineConfig } from '../../../core/types/renderer'
+import type { Staff } from '@cadence/core'
 
 /**
  * Instance-scoped grid manager that replaces function-static caches.
@@ -12,7 +13,7 @@ export class GridManager {
     ensure(
         container: Container,
         config: TimelineConfig,
-        staffs: any[],
+        staffs: Staff[],
         projectStartDate: Date,
         screenWidth: number,
         screenHeight: number,

@@ -2,11 +2,12 @@ import { Container, Graphics, Text } from 'pixi.js'
 import { computeGraphicsResolution, computeTextResolution } from '../utils/resolution'
 import { getTimeScaleForZoom, getMeasureMarkerXsAligned } from '../utils/layout'
 import type { TimelineConfig } from '../types/renderer'
+import type { Staff } from '@cadence/core'
 
 export function drawGridAndStaff(
     container: Container,
     config: TimelineConfig,
-    staffs: any[],
+    staffs: Staff[],
     projectStartDate: Date,
     screenWidth: number,
     _screenHeight: number,
