@@ -30,10 +30,6 @@ export interface TimelineConfig {
     MEASURE_PAIR_SPACING_PX?: number
 }
 
-export type StaffLike = Staff
-export type TaskLike = Task
-export type DependencyLike = Dependency
-
 export interface TaskLayout {
     startX: number
     centerY: number
@@ -60,7 +56,7 @@ export type TimelineLayers = {
 
 export interface RendererPlugin {
     onLayersCreated?(app: Application, layers: TimelineLayers, ctx: RendererContext): void
-    onTaskUpserted?(task: TaskLike, container: Container, ctx: { layout: TaskLayout; config: TimelineConfig; zoom: number; selected: boolean }): void
+    onTaskUpserted?(task: Task, container: Container, ctx: { layout: TaskLayout; config: TimelineConfig; zoom: number; selected: boolean }): void
     onDestroy?(): void
 }
 

@@ -1,11 +1,12 @@
 import { Application, Container, Graphics, Rectangle, Text } from 'pixi.js'
 import type { RendererContext } from '../types/context'
-import type { TaskLike, TaskLayout, TaskAnchors, RendererPlugin, TimelineConfig } from '../types/renderer'
+import type { TaskLayout, TaskAnchors, RendererPlugin, TimelineConfig } from '../types/renderer'
 import { drawSelectionHighlight } from '../../components/rendering/shapes'
 import { devLog } from '../utils/devlog'
 import { SpatialHash } from '../utils/spatial'
 import { computeTextResolution } from '../utils/resolution'
 import { worldDayToContainerX } from '../utils/layout'
+import { Task } from '@cadence/core'
 
 export class TimelineSceneManager {
     layers: { viewport: Container; background: Container; dependencies: Container; tasks: Container; selection: Container; dragLayer: Container }
@@ -13,7 +14,7 @@ export class TimelineSceneManager {
     dependencyGraphics: Map<string, Graphics>
     taskLayouts: Map<string, TaskLayout>
     taskAnchors: Map<string, TaskAnchors>
-    taskData: Map<string, TaskLike>
+    taskData: Map<string, Task>
     private plugins: RendererPlugin[]
     private spatial: SpatialHash
     private lastZoom: number
@@ -62,7 +63,7 @@ export class TimelineSceneManager {
     }
 
     upsertTask(
-        task: TaskLike,
+        task: Task,
         layout: TaskLayout,
         config: TimelineConfig,
         _title?: string,

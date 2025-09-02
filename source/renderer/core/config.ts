@@ -91,6 +91,3 @@ export const STATUS_TO_ACCIDENTAL: Record<string, string> = {
   blocked: '♭',
   cancelled: '𝄪',
 }
-
-// Centralized project start date used for timeline calculations
-export const PROJECT_START_DATE = SHARED_PROJECT_START_DATE

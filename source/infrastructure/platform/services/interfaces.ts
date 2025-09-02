@@ -44,17 +44,3 @@ export interface MessageBoxResult {
   response: number
   checkboxChecked?: boolean
 }
-
-// Export validation schemas for IPC
-export interface IPCRequest<T = unknown> {
-  id: string
-  channel: string
-  payload: T
-}
-
-export interface IPCResponse<T = unknown> {
-  id: string
-  success: boolean
-  data?: T
-  error?: string
-}

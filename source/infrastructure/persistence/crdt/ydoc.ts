@@ -3,30 +3,11 @@
  */
 
 import * as Y from 'yjs'
-import { TaskStatus, DependencyType } from '@cadence/core'
+import { Task, Dependency, TaskStatus, DependencyType } from '@cadence/core'
 import { getPersistenceProvider, initializePersistence } from './persistence'
 
-export interface TaskData {
-  id: string
-  title: string
-  startDate: string
-  durationDays: number
-  status: TaskStatus
-  assignee?: string
-  description?: string
-  staffId: string // ID of the staff this task is on
-  staffLine: number // Which line on the staff (0 = bottom line, 1 = first space, etc.)
-  projectId: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface DependencyData {
-  id: string
-  srcTaskId: string
-  dstTaskId: string
-  type: DependencyType
-}
+export type TaskData = Omit<Task, 'laneIndex'>
+export type DependencyData = Dependency
 
 /**
  * Persistence controller encapsulates persistence lifecycle per project
@@ -135,4 +116,3 @@ export function getProjectDoc(projectId: string): ProjectDocument {
 /**
  * Remove project document from registry
  */
-export {}

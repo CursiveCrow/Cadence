@@ -60,3 +60,17 @@ export const IPC_CHANNELS = {
   appQuit: 'app:quit',
 } as const
 export type IPCChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS]
+
+// IPC Interfaces
+export interface IPCRequest<T = unknown> {
+  id: string
+  channel: string
+  payload: T
+}
+
+export interface IPCResponse<T = unknown> {
+  id: string
+  success: boolean
+  data?: T
+  error?: string
+}

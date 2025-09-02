@@ -2,8 +2,8 @@
  * Layout utilities for timeline rendering
  */
 
-import { Staff } from '@cadence/core'
-import type { TimelineConfig, TaskLike, TaskLayout } from '../types/renderer'
+import type { Staff, Task } from '@cadence/core'
+import type { TimelineConfig, TaskLayout } from '../types/renderer'
 
 export type TimeScale = 'hour' | 'day' | 'week' | 'month'
 
@@ -138,27 +138,14 @@ export function dayIndexToIsoDateUTC(dayIndex: number, projectStartDate: Date): 
   return utcDate.toISOString().split('T')[0]
 }
 
-// Note: offsetMsToIsoDateUTC removed (was unused) to reduce API surface.
-
-/**
- * Compute task layout (moved from scene.ts) using config and staff list.
- */
-// duplicate removed
-
-/**
- * Grid visual parameters for WebGPU grid shader derived from zoom and config.
- */
-// duplicate removed
-
-
 /**
  * Compute task layout (moved from scene.ts) using config and staff list.
  */
 export function computeTaskLayout(
   config: TimelineConfig,
-  task: TaskLike,
+  task: Task,
   projectStartDate: Date,
-  staffs: { id: string; numberOfLines: number }[]
+  staffs: Staff[]
 ): TaskLayout {
   const taskStart = new Date(task.startDate)
   const dayIndex = Math.floor((taskStart.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24))
@@ -245,13 +232,6 @@ export function worldDayToContainerX(
   return worldDayToScreenX(config, dayIndex, align) - align.viewportPixelOffsetX
 }
 
-
-
-
-/**
- * Compute x positions for vertical measure markers across the visible extent.
- * Uses config.MEASURE_LENGTH_DAYS and config.MEASURE_OFFSET_DAYS if provided.
- */
 /**
  * Compute x positions for vertical measure markers across the visible extent using unified alignment.
  * Uses config.MEASURE_LENGTH_DAYS and config.MEASURE_OFFSET_DAYS if provided and the provided alignment phase.
@@ -286,9 +266,3 @@ export function getMeasureMarkerXsAligned(
   }
   return xs
 }
-
-
-
-
-// WGSL functions for grid-line location calculations shared with the GPU shader
-// WGSL grid helpers moved to gridShader.ts to decouple shader code from layout.

@@ -143,5 +143,3 @@ export function drawGridAndStaff(
 
     container.addChildAt(graphics, Math.min(1, container.children.length))
 }
-
-

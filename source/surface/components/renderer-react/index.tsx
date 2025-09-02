@@ -69,16 +69,6 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
                         getProjectStartDate: () => PROJECT_START_DATE,
                         findNearestStaffLine: (y: number) => findNearestStaffLineAt(y, staffsRef.current, TIMELINE_CONFIG as any),
                         snapXToDay: (x: number) => snapXToDayWithConfig(x, TIMELINE_CONFIG as any),
-                        // Provide a time-aware snapping using current zoom -> relies on engine's effective config
-                        snapXToTime: (x: number) => {
-                            // Mirror engine's effective config: DAY_WIDTH multiplied by current zoom
-                            const z = (engineRef.current as any)?.getViewportScale?.() || (viewportRef.current?.zoom || 1)
-                            const dayWidth = (TIMELINE_CONFIG as any).DAY_WIDTH * z
-                            const relative = (x - (TIMELINE_CONFIG as any).LEFT_MARGIN) / Math.max(dayWidth, 0.0001)
-                            const dayIndex = Math.round(relative)
-                            const snappedX = (TIMELINE_CONFIG as any).LEFT_MARGIN + dayIndex * dayWidth
-                            return { snappedX, dayIndex }
-                        },
                         dayIndexToIsoDate: (d: number) => dayIndexToIsoDateUTC(d, PROJECT_START_DATE)
                     },
                     callbacks: ({
@@ -144,5 +134,3 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
         <canvas ref={canvasRef} className={className} style={{ display: 'block', width: '100%', height: '100%' }} />
     )
 }
-
-export {}

@@ -1,10 +1,8 @@
 /**
- * Redux Toolkit (RTK) stores for UI state management
+ * Persistence layer for both domain state (CRDT) and UI state (Redux)
  * Based on Design.md specification
  */
 
 export * from './store'
 export * from './slices'
-
-// Ensure a non-empty declaration file is emitted for consumers
-export type __CadenceStateTypes = unknown
+export * from './crdt'
