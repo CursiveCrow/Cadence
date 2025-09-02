@@ -2,9 +2,7 @@
  * WebGPU availability checker
  * Utility to check if WebGPU is available and properly initialized
  */
-
-
-
+import { devLog } from './devlog'
 export interface WebGPUStatus {
   available: boolean
   rendererType: 'webgpu' | 'webgl' | 'unknown'
@@ -43,7 +41,7 @@ export async function checkWebGPUAvailability(): Promise<WebGPUStatus> {
       message: 'WebGPU adapter is available. Will attempt to use WebGPU renderer.'
     }
   } catch (error) {
-    console.error('WebGPU check error:', error)
+    devLog.error('WebGPU check error:', error)
     return {
       available: false,
       rendererType: 'unknown',
@@ -60,11 +58,11 @@ export function logWebGPUStatus(status: WebGPUStatus): void {
     ? 'background: #10b981; color: white; padding: 4px 8px; border-radius: 4px;'
     : 'background: #f59e0b; color: white; padding: 4px 8px; border-radius: 4px;'
 
-  console.log('%c WebGPU Status ', style, status.message)
-  console.log('Renderer Type:', status.rendererType.toUpperCase())
+  devLog.info('%c WebGPU Status ', style, status.message)
+  devLog.info('Renderer Type:', status.rendererType.toUpperCase())
 
   if (!status.available) {
-    console.log('Note: The application will use WebGL as a fallback, which is fully supported.')
+    devLog.info('Note: The application will use WebGL as a fallback, which is fully supported.')
   }
 }
 
@@ -76,6 +74,6 @@ export function logRendererPreference(status: WebGPUStatus, chosen: 'webgpu' | '
   const style = chosen === 'webgpu'
     ? 'background: #2563eb; color: white; padding: 2px 6px; border-radius: 4px;'
     : 'background: #6b7280; color: white; padding: 2px 6px; border-radius: 4px;'
-  console.log('%c Renderer Preference ', style, msg)
+  devLog.info('%c Renderer Preference ', style, msg)
 }
 

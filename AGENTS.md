@@ -6,7 +6,7 @@ source/
 ├── core/ # Business logic layer
 │ ├── domain/ # Entities, value objects, services, interfaces/ports
 │ └── use-cases/ # Commands and queries
-├── infrastructure/ # Technical implementations
+├── adapters/ # Technical implementations
 │ ├── persistence/ # Redux store
 │ └── platform/ # Platform-specific code
 ├── renderer/ # Canvas rendering engine

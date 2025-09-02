@@ -79,6 +79,7 @@ export class TimelineRendererEngine {
         try {
             const status = await checkWebGPUAvailability()
             logWebGPUStatus(status)
+            const chosenPref: 'webgpu' | 'webgl' = status.available ? 'webgpu' : 'webgl'
 
             const rect = this.opts.canvas.getBoundingClientRect()
             const width = Math.max(rect.width, 100) || window.innerWidth
@@ -92,8 +93,8 @@ export class TimelineRendererEngine {
                 autoDensity: true,
                 backgroundColor: this.opts.config.BACKGROUND_COLOR,
 
-                // Force WebGPU renderer
-                preference: 'webgpu',
+                // Choose renderer based on availability instead of forcing WebGPU
+                preference: chosenPref,
                 antialias: true,
                 clearBeforeRender: true,
                 preserveDrawingBuffer: false,
@@ -103,7 +104,7 @@ export class TimelineRendererEngine {
                 hello: false,
             })
             this.app = app
-            try { logRendererPreference(status, 'webgpu') } catch (err) { devLog.warn('logRendererPreference failed', err) }
+            try { logRendererPreference(status, chosenPref) } catch (err) { devLog.warn('logRendererPreference failed', err) }
             try { (app.renderer as any).roundPixels = true } catch (err) { devLog.warn('roundPixels set failed', err) }
 
             const layers = createTimelineLayers(app)
@@ -224,8 +225,6 @@ export class TimelineRendererEngine {
         this._ensureStageHitArea();
         this._updateDataAndViewport(data, viewport);
         const effectiveCfg = this._updateEffectiveConfig(viewport);
-
-        this._updateUIMetrics(effectiveCfg);
         this._renderGrid(data, viewport, effectiveCfg);
         this._updateViewportTransform(viewport, effectiveCfg);
 
@@ -259,14 +258,12 @@ export class TimelineRendererEngine {
         return computeEffectiveConfig(cfg as any, viewport.zoom, this.verticalScale);
     }
 
-    private _updateUIMetrics(_: TimelineConfig): void {
-        // No-op: Previously used to feed UI header via global metrics; header now asks layout for alignment directly.
-    }
+
 
     private _renderGrid(data: { staffs: Staff[] }, viewport: ViewportState, effectiveCfg: TimelineConfig): void {
         if (!this.app) return;
         const alignment = computeViewportAlignment(effectiveCfg as any, viewport.x || 0);
-        this.gridManager?.ensure(this.layers!.background, effectiveCfg as any, data.staffs, this.opts.utils.getProjectStartDate(), this.app.screen.width, this.app.screen.height, viewport.zoom, alignment, true);
+        this.gridManager?.ensure(this.layers!.background, effectiveCfg as any, data.staffs, this.opts.utils.getProjectStartDate(), this.app.screen.width, this.app.screen.height, viewport.zoom, alignment);
         this.scene?.updateTodayMarker(this.opts.utils.getProjectStartDate(), effectiveCfg as any, alignment, this.app.screen.height);
         this._updateGpuGrid(viewport, effectiveCfg);
     }

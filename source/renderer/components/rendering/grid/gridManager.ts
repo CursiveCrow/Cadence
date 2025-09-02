@@ -18,8 +18,7 @@ export class GridManager {
         screenWidth: number,
         screenHeight: number,
         zoom: number,
-        alignment: { viewportXDaysQuantized: number; viewportPixelOffsetX: number },
-        _useGpuGrid: boolean
+        alignment: { viewportXDaysQuantized: number; viewportPixelOffsetX: number }
     ): void {
         const meta = this.metaMap.get(container)
         const rz = Math.round((zoom || 1) * 100) / 100

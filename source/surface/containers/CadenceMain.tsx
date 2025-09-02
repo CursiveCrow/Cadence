@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { RootState, setSelection } from '@cadence/state'
+import { RootState, setSelection, setViewport } from '@cadence/state'
+import { updateStaff } from '@cadence/state'
 import { updateTask, createTask } from '@cadence/crdt'
 import { useProjectTasks, useProjectDependencies, useTask } from './hooks/crdt'
 import { TaskStatus, Task, Dependency } from '@cadence/core'
@@ -117,10 +118,10 @@ export const CadenceMain: React.FC = () => {
                         const newY = Math.max(0, Math.round(ratio * startY + (ratio - 1) * anchorPx))
                         setVerticalScale(s1)
                         try { (window as any).__CADENCE_SET_VERTICAL_SCALE?.(s1) } catch { }
-                        dispatch({ type: 'viewport/setViewport', payload: { x: viewport.x, y: newY, zoom: viewport.zoom } })
+                        dispatch(setViewport({ x: viewport.x, y: newY, zoom: viewport.zoom }))
                     }}
                     onChangeTimeSignature={(staffId, timeSignature) => {
-                        dispatch({ type: 'staffs/updateStaff', payload: { id: staffId, updates: { timeSignature } } })
+                        dispatch(updateStaff({ id: staffId, updates: { timeSignature } } as any))
                     }}
                 />
                 <TimelineView
@@ -134,7 +135,7 @@ export const CadenceMain: React.FC = () => {
                     onDragEnd={() => setIsDragInProgress(false)}
                     onVerticalScaleChange={(s) => {
                         setVerticalScale(s)
-                        dispatch({ type: 'viewport/setViewport', payload: { x: viewport.x, y: viewport.y, zoom: viewport.zoom } })
+                        dispatch(setViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom }))
                     }}
                     onZoomChange={(z, anchorLocalX) => {
                         const ppd0 = TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.0001, viewport.zoom)
@@ -142,7 +143,7 @@ export const CadenceMain: React.FC = () => {
                         const anchorPxFromGrid = anchorLocalX - TIMELINE_CONFIG.LEFT_MARGIN
                         const worldAtAnchor = viewport.x + (anchorPxFromGrid / ppd0)
                         const newX = Math.max(0, worldAtAnchor - (anchorPxFromGrid / ppd1))
-                        dispatch({ type: 'viewport/setViewport', payload: { x: Math.round(newX), y: viewport.y, zoom: z } })
+                        dispatch(setViewport({ x: Math.round(newX), y: viewport.y, zoom: z }))
                     }}
                 />
             </div>

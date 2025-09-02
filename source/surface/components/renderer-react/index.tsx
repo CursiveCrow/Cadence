@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Application, TimelineRendererEngine, TIMELINE_CONFIG, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC, StatusGlyphPlugin } from '@cadence/renderer'
+import { Application, TimelineRendererEngine, TIMELINE_CONFIG, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC } from '@cadence/renderer'
 import { PROJECT_START_DATE } from '@cadence/config'
 import type { Task, Dependency, Staff, DependencyType } from '@cadence/core'
 
@@ -65,7 +65,7 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
                     canvas,
                     projectId,
                     config: TIMELINE_CONFIG as any,
-                    plugins: [StatusGlyphPlugin],
+                    // StatusGlyphPlugin is injected by the engine by default
                     utils: {
                         getProjectStartDate: () => PROJECT_START_DATE,
                         findNearestStaffLine: (y: number) => findNearestStaffLineAt(y, staffsRef.current, TIMELINE_CONFIG as any),

@@ -2,6 +2,7 @@ import { Container, Text } from 'pixi.js'
 import { RendererPlugin } from '../../core/types/renderer'
 import { computeTextResolution } from '../../core/utils/resolution'
 import { devLog, safeCall } from '../../core/utils/devlog'
+import { statusToAccidental } from '../../core/utils/status'
 
 /**
  * StatusGlyphPlugin
@@ -15,7 +16,7 @@ export const StatusGlyphPlugin: RendererPlugin = {
                 container.removeChild(prev)
             }
             const status = (_task as any).status || 'default'
-            const accidental = STATUS_TO_ACCIDENTAL[status]
+            const accidental = statusToAccidental(status)
             if (!accidental) return
             const oversample = 1.5
             const baseFont = status === 'cancelled' ? Math.max(10, Math.round(ctx.config.TASK_HEIGHT * 0.72)) : Math.max(10, Math.round(ctx.config.TASK_HEIGHT * 0.64))
@@ -38,11 +39,4 @@ export const StatusGlyphPlugin: RendererPlugin = {
     }
 }
 
-// Plugin-local mapping from task status to musical accidentals used in UI
-const STATUS_TO_ACCIDENTAL: Record<string, string> = {
-    not_started: '',
-    in_progress: '♯',
-    completed: '♮',
-    blocked: '♭',
-    cancelled: '𝄪',
-}
+// Mapping centralized in core/utils/status.ts

@@ -1,26 +1,16 @@
 import { TimelineSceneManager } from '../scene'
 import { DataProviders, Utils as DndUtils } from './types'
+import { findNearestStaffLineAt } from '../utils/layout'
 
-export function findNearestStaffLineScaled(y: number, scaled: { TOP_MARGIN: number; STAFF_SPACING: number; STAFF_LINE_SPACING: number }, data: DataProviders): { staff: any; staffLine: number; centerY: number } | null {
+export function findNearestStaffLineScaled(
+    y: number,
+    scaled: { TOP_MARGIN: number; STAFF_SPACING: number; STAFF_LINE_SPACING: number },
+    data: DataProviders
+): { staff: any; staffLine: number; centerY: number } | null {
     const staffs = data.getStaffs()
     if (!staffs || staffs.length === 0) return null
-    let closest: { staff: any; staffLine: number; centerY: number } | null = null
-    let minDistance = Infinity
-    const halfStep = scaled.STAFF_LINE_SPACING / 2
-    for (let i = 0; i < staffs.length; i++) {
-        const staff = staffs[i]
-        const staffStartY = scaled.TOP_MARGIN + i * scaled.STAFF_SPACING
-        const maxIndex = (staff.numberOfLines - 1) * 2
-        for (let idx = 0; idx <= maxIndex; idx++) {
-            const centerY = staffStartY + idx * halfStep
-            const dist = Math.abs(y - centerY)
-            if (dist < minDistance) {
-                minDistance = dist
-                closest = { staff, staffLine: idx, centerY }
-            }
-        }
-    }
-    return closest
+    // Reuse shared grid math to ensure single source of positional truth
+    return findNearestStaffLineAt(y, staffs as any, scaled as any)
 }
 
 export function findTaskAtGlobal(global: { x: number; y: number }, scene: TimelineSceneManager, excludeId?: string): string | null {

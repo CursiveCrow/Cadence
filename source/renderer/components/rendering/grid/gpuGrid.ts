@@ -1,14 +1,7 @@
 import { Application, Container, Filter, GpuProgram, Graphics, Rectangle, UniformGroup } from 'pixi.js'
 import { WGSL_GRID_LINE_FUNCS } from './gridShader'
-
-export type TimeScale = 'hour' | 'day' | 'week' | 'month'
-
-function hexToRgb01(hex: number): { r: number; g: number; b: number } {
-  const r = ((hex >> 16) & 0xff) / 255
-  const g = ((hex >> 8) & 0xff) / 255
-  const b = (hex & 0xff) / 255
-  return { r, g, b }
-}
+import type { TimeScale } from '../../../core/utils/layout'
+import { hexToRgb01 } from '../../../core/utils/color'
 
 /**
  * GPU-based infinite vertical grid using a full-screen quad + fragment shader.

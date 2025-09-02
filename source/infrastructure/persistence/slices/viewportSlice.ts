@@ -21,4 +21,6 @@ const viewportSlice = createSlice({
 })
 
 export const { updateViewport } = viewportSlice.actions
+// Keep explicit named export to allow typed dispatches instead of raw type strings
+export const { setViewport } = viewportSlice.actions
 export default viewportSlice.reducer

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { TaskStatus } from '@cadence/core'
+import { statusToAccidental } from '@cadence/renderer'
 import './TaskPopup.css'
 import './styles/tokens.css'
 import { TaskPopupTask, TaskPopupStaff } from './types'
@@ -36,15 +37,7 @@ export const TaskPopup: React.FC<TaskPopupProps> = ({ task, staffs, selectedCoun
         zIndex: 1000,
     }
 
-    const getStatusIcon = (status: string) => {
-        switch (status) {
-            case TaskStatus.IN_PROGRESS: return '♯'
-            case TaskStatus.COMPLETED: return '♮'
-            case TaskStatus.BLOCKED: return '♭'
-            case TaskStatus.CANCELLED: return '𝄪'
-            default: return '♪'
-        }
-    }
+    const getStatusIcon = (status: string) => statusToAccidental(status) || '♪'
 
     const descriptionHtml = markdownToSafeHtml(task.description || '')
 
