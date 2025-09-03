@@ -1,11 +1,11 @@
 import { useCallback } from 'react'
 import { useSelector } from 'react-redux'
-import { RootState } from '../../../infrastructure/persistence'
+import { RootState } from '../../state'
 import { TIMELINE_CONFIG } from '@cadence/renderer'
 import { PROJECT_START_DATE } from '../../../config'
-import { Task } from '@cadence/core'
+import type { TaskData } from '../../../application/ports/PersistencePort'
 
-export function useTaskPopupPosition(tasks: Record<string, Task>) {
+export function useTaskPopupPosition(tasks: Record<string, TaskData>) {
   const staffs = useSelector((state: RootState) => state.staffs.list)
 
   const calculatePopupPosition = useCallback((taskId: string) => {

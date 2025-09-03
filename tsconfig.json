@@ -26,12 +26,12 @@
     "paths": {
       "@cadence/core": ["./source/core"],
       "@cadence/renderer": ["./source/renderer"],
-      "@cadence/crdt": ["./source/infrastructure/persistence/crdt"],
       "@cadence/ui": ["./source/surface/components"]
     }
   },
   "include": [
     "./source/**/*",
+    "./apps/**/*",
     "electron",
     "index.html"
   ],

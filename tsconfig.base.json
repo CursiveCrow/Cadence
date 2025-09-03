@@ -28,12 +28,6 @@
       "@cadence/core/*": [
         "source/core/*"
       ],
-      "@cadence/crdt": [
-        "source/infrastructure/persistence/crdt"
-      ],
-      "@cadence/crdt/*": [
-        "source/infrastructure/persistence/crdt/*"
-      ],
       "@cadence/renderer": [
         "source/renderer"
       ],
@@ -45,8 +39,7 @@
       ],
       "@cadence/ui/*": [
         "source/surface/components/*"
-      ],
-      
+      ]
     }
   }
 }

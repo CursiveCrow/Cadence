@@ -7,7 +7,7 @@ import { PanZoomController, ViewportState } from './panzoom'
 import { checkWebGPUAvailability, logWebGPUStatus, logRendererPreference } from './utils/webgpu-check'
 import { createGpuTimeGrid, GpuTimeGrid } from '../components/rendering/grid/gpuGrid'
 import { computeEffectiveConfig, snapXToTimeWithConfig, computeTaskLayout, getGridParamsForZoom, computeViewportAlignment } from './utils/layout'
-import { GridManager } from '../components/rendering/grid/gridManager'
+import { drawGridAndStaff } from './scene/grid'
 import { devLog, safeCall } from './utils/devlog'
 
 import type { Task, Dependency, Staff, DependencyType } from '@cadence/core'
@@ -58,8 +58,8 @@ export class TimelineRendererEngine {
     private setViewport: (v: ViewportState) => void = () => { }
     private currentData: { tasks: EngineTasks; dependencies: EngineDependencies; staffs: Staff[] } = { tasks: {}, dependencies: {}, staffs: [] }
     private verticalScale: number = 1
-    private gridManager: GridManager | null = null
     private gpuGrid: GpuTimeGrid | undefined
+    private _bgMeta: WeakMap<Container, { w: number; h: number; z: number; cfg: string }> = new WeakMap()
 
     constructor(private readonly opts: TimelineRendererEngineOptions) { }
 
@@ -146,7 +146,6 @@ export class TimelineRendererEngine {
                     } catch (err) { devLog.warn('pointerout handler error', err) }
                 })
             } catch (err) { devLog.warn('register pointer handlers failed', err) }
-            this.gridManager = new GridManager()
             this.dnd = new TimelineDnDController({
                 app,
                 layers,
@@ -252,7 +251,7 @@ export class TimelineRendererEngine {
     private _renderGrid(data: { staffs: Staff[] }, viewport: ViewportState, effectiveCfg: TimelineConfig): void {
         if (!this.app) return;
         const alignment = computeViewportAlignment(effectiveCfg as any, viewport.x || 0);
-        this.gridManager?.ensure(this.layers!.background, effectiveCfg as any, data.staffs, this.opts.utils.getProjectStartDate(), this.app.screen.width, this.app.screen.height, viewport.zoom, alignment);
+        this._ensureStaffBackground(effectiveCfg as any, data.staffs, alignment);
         this.scene?.updateTodayMarker(this.opts.utils.getProjectStartDate(), effectiveCfg as any, alignment, this.app.screen.height);
         this._updateGpuGrid(viewport, effectiveCfg);
     }
@@ -303,6 +302,24 @@ export class TimelineRendererEngine {
         this.layers.viewport.x = Number.isFinite(alignment.viewportPixelOffsetX) ? alignment.viewportPixelOffsetX : 0;
         this.layers.viewport.y = Math.round(Number.isFinite(-viewport.y) ? -viewport.y : 0);
         this.layers.viewport.scale.set(1, 1);
+    }
+
+    private _ensureStaffBackground(
+        config: TimelineConfig,
+        staffs: Staff[],
+        alignment: { viewportXDaysQuantized: number; viewportPixelOffsetX: number }
+    ): void {
+        if (!this.layers || !this.app) return;
+        const container = this.layers.background;
+        const w = this.app.screen.width;
+        const h = this.app.screen.height;
+        const rz = Math.round((this.getViewport().zoom || 1) * 100) / 100;
+        const cfgKey = `${config.TOP_MARGIN}|${config.STAFF_SPACING}|${config.STAFF_LINE_SPACING}|${staffs.length}|${alignment.viewportXDaysQuantized}|${alignment.viewportPixelOffsetX}`;
+        const meta = this._bgMeta.get(container);
+        if (container.children.length > 0 && meta?.w === w && meta?.h === h && meta?.z === rz && meta?.cfg === cfgKey) return;
+        try { container.removeChildren(); } catch { }
+        drawGridAndStaff(container, config, staffs as any, this.opts.utils.getProjectStartDate(), w, h, rz, alignment);
+        this._bgMeta.set(container, { w, h, z: rz, cfg: cfgKey });
     }
 
     private _renderTasks(data: { tasks: EngineTasks; staffs: Staff[]; selection: string[] }, viewport: ViewportState, effectiveCfg: TimelineConfig): void {

@@ -1,21 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { RootState } from '../../../infrastructure/persistence'
-import { setActiveProject, setStaffs } from '../../../infrastructure/persistence'
-import { createTask, createDependency } from '@cadence/crdt'
+import { RootState } from '../../state'
+import { setActiveProject, setStaffs } from '../../state'
 import { seedDemoProject } from '../../../config/fixtures'
 import { Dependency } from '@cadence/core'
-import { useProjectTasks } from './crdt'
+import { useProjectSnapshot } from './crdt'
+import { useApplicationPorts } from '../../../application/context/ApplicationPortsContext'
 
 const DEMO_PROJECT_ID = 'demo-project'
 
 export function useDemoProject() {
     const dispatch = useDispatch()
     const [isInitialized, setIsInitialized] = useState(false)
+    const { persistence } = useApplicationPorts()
 
     const activeProjectId = useSelector((state: RootState) => state.ui.activeProjectId)
     const staffs = useSelector((state: RootState) => state.staffs.list)
-    const tasks = useProjectTasks(DEMO_PROJECT_ID)
+    const { tasks } = useProjectSnapshot(DEMO_PROJECT_ID)
 
     useEffect(() => {
         if (!activeProjectId) {
@@ -36,9 +37,9 @@ export function useDemoProject() {
                 seedDemoProject(
                     DEMO_PROJECT_ID,
                     {
-                        createTask,
+                        createTask: (projectId, task) => persistence.createTask(projectId, task as any),
                         createDependency: (projectId: string, dep: Omit<Dependency, 'projectId' | 'createdAt' | 'updatedAt'>) => {
-                            createDependency(projectId, dep as Dependency)
+                            return persistence.createDependency(projectId, dep as any)
                         }
                     },
                     () => Object.keys(tasks).length > 0

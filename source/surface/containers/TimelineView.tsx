@@ -1,15 +1,15 @@
 import React from 'react'
 import { DateHeader as UIDateHeader } from '@cadence/ui'
 import { TimelineRenderer } from './TimelineRenderer'
-import { Task, Dependency, Staff } from '@cadence/core'
+import { Staff } from '@cadence/core'
 import { TIMELINE_CONFIG } from '@cadence/renderer'
 import { PROJECT_START_DATE } from '../../config'
 import type { TimelineCanvasHandle } from '../components/renderer-react'
+import type { ProjectSnapshot } from '../../application/ports/PersistencePort'
 
 interface TimelineViewProps {
     projectId: string
-    tasks: Record<string, Task>
-    dependencies: Record<string, Dependency>
+    snapshot: ProjectSnapshot
     selection: string[]
     viewport: { x: number; y: number; zoom: number }
     staffs: Staff[]
@@ -34,8 +34,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                 <TimelineRenderer
                     timelineRef={props.timelineRef}
                     projectId={props.projectId}
-                    tasks={props.tasks}
-                    dependencies={props.dependencies}
+                    snapshot={props.snapshot}
                     selection={props.selection}
                     viewport={props.viewport}
                     staffs={props.staffs}

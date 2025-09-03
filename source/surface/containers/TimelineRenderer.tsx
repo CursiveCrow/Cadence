@@ -1,15 +1,15 @@
 import React from 'react'
 import { useDispatch } from 'react-redux'
-import { setSelectionWithAnchor, updateViewport } from '../../infrastructure/persistence'
-import { updateTask, createDependency } from '@cadence/crdt'
-import { Staff, Task, Dependency, DependencyType } from '@cadence/core'
+import { setSelectionWithAnchor, updateViewport } from '../state'
+import { Staff, Task, DependencyType } from '@cadence/core'
 import { TimelineCanvas, type TimelineCanvasHandle } from '../components/renderer-react'
 import './TimelineRenderer.css'
+import { useApplicationPorts } from '../../application/context/ApplicationPortsContext'
+import type { ProjectSnapshot } from '../../application/ports/PersistencePort'
 
 interface TimelineCanvasProps {
   projectId: string
-  tasks: Record<string, Task>
-  dependencies: Record<string, Dependency>
+  snapshot: ProjectSnapshot
   selection: string[]
   viewport: { x: number; y: number; zoom: number }
   staffs: Staff[]
@@ -21,8 +21,7 @@ interface TimelineCanvasProps {
 
 export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
   projectId,
-  tasks,
-  dependencies,
+  snapshot,
   selection,
   viewport,
   staffs,
@@ -32,14 +31,14 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
   timelineRef,
 }) => {
   const dispatch = useDispatch()
+  const { persistence } = useApplicationPorts()
 
   return (
     <div className="timeline-canvas-container">
       <TimelineCanvas
         ref={timelineRef as any}
         projectId={projectId}
-        tasks={tasks}
-        dependencies={dependencies}
+        snapshot={snapshot}
         selection={selection}
         viewport={viewport}
         staffs={staffs}
@@ -50,8 +49,8 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
           // Trigger a re-render for any components depending on viewport while engine already applied vertical scale
           dispatch(updateViewport({ ...viewport }))
         }}
-        onUpdateTask={(pid: string, id: string, updates: Partial<Task>) => updateTask(pid, id, updates as any)}
-        onCreateDependency={(pid: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: DependencyType }) => createDependency(pid, dep as any)}
+        onUpdateTask={(pid: string, id: string, updates: Partial<Task>) => persistence.updateTask(pid, id, updates as any)}
+        onCreateDependency={(pid: string, dep: { id: string; srcTaskId: string; dstTaskId: string; type: DependencyType }) => persistence.createDependency(pid, dep as any)}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         className="timeline-canvas"

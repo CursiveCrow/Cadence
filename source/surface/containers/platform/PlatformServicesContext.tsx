@@ -1,5 +1,4 @@
 import React from 'react'
-import type { PlatformServices } from '../../../infrastructure/platform/services/interfaces'
+import type { PlatformPort as PlatformServices } from '../../../application/ports/PlatformPort'
 
 export const PlatformServicesContext = React.createContext<PlatformServices | null>(null)
-

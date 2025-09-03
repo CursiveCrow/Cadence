@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { RootState } from '../../infrastructure/persistence'
-import { setSelection, setViewport } from '../../infrastructure/persistence'
-import { updateStaff } from '../../infrastructure/persistence'
-import { updateTask, createTask } from '@cadence/crdt'
-import { useProjectTasks, useProjectDependencies, useTask } from './hooks/crdt'
-import { TaskStatus, Task, Dependency } from '@cadence/core'
+import { RootState } from '../state'
+import { setSelection, setViewport } from '../state'
+import { updateStaff } from '../state'
+import { useProjectSnapshot } from './hooks/crdt'
+import { TaskStatus, Task } from '@cadence/core'
 import { ProjectHeader as UIProjectHeader } from '@cadence/ui'
 import { StaffManager } from './StaffManager'
 import { useDemoProject } from './hooks/useDemoProject'
@@ -16,6 +15,7 @@ import type { TimelineCanvasHandle } from '../components/renderer-react'
 import { TaskDetails } from './TaskDetails'
 import { TIMELINE_CONFIG } from '@cadence/renderer'
 import './CadenceMain.css'
+import { useApplicationPorts } from '../../application/context/ApplicationPortsContext'
 
 export const CadenceMain: React.FC = () => {
     const dispatch = useDispatch()
@@ -25,18 +25,18 @@ export const CadenceMain: React.FC = () => {
     const staffs = useSelector((state: RootState) => state.staffs.list)
     const [verticalScale, setVerticalScale] = useState(1)
     const verticalZoomSession = useRef<{ startZoom: number; startViewportY: number; anchorPx: number } | null>(null)
+    const { persistence } = useApplicationPorts()
 
     const { demoProjectId } = useDemoProject()
-    const tasks = useProjectTasks(demoProjectId)
-    const dependenciesData = useProjectDependencies(demoProjectId)
+    const snapshot = useProjectSnapshot(demoProjectId)
     const [popupPosition, setPopupPosition] = useState<{ x: number, y: number } | null>(null)
     const [isDragInProgress, setIsDragInProgress] = useState(false)
     const [showStaffManager, setShowStaffManager] = useState(false)
-    const { calculatePopupPosition } = useTaskPopupPosition(tasks)
+    const { calculatePopupPosition } = useTaskPopupPosition(snapshot.tasks)
     const timelineRef = useRef<TimelineCanvasHandle | null>(null)
 
     const selectedTaskId = selection.length > 0 ? selection[0] : null
-    const selectedTask = useTask(demoProjectId, selectedTaskId || '')
+    const selectedTask = selectedTaskId ? (snapshot.tasks[selectedTaskId] as unknown as Task | undefined) : null
 
     const handleClosePopup = useCallback(() => {
         dispatch(setSelection([]))
@@ -70,26 +70,14 @@ export const CadenceMain: React.FC = () => {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         }
-        createTask(demoProjectId, newTask)
+        persistence.createTask(demoProjectId, newTask)
     }
 
     const handleUpdateTask = (updates: Partial<Task>) => {
         if (selectedTask) {
-            updateTask(demoProjectId, selectedTask.id, updates)
+            persistence.updateTask(demoProjectId, selectedTask.id, updates)
         }
     }
-
-    const dependencies: Record<string, Dependency> = Object.entries(dependenciesData).reduce((acc, [id, dep]) => {
-        acc[id] = {
-            ...dep,
-            id,
-            projectId: demoProjectId,
-            createdAt: '', // These fields are not in the Yjs data, adding placeholders
-            updatedAt: '',
-        }
-        return acc
-    }, {} as Record<string, Dependency>)
-
 
     return (
         <div className="cadence-main">
@@ -130,8 +118,7 @@ export const CadenceMain: React.FC = () => {
                 <TimelineView
                     timelineRef={timelineRef}
                     projectId={demoProjectId}
-                    tasks={tasks}
-                    dependencies={dependencies}
+                    snapshot={snapshot}
                     selection={selection}
                     viewport={viewport}
                     staffs={staffs}

@@ -1,23 +1,21 @@
 /**
- * PixiJS v8 WebGPU renderer utilities
- * WebGPU detection and spatial indexing support
+ * Cadence Renderer Public API (narrowed)
+ * - Minimal config and helpers for UI consumers
+ * - Factory to create a renderer instance behind a stable port
  */
 
-export * from './core/utils/spatial'
-export * from './core/utils/webgpu-check'
-export * from './core/scene'
-export * from './core/types/renderer'
-export * from './core/dnd'
-export * from './core/config'
-export * from './core/utils/layout'
-export * from './components/rendering/dateHeader'
-export * from './core/utils/resolution'
-export * from './core/utils/status'
-export * from './core/utils/color'
-export * from './core/engine'
-export * from './core/panzoom'
-export * from './components/rendering/shapes'
+export { TIMELINE_CONFIG } from './core/config'
+export {
+  findNearestStaffLineAt,
+  snapXToDayWithConfig,
+  dayIndexToIsoDateUTC,
+  DAY_THRESHOLD,
+  HOUR_THRESHOLD,
+} from './core/utils/layout'
+export { computeDateHeaderHeight, computeDateHeaderViewModel } from './components/rendering/dateHeader'
+export type { DateHeaderViewModel } from './components/rendering/dateHeader'
 
-
-// Re-export Application for consumers that use '@cadence/renderer'
-export { Application } from 'pixi.js'
+// Renderer Port
+export type { TimelineConfig } from './core/types/renderer'
+export { createRenderer } from './public/rendererPort'
+export { statusToAccidental } from './core/utils/status'

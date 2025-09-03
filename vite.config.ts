@@ -25,9 +25,9 @@ export default defineConfig({
     alias: [
       // Allow importing directly from /source/... in index.html and modules
       { find: /^\/source\//, replacement: path.resolve(__dirname, 'source') + '/' },
+      { find: /^\/apps\//, replacement: path.resolve(__dirname, 'apps') + '/' },
       // First-class aliases to new source tree (no packages)
       { find: '@cadence/core', replacement: path.resolve(__dirname, 'source/core') },
-      { find: '@cadence/crdt', replacement: path.resolve(__dirname, 'source/infrastructure/persistence/crdt') },
       { find: '@cadence/renderer', replacement: path.resolve(__dirname, 'source/renderer') },
       { find: '@cadence/ui', replacement: path.resolve(__dirname, 'source/surface/components') },
       // '@cadence/ui' covers subpaths like styles/*

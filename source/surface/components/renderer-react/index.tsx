@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
-import { Application, TimelineRendererEngine, TIMELINE_CONFIG, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC } from '@cadence/renderer'
+import { createRenderer, TIMELINE_CONFIG, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC } from '@cadence/renderer'
 import { PROJECT_START_DATE } from '../../../config'
 import type { Task, Dependency, Staff, DependencyType } from '@cadence/core'
+import type { ProjectSnapshot } from '../../../application/ports/PersistencePort'
 
 export interface RendererReactProps {
     projectId: string
-    tasks: Record<string, Task>
-    dependencies: Record<string, Dependency>
+    snapshot: ProjectSnapshot
     selection: string[]
     viewport: { x: number; y: number; zoom: number }
     staffs: Staff[]
@@ -27,8 +27,7 @@ export type TimelineCanvasHandle = {
 
 export const TimelineCanvas = forwardRef<TimelineCanvasHandle, RendererReactProps>(({ 
     projectId,
-    tasks,
-    dependencies,
+    snapshot,
     selection,
     viewport,
     staffs,
@@ -42,18 +41,23 @@ export const TimelineCanvas = forwardRef<TimelineCanvasHandle, RendererReactProp
     className,
 }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null)
-    const appRef = useRef<Application | null>(null)
-    const engineRef = useRef<TimelineRendererEngine | null>(null)
+    const engineRef = useRef<ReturnType<typeof createRenderer> | null>(null)
     const [ready, setReady] = useState(false)
     const initializingRef = useRef(false)
 
-    const tasksRef = useRef<Record<string, Task>>(tasks)
-    const depsRef = useRef<Record<string, Dependency>>(dependencies)
+    const tasksRef = useRef<Record<string, Task>>({})
+    const depsRef = useRef<Record<string, Dependency>>({})
     const staffsRef = useRef<Staff[]>(staffs)
     const viewportRef = useRef(viewport)
 
-    useEffect(() => { tasksRef.current = tasks }, [tasks])
-    useEffect(() => { depsRef.current = dependencies }, [dependencies])
+    // Convert snapshot to renderer-friendly structures
+    useEffect(() => {
+        tasksRef.current = snapshot.tasks as unknown as Record<string, Task>
+        depsRef.current = Object.entries(snapshot.dependencies).reduce((acc, [id, dep]) => {
+            acc[id] = { ...(dep as any), id, projectId, createdAt: (dep as any).createdAt ?? '', updatedAt: (dep as any).updatedAt ?? '' }
+            return acc
+        }, {} as Record<string, Dependency>)
+    }, [snapshot, projectId])
     useEffect(() => { staffsRef.current = staffs }, [staffs])
     useEffect(() => { viewportRef.current = viewport }, [viewport])
 
@@ -66,7 +70,7 @@ export const TimelineCanvas = forwardRef<TimelineCanvasHandle, RendererReactProp
             if (!canvas) return
             initializingRef.current = true
             try {
-                const engine = new TimelineRendererEngine({
+                const engine = createRenderer({
                     canvas,
                     projectId,
                     config: TIMELINE_CONFIG as any,
@@ -94,7 +98,6 @@ export const TimelineCanvas = forwardRef<TimelineCanvasHandle, RendererReactProp
                 })
                 await engine.init()
                 engineRef.current = engine
-                appRef.current = engine.getApplication() as any
                 if (mounted) setReady(true)
             } finally {
                 initializingRef.current = false
@@ -107,7 +110,6 @@ export const TimelineCanvas = forwardRef<TimelineCanvasHandle, RendererReactProp
             try { cancelAnimationFrame(raf) } catch { }
             try { engineRef.current?.destroy() } catch { }
             engineRef.current = null
-            appRef.current = null
             setReady(false)
         }
     }, [projectId])
@@ -123,8 +125,10 @@ export const TimelineCanvas = forwardRef<TimelineCanvasHandle, RendererReactProp
 
     useEffect(() => {
         if (!ready || !engineRef.current) return
+        const tasks = tasksRef.current
+        const dependencies = depsRef.current
         engineRef.current.render({ tasks, dependencies, staffs, selection }, viewport)
-    }, [tasks, dependencies, staffs, selection, viewport, ready])
+    }, [snapshot, staffs, selection, viewport, ready])
 
     return (
         <canvas ref={canvasRef} className={className} style={{ display: 'block', width: '100%', height: '100%' }} />

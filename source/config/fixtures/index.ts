@@ -1,7 +1,7 @@
 import { Task, Dependency, TaskStatus, DependencyType } from '@cadence/core'
 
-type CreateTaskFn = (projectId: string, task: Omit<Task, 'projectId' | 'createdAt' | 'updatedAt'>) => void
-type CreateDependencyFn = (projectId: string, dep: Omit<Dependency, 'projectId' | 'createdAt' | 'updatedAt'>) => void
+type CreateTaskFn = (projectId: string, task: Omit<Task, 'projectId' | 'createdAt' | 'updatedAt'>) => Promise<void>
+type CreateDependencyFn = (projectId: string, dep: Omit<Dependency, 'projectId' | 'createdAt' | 'updatedAt'>) => Promise<void>
 
 export function seedDemoProject(demoProjectId: string, fns: { createTask: CreateTaskFn, createDependency: CreateDependencyFn }, isSeeded: () => boolean) {
     // Seed tasks
@@ -29,5 +29,4 @@ export function seedDemoProject(demoProjectId: string, fns: { createTask: Create
         fns.createDependency(demoProjectId, { id: 'dep-2', srcTaskId: 'task-3', dstTaskId: 'task-4', type: DependencyType.FINISH_TO_START })
     }, 200)
 }
-
 

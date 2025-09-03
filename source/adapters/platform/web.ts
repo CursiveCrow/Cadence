@@ -1,14 +1,9 @@
 /**
- * Web API implementation of platform services
+ * Web implementation of PlatformPort using browser APIs.
  */
+import type { PlatformPort, FileDialogOptions, FileHandle, MessageBoxOptions, MessageBoxResult } from '../../application/ports/PlatformPort'
 
-import { PlatformServices, FileDialogOptions, FileHandle, MessageBoxOptions, MessageBoxResult } from './interfaces'
-
-/**
- * Web implementation using browser APIs
- * Fallback for when running in web environment
- */
-export class WebPlatformServices implements PlatformServices {
+export class WebPlatformServices implements PlatformPort {
   async showOpenDialog(options: FileDialogOptions): Promise<FileHandle | null> {
     return new Promise((resolve) => {
       const input = document.createElement('input')
@@ -24,49 +19,39 @@ export class WebPlatformServices implements PlatformServices {
         const file = (e.target as HTMLInputElement).files?.[0]
         if (file) {
           const content = await file.arrayBuffer()
-          resolve({
-            name: file.name,
-            path: file.name, // Web doesn't have real paths
-            content
-          })
+          resolve({ name: file.name, path: file.name, content })
         } else {
           resolve(null)
         }
       }
 
-      input.oncancel = () => resolve(null)
+      ;(input as any).oncancel = () => resolve(null)
       input.click()
     })
   }
 
   async showSaveDialog(options: FileDialogOptions): Promise<string | null> {
-    // Prefer File System Access API if available to get a file name
     try {
       const w = window as any
       if (w.showSaveFilePicker) {
         const handle = await w.showSaveFilePicker({
           suggestedName: options.defaultPath || 'untitled',
-          types: options.filters?.map((f) => ({
-            description: f.name,
-            accept: { 'application/octet-stream': f.extensions.map((e) => `.${e}`) }
-          }))
+          types: options.filters?.map((f: any) => ({ description: f.name, accept: { 'application/octet-stream': f.extensions.map((e: string) => `.${e}`) } }))
         })
         return (handle as any).name || options.defaultPath || 'untitled'
       }
     } catch {
-      // fall back to prompt below
+      // fall back to prompt
     }
     const filename = prompt(options.title || 'Save file as:', options.defaultPath || 'untitled')
     return filename
   }
 
   async readFile(_path: string): Promise<ArrayBuffer> {
-    // Web can't read arbitrary paths, this is a placeholder
     throw new Error('Reading arbitrary file paths not supported in web environment')
   }
 
   async writeFile(path: string, content: ArrayBuffer): Promise<void> {
-    // Try File System Access API first
     try {
       const w = window as any
       if (w.showSaveFilePicker) {
@@ -77,9 +62,8 @@ export class WebPlatformServices implements PlatformServices {
         return
       }
     } catch {
-      // fallback to download below
+      // fallback to download
     }
-    // Fallback: trigger a download
     const blob = new Blob([content])
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -92,7 +76,6 @@ export class WebPlatformServices implements PlatformServices {
   }
 
   async showMessageBox(options: MessageBoxOptions): Promise<MessageBoxResult> {
-    // Web fallback using browser dialogs
     if (options.type === 'question' && options.buttons && options.buttons.length === 2) {
       const result = confirm(`${options.title}\n\n${options.message}`)
       return { response: result ? 0 : 1 }
@@ -111,7 +94,7 @@ export class WebPlatformServices implements PlatformServices {
   }
 
   async quit(): Promise<void> {
-    // Web can't quit, just close the tab
     window.close()
   }
 }
+
