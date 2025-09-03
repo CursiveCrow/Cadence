@@ -1,3 +1,2 @@
-// Aggregate exports for the core domain and use-cases
+// Aggregate exports for the core domain
 export * from './domain'
-export * from './use-cases'

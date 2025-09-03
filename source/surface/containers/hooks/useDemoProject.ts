@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { RootState, setActiveProject, setStaffs } from '@cadence/state'
+import { RootState } from '../../../infrastructure/persistence'
+import { setActiveProject, setStaffs } from '../../../infrastructure/persistence'
 import { createTask, createDependency } from '@cadence/crdt'
-import { seedDemoProject } from '@cadence/fixtures'
+import { seedDemoProject } from '../../../config/fixtures'
 import { Dependency } from '@cadence/core'
 import { useProjectTasks } from './crdt'
 
-export const DEMO_PROJECT_ID = 'demo-project'
+const DEMO_PROJECT_ID = 'demo-project'
 
 export function useDemoProject() {
     const dispatch = useDispatch()
@@ -53,4 +54,3 @@ export function useDemoProject() {
         isDemoProjectInitialized: isInitialized
     }
 }
-

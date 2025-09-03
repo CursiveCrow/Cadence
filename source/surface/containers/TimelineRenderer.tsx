@@ -1,9 +1,9 @@
 import React from 'react'
 import { useDispatch } from 'react-redux'
-import { setSelection, updateViewport } from '@cadence/state'
+import { setSelectionWithAnchor, updateViewport } from '../../infrastructure/persistence'
 import { updateTask, createDependency } from '@cadence/crdt'
 import { Staff, Task, Dependency, DependencyType } from '@cadence/core'
-import { TimelineCanvas } from '@cadence/renderer-react'
+import { TimelineCanvas, type TimelineCanvasHandle } from '../components/renderer-react'
 import './TimelineRenderer.css'
 
 interface TimelineCanvasProps {
@@ -16,6 +16,7 @@ interface TimelineCanvasProps {
   onDragStart?: () => void
   onDragEnd?: () => void
   onVerticalScaleChange?: (s: number) => void
+  timelineRef?: React.Ref<TimelineCanvasHandle>
 }
 
 export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
@@ -27,20 +28,22 @@ export const TimelineRenderer: React.FC<TimelineCanvasProps> = ({
   staffs,
   onDragStart,
   onDragEnd,
-  onVerticalScaleChange
+  onVerticalScaleChange,
+  timelineRef,
 }) => {
   const dispatch = useDispatch()
 
   return (
     <div className="timeline-canvas-container">
       <TimelineCanvas
+        ref={timelineRef as any}
         projectId={projectId}
         tasks={tasks}
         dependencies={dependencies}
         selection={selection}
         viewport={viewport}
         staffs={staffs}
-        onSelect={(ids: string[]) => dispatch(setSelection(ids))}
+        onSelect={(payload: { ids: string[]; anchor?: { x: number; y: number } }) => dispatch(setSelectionWithAnchor(payload))}
         onViewportChange={(v: { x: number; y: number; zoom: number }) => dispatch(updateViewport(v))}
         onVerticalScaleChange={(s: number) => {
           try { onVerticalScaleChange?.(s) } catch { }

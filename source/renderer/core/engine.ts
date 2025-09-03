@@ -1,8 +1,7 @@
 import { Application, Container, Rectangle } from 'pixi.js'
 import { createTimelineLayers, TimelineSceneManager } from './scene'
-import type { TimelineConfig, RendererPlugin } from './types/renderer'
+import type { TimelineConfig } from './types/renderer'
 import { drawDependencyArrow } from '../components/rendering/shapes'
-import { StatusGlyphPlugin } from '../components/plugins/status-glyph'
 import { TimelineDnDController } from './dnd'
 import { PanZoomController, ViewportState } from './panzoom'
 import { checkWebGPUAvailability, logWebGPUStatus, logRendererPreference } from './utils/webgpu-check'
@@ -19,7 +18,7 @@ export type EngineTasks = Record<string, Task>
 export type EngineDependencies = Record<string, Dependency>
 
 export interface EngineCallbacks {
-    select: (ids: string[]) => void
+    select: (payload: { ids: string[]; anchor?: { x: number; y: number } }) => void
     onDragStart?: () => void
     onDragEnd?: () => void
     updateTask: (projectId: string, taskId: string, updates: Partial<Task>) => void
@@ -42,7 +41,6 @@ export interface TimelineRendererEngineOptions {
     config: TimelineConfig
     utils: EngineUtils
     callbacks: EngineCallbacks
-    plugins?: RendererPlugin[]
 }
 
 // Use shared GridManager
@@ -118,28 +116,19 @@ export class TimelineRendererEngine {
             } catch (err) { devLog.warn('createGpuTimeGrid/init failed', err) }
 
             this.scene = new TimelineSceneManager(layers)
-            // Always enable status glyphs; merge with any provided plugins and de-duplicate
-            const provided = this.opts.plugins || []
-            const pluginSet = new Set<RendererPlugin>(provided)
-            pluginSet.add(StatusGlyphPlugin)
-            this.scene.setPlugins(Array.from(pluginSet))
-            // Provide context providers for plugins to query effective config and project start
+            // Compute effective config helper for hover/tooltip
             const getEffective = () => {
                 const vp = this.getViewport()
                 return computeEffectiveConfig(this.opts.config as any, vp.zoom || 1, this.getVerticalScale()) as any
             }
-            this.scene.setContextProviders({
-                getEffectiveConfig: getEffective,
-                getProjectStartDate: () => this.opts.utils.getProjectStartDate()
-            })
-            this.scene.notifyLayersCreated(app)
+            // Plugins removed; no notify step
             // Hover guide and date tooltip on pointer move
             try {
                 app.stage.on('globalpointermove', (e: any) => {
                     try {
                         const local = layers.viewport.toLocal(e.global)
                         const eff = getEffective()
-                        this.scene?.updateHoverAtViewportX(local.x, eff as any, app.screen.height)
+                        this.scene?.updateHoverAtViewportX(local.x, eff as any, app.screen.height, this.opts.utils.getProjectStartDate())
                         // Task tooltip near hovered task
                         this.scene?.updateTaskHoverAtViewportPoint(local.x, local.y, eff as any, this.opts.utils.getProjectStartDate(), app.screen.width)
                     } catch (err) { devLog.warn('globalpointermove handler error', err) }
@@ -147,13 +136,13 @@ export class TimelineRendererEngine {
                 app.stage.on('pointerleave', () => {
                     try {
                         const eff = getEffective()
-                        this.scene?.updateHoverAtViewportX(null as any, eff as any, app.screen.height)
+                        this.scene?.updateHoverAtViewportX(null as any, eff as any, app.screen.height, this.opts.utils.getProjectStartDate())
                     } catch (err) { devLog.warn('pointerleave handler error', err) }
                 })
                 app.stage.on('pointerout', () => {
                     try {
                         const eff = getEffective()
-                        this.scene?.updateHoverAtViewportX(null as any, eff as any, app.screen.height)
+                        this.scene?.updateHoverAtViewportX(null as any, eff as any, app.screen.height, this.opts.utils.getProjectStartDate())
                     } catch (err) { devLog.warn('pointerout handler error', err) }
                 })
             } catch (err) { devLog.warn('register pointer handlers failed', err) }
@@ -250,7 +239,7 @@ export class TimelineRendererEngine {
         this.currentData = { tasks: data.tasks, dependencies: data.dependencies, staffs: data.staffs };
         this.getViewport = () => viewport;
         this.setViewport = (v) => { try { this.opts.callbacks.onViewportChange?.(v) } catch (err) { devLog.warn('onViewportChange callback failed', err) } };
-        this.scene?.setZoom(viewport.zoom || 1);
+        // scene zoom tracking removed
     }
 
     private _updateEffectiveConfig(viewport: ViewportState): TimelineConfig {

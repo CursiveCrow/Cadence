@@ -4,7 +4,6 @@
 
 import * as Y from 'yjs'
 import { Task, Dependency } from '@cadence/core'
-import { ProjectPersistenceController } from './persistence-controller'
 
 export type TaskData = Omit<Task, 'laneIndex'>
 export type DependencyData = Dependency
@@ -22,7 +21,6 @@ export class ProjectDocument {
   public readonly dependencies: Y.Map<DependencyData>
   public readonly settings: Y.Map<unknown>
   public readonly undoManager: Y.UndoManager
-  private persistence: ProjectPersistenceController
 
   constructor(public readonly projectId: string) {
     this.ydoc = new Y.Doc()
@@ -33,9 +31,7 @@ export class ProjectDocument {
     // Set up UndoManager for undo/redo functionality
     this.undoManager = new Y.UndoManager([this.tasks, this.dependencies, this.settings])
 
-    // Attach persistence controller (non-blocking)
-    this.persistence = new ProjectPersistenceController(projectId, this.ydoc)
-    void this.persistence.init()
+    // Persistence is currently in-memory only. External save/load can be added later.
   }
 
   /**

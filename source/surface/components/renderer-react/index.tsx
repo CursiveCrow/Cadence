@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import { Application, TimelineRendererEngine, TIMELINE_CONFIG, findNearestStaffLineAt, snapXToDayWithConfig, dayIndexToIsoDateUTC } from '@cadence/renderer'
-import { PROJECT_START_DATE } from '@cadence/config'
+import { PROJECT_START_DATE } from '../../../config'
 import type { Task, Dependency, Staff, DependencyType } from '@cadence/core'
 
 export interface RendererReactProps {
@@ -10,7 +10,7 @@ export interface RendererReactProps {
     selection: string[]
     viewport: { x: number; y: number; zoom: number }
     staffs: Staff[]
-    onSelect: (ids: string[]) => void
+    onSelect: (payload: { ids: string[]; anchor?: { x: number; y: number } }) => void
     onViewportChange: (v: { x: number; y: number; zoom: number }) => void
     onDragStart?: () => void
     onDragEnd?: () => void
@@ -20,7 +20,12 @@ export interface RendererReactProps {
     className?: string
 }
 
-export const TimelineCanvas: React.FC<RendererReactProps> = ({
+export type TimelineCanvasHandle = {
+    setVerticalScale: (s: number) => void
+    setViewport: (v: { x: number; y: number; zoom: number }) => void
+}
+
+export const TimelineCanvas = forwardRef<TimelineCanvasHandle, RendererReactProps>(({ 
     projectId,
     tasks,
     dependencies,
@@ -35,7 +40,7 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
     onCreateDependency,
     onVerticalScaleChange,
     className,
-}) => {
+}, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const appRef = useRef<Application | null>(null)
     const engineRef = useRef<TimelineRendererEngine | null>(null)
@@ -65,7 +70,6 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
                     canvas,
                     projectId,
                     config: TIMELINE_CONFIG as any,
-                    // StatusGlyphPlugin is injected by the engine by default
                     utils: {
                         getProjectStartDate: () => PROJECT_START_DATE,
                         findNearestStaffLine: (y: number) => findNearestStaffLineAt(y, staffsRef.current, TIMELINE_CONFIG as any),
@@ -73,7 +77,7 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
                         dayIndexToIsoDate: (d: number) => dayIndexToIsoDateUTC(d, PROJECT_START_DATE)
                     },
                     callbacks: ({
-                        select: onSelect,
+                        select: onSelect as any,
                         onDragStart,
                         onDragEnd,
                         updateTask: (pid: string, id: string, updates: Partial<Task>) => {
@@ -91,24 +95,6 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
                 await engine.init()
                 engineRef.current = engine
                 appRef.current = engine.getApplication() as any
-                // Expose helpers only in dev to avoid leaking globals in production
-                const isDev = (() => {
-                    try { return !!(import.meta as any)?.env?.DEV } catch { }
-                    try {
-                        const p: any = (typeof globalThis !== 'undefined') ? (globalThis as any).process : undefined
-                        return !!p && p.env && p.env.NODE_ENV !== 'production'
-                    } catch { }
-                    return false
-                })()
-                if (isDev) {
-                    ; (window as any).__CADENCE_SET_VIEWPORT = (v: { x: number; y: number; zoom: number }) => {
-                        try { engineRef.current && engineRef.current.render({ tasks: tasksRef.current, dependencies: depsRef.current, staffs: staffsRef.current, selection: [] }, v) } catch { }
-                    }
-                }
-                // Expose vertical scale setter in all builds; UI depends on this for sidebar vertical zoom control
-                ; (window as any).__CADENCE_SET_VERTICAL_SCALE = (s: number) => {
-                    try { engineRef.current?.setVerticalScale(s) } catch { }
-                }
                 if (mounted) setReady(true)
             } finally {
                 initializingRef.current = false
@@ -126,6 +112,15 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
         }
     }, [projectId])
 
+    useImperativeHandle(ref, () => ({
+        setVerticalScale: (s: number) => {
+            try { engineRef.current?.setVerticalScale(s) } catch { }
+        },
+        setViewport: (v: { x: number; y: number; zoom: number }) => {
+            try { engineRef.current && engineRef.current.render({ tasks: tasksRef.current, dependencies: depsRef.current, staffs: staffsRef.current, selection: [] }, v) } catch { }
+        }
+    }), [])
+
     useEffect(() => {
         if (!ready || !engineRef.current) return
         engineRef.current.render({ tasks, dependencies, staffs, selection }, viewport)
@@ -134,4 +129,4 @@ export const TimelineCanvas: React.FC<RendererReactProps> = ({
     return (
         <canvas ref={canvasRef} className={className} style={{ display: 'block', width: '100%', height: '100%' }} />
     )
-}
+})

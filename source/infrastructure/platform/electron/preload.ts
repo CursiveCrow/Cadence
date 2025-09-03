@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC_CHANNELS } from '@cadence/contracts'
+import { IPC_CHANNELS } from '../contracts'
 import { domReady, createPreloadLoading } from './preload-utils'
 
 // --------- Expose minimal, typed API to the Renderer process ---------

@@ -3,7 +3,7 @@
  */
 
 import { PlatformServices, FileDialogOptions, FileHandle, MessageBoxOptions, MessageBoxResult } from './interfaces'
-import { IPC_CHANNELS, DialogOpenFileRequest, DialogOpenFileResponse, SaveFileRequest, SaveFileResponse, AppGetVersionResponse, DialogMessageBoxOptions, DialogMessageBoxResponse } from '@cadence/contracts'
+import { IPC_CHANNELS, DialogOpenFileRequest, DialogOpenFileResponse, SaveFileRequest, SaveFileResponse, AppGetVersionResponse, DialogMessageBoxOptions, DialogMessageBoxResponse } from '../contracts'
 
 /**
  * Electron implementation using IPC

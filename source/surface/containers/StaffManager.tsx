@@ -1,6 +1,7 @@
 import React from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { RootState, addStaff, updateStaff, deleteStaff, reorderStaffs } from '@cadence/state'
+import { RootState } from '../../infrastructure/persistence'
+import { addStaff, updateStaff, deleteStaff, reorderStaffs } from '../../infrastructure/persistence'
 import { Staff } from '@cadence/core'
 import { StaffManager as UIStaffManager } from '@cadence/ui'
 

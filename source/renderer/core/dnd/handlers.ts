@@ -17,14 +17,15 @@ export function onDownTask(this: TimelineDnDController, event: any, task: Task, 
         return
     }
 
+    let anchor: { x: number; y: number } | undefined
     try {
         const view = this.app.view as HTMLCanvasElement
         const rect = view.getBoundingClientRect()
         const cssX = rect.left + (globalPos.x * (rect.width / view.width))
         const cssY = rect.top + (globalPos.y * (rect.height / view.height))
-            ; (window as any).__CADENCE_LAST_SELECT_POS = { x: Math.round(cssX), y: Math.round(cssY) }
-    } catch { }
-    this.callbacks.select([(task as any).id])
+        anchor = { x: Math.round(cssX), y: Math.round(cssY) }
+    } catch { /* ignore */ }
+    this.callbacks.select({ ids: [(task as any).id], anchor })
     const widthNow = layout ? layout.width : (container as any).hitArea?.width || 0
     const isNearRightEdge = localPos.x > widthNow - 10 && localPos.x >= 0
     if (isNearRightEdge) {
@@ -293,7 +294,7 @@ export function onUp(this: TimelineDnDController, event: any) {
         const target = (event as any).target
         const matchedIdFromTarget = target ? this.resolveTaskIdFromHit(target) : null
         if (!matchedIdFromTarget) {
-            this.callbacks.select([])
+            this.callbacks.select({ ids: [] })
         }
     }
     this.state.stageDownOnEmpty = false
@@ -306,7 +307,7 @@ export function onTap(this: TimelineDnDController, event: any) {
     const target = (event as any).target
     const matchedIdFromTarget = target ? this.resolveTaskIdFromHit(target) : null
     if (!matchedIdFromTarget) {
-        this.callbacks.select([])
+        this.callbacks.select({ ids: [] })
     }
     this.state.pointerDownOnStage = false
 }
@@ -331,7 +332,7 @@ export function onStageDown(this: TimelineDnDController, event: any) {
     const target = (event as any).target
     this.state.pointerDownOnStage = (target === this.app.stage)
     if (target === this.app.stage) {
-        this.callbacks.select([])
+        this.callbacks.select({ ids: [] })
         this.state.stageDownOnEmpty = false
         return
     }

@@ -27,7 +27,7 @@ export interface DataProviders {
 }
 
 export interface Callbacks {
-    select: (ids: string[]) => void
+    select: (payload: { ids: string[]; anchor?: { x: number; y: number } }) => void
     onDragStart?: () => void
     onDragEnd?: () => void
     updateTask: (projectId: string, taskId: string, updates: Partial<any>) => void

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { RootState, setSelection, setViewport } from '@cadence/state'
-import { updateStaff } from '@cadence/state'
+import { RootState } from '../../infrastructure/persistence'
+import { setSelection, setViewport } from '../../infrastructure/persistence'
+import { updateStaff } from '../../infrastructure/persistence'
 import { updateTask, createTask } from '@cadence/crdt'
 import { useProjectTasks, useProjectDependencies, useTask } from './hooks/crdt'
 import { TaskStatus, Task, Dependency } from '@cadence/core'
@@ -11,14 +12,16 @@ import { useDemoProject } from './hooks/useDemoProject'
 import { useTaskPopupPosition } from './hooks/useTaskPopupPosition'
 import { Sidebar } from './Sidebar'
 import { TimelineView } from './TimelineView'
+import type { TimelineCanvasHandle } from '../components/renderer-react'
 import { TaskDetails } from './TaskDetails'
 import { TIMELINE_CONFIG } from '@cadence/renderer'
 import './CadenceMain.css'
 
 export const CadenceMain: React.FC = () => {
     const dispatch = useDispatch()
-    const selection = useSelector((state: RootState) => state.selection.ids)
-    const viewport = useSelector((state: RootState) => state.viewport)
+    const selection = useSelector((state: RootState) => state.ui.selection)
+    const selectionAnchor = useSelector((state: RootState) => state.ui.selectionAnchor)
+    const viewport = useSelector((state: RootState) => state.ui.viewport)
     const staffs = useSelector((state: RootState) => state.staffs.list)
     const [verticalScale, setVerticalScale] = useState(1)
     const verticalZoomSession = useRef<{ startZoom: number; startViewportY: number; anchorPx: number } | null>(null)
@@ -30,6 +33,7 @@ export const CadenceMain: React.FC = () => {
     const [isDragInProgress, setIsDragInProgress] = useState(false)
     const [showStaffManager, setShowStaffManager] = useState(false)
     const { calculatePopupPosition } = useTaskPopupPosition(tasks)
+    const timelineRef = useRef<TimelineCanvasHandle | null>(null)
 
     const selectedTaskId = selection.length > 0 ? selection[0] : null
     const selectedTask = useTask(demoProjectId, selectedTaskId || '')
@@ -41,16 +45,15 @@ export const CadenceMain: React.FC = () => {
 
     useEffect(() => {
         if (selection.length > 0 && !isDragInProgress) {
-            const last = (window as any).__CADENCE_LAST_SELECT_POS as { x: number; y: number } | undefined
-            if (last && Number.isFinite(last.x) && Number.isFinite(last.y)) {
-                setPopupPosition({ x: last.x, y: last.y })
+            if (selectionAnchor && Number.isFinite(selectionAnchor.x) && Number.isFinite(selectionAnchor.y)) {
+                setPopupPosition({ x: selectionAnchor.x, y: selectionAnchor.y })
             } else {
                 setPopupPosition(calculatePopupPosition(selection[0]))
             }
         } else {
             setPopupPosition(null)
         }
-    }, [selection, calculatePopupPosition, isDragInProgress])
+    }, [selection, selectionAnchor, calculatePopupPosition, isDragInProgress])
 
     const addNewTask = () => {
         const randomStaff = staffs[Math.floor(Math.random() * staffs.length)] || staffs[0]
@@ -117,7 +120,7 @@ export const CadenceMain: React.FC = () => {
                         const ratio = s1 / s0
                         const newY = Math.max(0, Math.round(ratio * startY + (ratio - 1) * anchorPx))
                         setVerticalScale(s1)
-                        try { (window as any).__CADENCE_SET_VERTICAL_SCALE?.(s1) } catch { }
+                        try { timelineRef.current?.setVerticalScale(s1) } catch { }
                         dispatch(setViewport({ x: viewport.x, y: newY, zoom: viewport.zoom }))
                     }}
                     onChangeTimeSignature={(staffId, timeSignature) => {
@@ -125,6 +128,7 @@ export const CadenceMain: React.FC = () => {
                     }}
                 />
                 <TimelineView
+                    timelineRef={timelineRef}
                     projectId={demoProjectId}
                     tasks={tasks}
                     dependencies={dependencies}

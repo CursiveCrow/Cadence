@@ -1,12 +1,12 @@
-import { Application, Container, Graphics, Rectangle, Text } from 'pixi.js'
-import type { RendererContext } from '../types/context'
-import type { TaskLayout, TaskAnchors, RendererPlugin, TimelineConfig } from '../types/renderer'
+import { Container, Graphics, Rectangle, Text } from 'pixi.js'
+import type { TaskLayout, TaskAnchors, TimelineConfig } from '../types/renderer'
 import { drawSelectionHighlight } from '../../components/rendering/shapes'
 import { devLog } from '../utils/devlog'
 import { SpatialHash } from '../utils/spatial'
 import { computeTextResolution } from '../utils/resolution'
 import { worldDayToContainerX } from '../utils/layout'
 import { Task } from '@cadence/core'
+import { statusToAccidental } from '../utils/status'
 
 export class TimelineSceneManager {
     layers: { viewport: Container; background: Container; dependencies: Container; tasks: Container; selection: Container; dragLayer: Container }
@@ -15,11 +15,9 @@ export class TimelineSceneManager {
     taskLayouts: Map<string, TaskLayout>
     taskAnchors: Map<string, TaskAnchors>
     taskData: Map<string, Task>
-    private plugins: RendererPlugin[]
+    // Plugins removed to simplify engine
     private spatial: SpatialHash
-    private lastZoom: number
-    private providerGetConfig: () => TimelineConfig
-    private providerGetProjectStartDate: () => Date
+    // Context providers removed; engine passes config to methods directly
     private hoverGuide: Graphics | null = null
     private hoverText: Text | null = null
     private todayLine: Graphics | null = null
@@ -32,35 +30,10 @@ export class TimelineSceneManager {
         this.taskLayouts = new Map()
         this.taskAnchors = new Map()
         this.taskData = new Map()
-        this.plugins = []
         this.spatial = new SpatialHash(200)
-        this.lastZoom = 1
-        this.providerGetConfig = () => ({
-            LEFT_MARGIN: 0, TOP_MARGIN: 0, DAY_WIDTH: 60, STAFF_SPACING: 120, STAFF_LINE_SPACING: 18,
-            TASK_HEIGHT: 20, STAFF_LINE_COUNT: 5, BACKGROUND_COLOR: 0x000000,
-            GRID_COLOR_MAJOR: 0xffffff, GRID_COLOR_MINOR: 0xffffff, STAFF_LINE_COLOR: 0xffffff,
-            TASK_COLORS: { default: 0xffffff }, DEPENDENCY_COLOR: 0xffffff, SELECTION_COLOR: 0xffffff,
-        } as any)
-        this.providerGetProjectStartDate = () => new Date(0)
+        
     }
 
-    setPlugins(plugins: RendererPlugin[]): void { this.plugins = plugins || [] }
-    setZoom(zoom: number): void { this.lastZoom = zoom }
-    setContextProviders(providers: { getEffectiveConfig: () => TimelineConfig; getProjectStartDate: () => Date }): void {
-        this.providerGetConfig = providers.getEffectiveConfig
-        this.providerGetProjectStartDate = providers.getProjectStartDate
-    }
-
-    notifyLayersCreated(app: Application): void {
-        const ctx: RendererContext = {
-            getZoom: () => this.lastZoom,
-            getEffectiveConfig: () => this.providerGetConfig(),
-            getProjectStartDate: () => this.providerGetProjectStartDate(),
-        }
-        for (const p of this.plugins) {
-            try { p.onLayersCreated?.(app, this.layers as any, ctx) } catch (err) { devLog.warn('plugin.onLayersCreated failed', err) }
-        }
-    }
 
     upsertTask(
         task: Task,
@@ -182,10 +155,29 @@ export class TimelineSceneManager {
             })
         }
 
-        // Notify plugins
-        for (const p of this.plugins) {
-            try { p.onTaskUpserted?.(task, container, { layout, config, zoom: _zoom, selected: _selected }) } catch (err) { devLog.warn('plugin.onTaskUpserted failed', err) }
-        }
+        // Inline status glyph rendering (was a plugin)
+        try {
+            const status = (task as any).status || 'default'
+            const accidental = statusToAccidental(status)
+            if (accidental) {
+                const oversample = 1.5
+                const baseFont = status === 'cancelled' ? Math.max(10, Math.round(config.TASK_HEIGHT * 0.72)) : Math.max(10, Math.round(config.TASK_HEIGHT * 0.64))
+                const t = new Text({
+                    text: accidental,
+                    style: { fontFamily: 'serif', fontSize: baseFont * oversample, fontWeight: 'bold', fill: 0xffffff, align: 'center' }
+                })
+                const viewport = container.parent?.parent as Container | undefined
+                const scaleX = viewport?.scale?.x ?? 1
+                const desiredRes = computeTextResolution(scaleX, oversample)
+                ; (t as any).resolution = desiredRes
+                try { (t as any).updateText?.() } catch { }
+                const r = config.TASK_HEIGHT / 2
+                t.scale.set(1 / oversample)
+                t.x = Math.round(r - t.width / 2)
+                t.y = Math.round((config.TASK_HEIGHT / 2) - t.height / 2)
+                container.addChild(t)
+            }
+        } catch (err) { devLog.warn('inline status glyph failed', err) }
         return { container, created }
     }
 
@@ -231,7 +223,7 @@ export class TimelineSceneManager {
         drawSelectionHighlight(this.layers.selection, config, layout)
     }
 
-    updateHoverAtViewportX(px: number | null, config: TimelineConfig, screenHeight: number): void {
+    updateHoverAtViewportX(px: number | null, config: TimelineConfig, screenHeight: number, projectStartDate: Date): void {
         if (px == null || !Number.isFinite(px)) {
             if (this.hoverGuide && this.layers.dragLayer.children.includes(this.hoverGuide)) this.layers.dragLayer.removeChild(this.hoverGuide)
             if (this.hoverText && this.layers.dragLayer.children.includes(this.hoverText)) this.layers.dragLayer.removeChild(this.hoverText)
@@ -249,7 +241,7 @@ export class TimelineSceneManager {
         if (!this.hoverGuide) this.layers.dragLayer.addChild(g)
         this.hoverGuide = g
 
-        const base = this.providerGetProjectStartDate()
+        const base = projectStartDate
         const relDays = Math.round((px - config.LEFT_MARGIN) / Math.max(config.DAY_WIDTH, 0.0001))
         const ms = 24 * 60 * 60 * 1000
         const date = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()) + relDays * ms)
@@ -429,5 +421,3 @@ export class TimelineSceneManager {
         this.spatial.clear()
     }
 }
-
-

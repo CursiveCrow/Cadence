@@ -1,4 +1,4 @@
-import type { IPC_CHANNELS } from '@cadence/contracts'
+import type { IPC_CHANNELS } from '../../../infrastructure/platform/contracts'
 
 export interface IElectronAPI {
   on: (channel: (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS], listener: (event: any, ...args: any[]) => void) => void

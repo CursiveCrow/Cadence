@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
-import { IPC_CHANNELS, DialogOpenFileRequest, SaveFileRequest, DialogOpenFileResponse, SaveFileResponse, AppGetVersionResponse, DialogMessageBoxOptions, DialogMessageBoxResponse } from '@cadence/contracts'
+import { IPC_CHANNELS, DialogOpenFileRequest, SaveFileRequest, DialogOpenFileResponse, SaveFileResponse, AppGetVersionResponse, DialogMessageBoxOptions, DialogMessageBoxResponse } from '../contracts'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 

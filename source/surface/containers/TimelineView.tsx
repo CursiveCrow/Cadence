@@ -3,7 +3,8 @@ import { DateHeader as UIDateHeader } from '@cadence/ui'
 import { TimelineRenderer } from './TimelineRenderer'
 import { Task, Dependency, Staff } from '@cadence/core'
 import { TIMELINE_CONFIG } from '@cadence/renderer'
-import { PROJECT_START_DATE } from '@cadence/config'
+import { PROJECT_START_DATE } from '../../config'
+import type { TimelineCanvasHandle } from '../components/renderer-react'
 
 interface TimelineViewProps {
     projectId: string
@@ -16,6 +17,7 @@ interface TimelineViewProps {
     onDragEnd: () => void
     onVerticalScaleChange: (scale: number) => void
     onZoomChange: (zoom: number, anchorLocalX: number) => void
+    timelineRef?: React.Ref<TimelineCanvasHandle>
 }
 
 export const TimelineView: React.FC<TimelineViewProps> = (props) => {
@@ -30,6 +32,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
             />
             <div className="timeline-container full-width">
                 <TimelineRenderer
+                    timelineRef={props.timelineRef}
                     projectId={props.projectId}
                     tasks={props.tasks}
                     dependencies={props.dependencies}
@@ -44,4 +47,3 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
         </div>
     )
 }
-

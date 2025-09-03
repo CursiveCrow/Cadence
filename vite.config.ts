@@ -10,10 +10,6 @@ export default defineConfig({
   optimizeDeps: {
     exclude: [
       '@cadence/renderer',
-      '@cadence/config',
-      '@cadence/contracts',
-      '@cadence/platform-services',
-      '@sqlite.org/sqlite-wasm',
     ],
     esbuildOptions: {
       target: 'esnext',
@@ -22,7 +18,7 @@ export default defineConfig({
   build: {
     target: 'esnext',
     rollupOptions: {
-      external: ['@sqlite.org/sqlite-wasm'],
+      external: [],
     },
   },
   resolve: {
@@ -31,17 +27,10 @@ export default defineConfig({
       { find: /^\/source\//, replacement: path.resolve(__dirname, 'source') + '/' },
       // First-class aliases to new source tree (no packages)
       { find: '@cadence/core', replacement: path.resolve(__dirname, 'source/core') },
-      { find: '@cadence/state', replacement: path.resolve(__dirname, 'source/infrastructure/persistence') },
       { find: '@cadence/crdt', replacement: path.resolve(__dirname, 'source/infrastructure/persistence/crdt') },
       { find: '@cadence/renderer', replacement: path.resolve(__dirname, 'source/renderer') },
-      { find: '@cadence/renderer-react', replacement: path.resolve(__dirname, 'source/surface/components/renderer-react') },
-      { find: '@cadence/platform-services', replacement: path.resolve(__dirname, 'source/infrastructure/platform/services') },
-      { find: '@cadence/contracts', replacement: path.resolve(__dirname, 'source/infrastructure/platform/contracts') },
       { find: '@cadence/ui', replacement: path.resolve(__dirname, 'source/surface/components') },
-      { find: '@cadence/config', replacement: path.resolve(__dirname, 'source/config') },
-      { find: '@cadence/fixtures', replacement: path.resolve(__dirname, 'source/config/fixtures') },
-      // CSS path alias that tsconfig-paths doesn't catch for styles imports
-      { find: '@cadence/ui/styles', replacement: path.resolve(__dirname, 'source/surface/components/styles') },
+      // '@cadence/ui' covers subpaths like styles/*
     ],
   },
   server: {

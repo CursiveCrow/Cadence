@@ -26,14 +26,8 @@
     "paths": {
       "@cadence/core": ["./source/core"],
       "@cadence/renderer": ["./source/renderer"],
-      "@cadence/state": ["./source/infrastructure/persistence"],
       "@cadence/crdt": ["./source/infrastructure/persistence/crdt"],
-      "@cadence/config": ["./source/config"],
-      "@cadence/contracts": ["./source/infrastructure/platform/contracts"],
-      "@cadence/platform-services": ["./source/infrastructure/platform/services"],
-      "@cadence/fixtures": ["./source/config/fixtures"],
-      "@cadence/ui": ["./source/surface/components"],
-      "@cadence/renderer-react": ["./source/surface/components/renderer-react"]
+      "@cadence/ui": ["./source/surface/components"]
     }
   },
   "include": [

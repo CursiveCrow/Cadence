@@ -1,6 +1,4 @@
-import type { Application, Container } from 'pixi.js'
-import type { Task } from '@cadence/core'
-import type { RendererContext } from './context'
+import type { Container } from 'pixi.js'
 
 export interface TimelineConfig {
     LEFT_MARGIN: number
@@ -53,11 +51,3 @@ export type TimelineLayers = {
     selection: Container
     dragLayer: Container
 }
-
-export interface RendererPlugin {
-    onLayersCreated?(app: Application, layers: TimelineLayers, ctx: RendererContext): void
-    onTaskUpserted?(task: Task, container: Container, ctx: { layout: TaskLayout; config: TimelineConfig; zoom: number; selected: boolean }): void
-    onDestroy?(): void
-}
-
-
