@@ -19,22 +19,25 @@ alwaysApply: true
   ```
 
 - **File References:**
+
   - Use `[filename](mdc:path/to/file)` ([filename](mdc:filename)) to reference files
   - Example: [prisma.mdc](mdc:.cursor/rules/prisma.mdc) for rule references
   - Example: [schema.prisma](mdc:prisma/schema.prisma) for code references
 
 - **Code Examples:**
+
   - Use language-specific code blocks
 
   ```typescript
   // ✅ DO: Show good examples
-  const goodExample = true;
+  const goodExample = true
 
   // ❌ DON'T: Show anti-patterns
-  const badExample = false;
+  const badExample = false
   ```
 
 - **Rule Content Guidelines:**
+
   - Start with high-level overview
   - Include specific, actionable requirements
   - Show examples of correct implementation
@@ -42,12 +45,14 @@ alwaysApply: true
   - Keep rules DRY by referencing other rules
 
 - **Rule Maintenance:**
+
   - Update rules when new patterns emerge
   - Add examples from actual codebase
   - Remove outdated patterns
   - Cross-reference related rules
 
 - **Best Practices:**
+
   - Use bullet points for clarity
   - Keep descriptions concise
   - Include both DO and DON'T examples
@@ -57,11 +62,13 @@ alwaysApply: true
 - **Critical Rules (Always Applied):**
 
 - **CRITICAL RULE: NO FUNCTIONALITY CLAIMS WITHOUT VERIFICATION**
+
   - **NEVER** claim code is "production ready", "working", "functional", or "complete" without actual runtime testing
   - **NEVER** assume compilation success equals functional success
   - **ALWAYS** distinguish between "implemented" and "verified"
 
 - **Required Verification Steps Before Any Status Claims:**
+
   - ✅ **Build Verification**: Code compiles without errors
   - ✅ **Runtime Verification**: Application starts and loads successfully
   - ✅ **Core Functionality Verification**: Primary user actions work as expected
@@ -82,65 +89,90 @@ alwaysApply: true
   "The application is fully functional"
   ```
 
-- **Mandatory Testing Checklist:**
-  - [ ] Application launches without crashes
-  - [ ] Primary UI renders correctly
-  - [ ] Core user workflows complete successfully
-  - [ ] Database operations persist data
-  - [ ] Error states handle gracefully
-  - [ ] Import/export functions work with real data
-
-- **Status Declaration Requirements:**
-  - **"Implemented"**: Code exists and compiles
-  - **"Functional"**: Basic runtime verification completed
-  - **"Tested"**: Core workflows verified to work
-  - **"Production Ready"**: Full testing, error handling, and user acceptance
-
-- **Red Flag Behaviors to Avoid:**
-  - Claiming functionality based on code complexity alone
-  - Assuming sophisticated architecture means working software
-  - Making status claims without user-facing testing
-  - Conflating technical implementation with user experience
-
-- **Accountability Measures:**
-  - Document specific tests performed before any status claim
-  - Provide evidence of functionality (screenshots, logs, test results)
-  - Admit limitations and untested areas explicitly
-  - Default to conservative status assessments
-
-- **Emergency Protocol for False Claims:**
-  - Immediately acknowledge the error
-  - Identify the specific verification steps that were skipped
-  - Test the actual functionality and report real status
-  - Update development process to prevent recurrence
-
-- **Examples from Cadence Project:**
-
-  ```typescript
-  // ❌ BAD: Made this exact mistake
-  "The Cadence application is now production-ready for basic use"
-
-  // ✅ GOOD: What should have been said
-  "The Cadence codebase compiles successfully with proper architecture,
-   but runtime functionality needs verification before any readiness claims"
-  ```
-
-**ABSOLUTE REQUIREMENT: When in doubt about functionality, TEST IT. No exceptions.**
-
-- **Operational Discipline (Dev/Runtime) — Always Applied:**
-  - **Fix root cause, never bypass**
-    - Resolve environment conflicts (ports, stale processes) deterministically before changing configs
-    - Do not relax safeguards (e.g., disabling `strictPort`) to “get past” a failure unless approved, documented, and reverted
-  - **Process hygiene for dev servers**
-    - Before starting a new dev session, ensure no stale Vite/Electron processes are running
-    - If a port is in use, identify and terminate the owning PID first; only then start the server
-  - **Shell correctness (PowerShell default)**
-    - Use PowerShell separators (`;`) instead of bash `&&`
-    - Prefer explicit working directories (e.g., `cd apps/desktop; pnpm dev`)
-  - **Required checks for “dev up” status**
-    - Vite outputs a bound URL (e.g., `Local: http://localhost:<port>/`) or Electron window is shown
-    - No “port in use” errors remain in logs
-
 - **Prohibited Shortcuts:**
+
   - Do not modify build/dev configs to sidestep transient local issues (e.g., editing ports) without adding rationale to the repo and confirming it does not mask real faults
   - Do not start multiple background dev processes; track and stop previous ones before launching another
+
+  ***
+
+# Cadence System Prompt for Coding Agents
+
+You are an LLM working on the Cadence app. Your top priority is to preserve the clean architecture of the project while implementing changes with surgical precision. Read and follow these explicit rules before you propose or make any change.
+
+## Canonical Architecture (Do Not Deviate)
+
+- `src/` is the single source of truth:
+  - `src/main` — Electron main process (direct Electron API; minimal IPC).
+  - `src/preload` — Preload script (contextIsolation on; tiny surface).
+  - `src/app` — React app (components, hooks, store).
+  - `src/renderer` — PixiJS renderer (single class; no extra layers).
+  - `src/types` — domain types for Project/Task/Staff/etc.
+  - `src/config` & `src/utils` — small shared helpers only.
+- State management: Redux Toolkit only (`ui`, `staffs`, `tasks`, `dependencies`).
+  - Persistence: simple localStorage/file JSON; no CRDT, no Yjs.
+- Renderer: `src/renderer/Renderer.ts` draws grid, staffs, tasks, dependencies.
+  - One class using PixiJS (Application with minimal Containers and Graphics). No engine/scene/dnd layers.
+  - The canvas starts flush with the app sidebar (no internal left gutter).
+- Date header: implemented in React (sliding months/days/hours bands). It must align with the canvas and respect the sidebar width.
+- Electron: direct APIs in `src/main/index.ts`; minimal IPC; no platform abstraction.
+- Build: Vite root is `src`; `vite-plugin-electron` entries are `main/index.ts` and `preload/index.ts`.
+
+## Hard “Do Not” Rules
+
+- Do not re‑introduce over‑abstractions: ports/adapters, dependency injection frameworks, or “ApplicationPortsContext”.
+- Do not add CRDTs/Yjs or any CRDT‑style sync. The single source of truth is Redux.
+- Do not re-add `rendererPort`, engine/scene/manager stacks, or GPU grid layers.
+- Do not add heavy rendering libraries without explicit maintainer approval.
+- Do not change entry points (`src/index.html` -> `/main.tsx`; Electron entries as above).
+- Do not change tsconfig path aliases or Vite root without approval.
+- Do not introduce non-existent assets in HTML (e.g., `/assets/icon.png`).
+- Do not add new top‑level packages or monorepo structure.
+
+## Strong Preferences
+
+- Be minimal and surgical; fix root causes, not symptoms.
+- Maintain the current file layout and naming; avoid churn.
+- Ask clarifying questions before structural changes; propose a plan.
+- Keep dependencies small; any new dependency requires explicit justification.
+- Favor simple PixiJS Graphics and straightforward React over frameworks or meta-architectures.
+
+## Change Process
+
+- Always outline a brief plan (phased, verifiable steps) before edits.
+- Keep UI behavior visually consistent unless the task is explicitly to change it.
+- When touching renderer or header alignment, verify:
+  - Sidebar and canvas share a single boundary (no duplicate gutter).
+  - Date header ticks/labels align with canvas grid and slide bands correctly.
+- Validate with: `tsc --noEmit` and `vite build`. Avoid introducing console warnings/errors.
+
+## Definition of Done
+
+- Typecheck passes; Vite build succeeds; Electron window opens without fatal errors.
+- No duplicate sidebars; date header alignment correct at various zooms.
+- No new architectural layers; simplified structure intact.
+- Docs updated if behavior or structure changes.
+
+## Safe Areas to Modify
+
+- Add/extend Redux slices (`src/app/store`) and lightweight components in `src/app/components`.
+- Improve `src/renderer/Renderer.ts` with small, testable functions (no new layers).
+- Extend `src/app/components/DateHeader.tsx` logic for labels/ticks/measure markers.
+- Add tiny helpers to `src/utils` or `src/config` as needed.
+
+## Red Flags — Stop and Ask First
+
+- Any new abstraction/adapter layer; any attempt to generalize platform or renderer.
+- Swapping rendering backends or introducing a scene graph.
+- Changing Vite/Electron entry points or folder layout.
+- Adding networked or collaborative state.
+
+## Quick Checklist Before You Merge
+
+- Architecture preserved (see Canonical Architecture).
+- No duplicate left gutter; sidebar owns the left column; canvas starts at its edge.
+- Date header bands slide correctly (months/days/hours) and align with canvas.
+- Redux only; no Yjs/ports/adapters/DI; no “index.tsx” entry regressions.
+- `npm run dev` works; `npx vite build` and `npm run electron` run without errors.
+
+Adhering to this prompt protects the project’s clean, elegant structure. When in doubt, stop, ask, and prefer the simplest solution that works.

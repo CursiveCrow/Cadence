@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import type { Staff } from '@types'
 import { computeDateHeaderHeight } from './DateHeader'
 import { TIMELINE } from '@renderer/utils'
@@ -13,10 +13,14 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, onAddNote, onOpenStaffManager }) => {
   const headerH = computeDateHeaderHeight(viewport.zoom || 1)
   const [tsEditing, setTsEditing] = useState<{ id: string; value: string; rect: DOMRect } | null>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
 
   return (
-    <div className="sidebar ui-surface-1 ui-border-r ui-text" style={{ position: 'relative', overflow: 'hidden' }}>
-      <div className="ui-flex ui-justify-between ui-items-center" style={{ marginBottom: 8, gap: 6 }}>
+    <div
+      className="sidebar ui-surface-1 ui-text"
+      style={{ position: 'relative', overflow: 'hidden', height: '100%' }}
+    >
+      <div ref={headerRef} className="ui-flex ui-justify-between ui-items-center" style={{ marginBottom: 8, gap: 6 }}>
         <strong className="ui-text-sm" style={{ color: '#bcc3d6' }}>Staves</strong>
         <div className="ui-flex ui-gap-2">
           <button className="ui-btn ui-btn-primary ui-rounded-md ui-text-sm ui-focus-ring" onClick={onAddNote}>+ Add Note</button>
@@ -25,11 +29,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, onAddNote, o
       </div>
 
       {/* Staff labels follow their staff centers */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: (headerRef.current?.offsetHeight || 0), pointerEvents: 'none', zIndex: 1, paddingLeft: 12 }}>
         {staffs.map((s, index) => {
           const staffStartY = TIMELINE.TOP_MARGIN + index * TIMELINE.STAFF_SPACING
           const centerY = staffStartY + ((s.numberOfLines - 1) * TIMELINE.STAFF_LINE_SPACING) / 2
-          const top = headerH + (centerY - viewport.y)
+          const top = (centerY - viewport.y)
           const ts = (s.timeSignature || '4/4').split('/')
           return (
             <div key={s.id} className="ui-flex ui-items-center" style={{ position: 'absolute', top, left: 0, right: 0, transform: 'translateY(-50%)', gap: 8, paddingRight: 8 }}>

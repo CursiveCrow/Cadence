@@ -8,13 +8,13 @@ You are an LLM working on the Cadence app. Your top priority is to preserve the 
   - `src/main` — Electron main process (direct Electron API; minimal IPC).
   - `src/preload` — Preload script (contextIsolation on; tiny surface).
   - `src/app` — React app (components, hooks, store).
-  - `src/renderer` — Canvas2D renderer (single class; no extra layers).
+  - `src/renderer` — PixiJS renderer (single class; no extra layers).
   - `src/types` — domain types for Project/Task/Staff/etc.
   - `src/config` & `src/utils` — small shared helpers only.
 - State management: Redux Toolkit only (`ui`, `staffs`, `tasks`, `dependencies`).
   - Persistence: simple localStorage/file JSON; no CRDT, no Yjs.
 - Renderer: `src/renderer/Renderer.ts` draws grid, staffs, tasks, dependencies.
-  - One class; Canvas 2D; no engine/scene/dnd/gpu layers.
+  - One class using PixiJS (Application with minimal Containers and Graphics). No engine/scene/dnd layers.
   - The canvas starts flush with the app sidebar (no internal left gutter).
 - Date header: implemented in React (sliding months/days/hours bands). It must align with the canvas and respect the sidebar width.
 - Electron: direct APIs in `src/main/index.ts`; minimal IPC; no platform abstraction.
@@ -37,7 +37,7 @@ You are an LLM working on the Cadence app. Your top priority is to preserve the 
 - Maintain the current file layout and naming; avoid churn.
 - Ask clarifying questions before structural changes; propose a plan.
 - Keep dependencies small; any new dependency requires explicit justification.
-- Favor simple Canvas2D and straightforward React over frameworks or meta-architectures.
+- Favor simple PixiJS Graphics and straightforward React over frameworks or meta-architectures.
 
 ## Change Process
 

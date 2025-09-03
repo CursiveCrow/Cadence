@@ -11,6 +11,7 @@ import { setSelection, setSelectionWithAnchor, setViewport } from '@app/store/ui
 import { addTask, updateTask } from '@app/store/tasks'
 import { addDependency } from '@app/store/dependencies'
 import { TIMELINE_CONFIG } from '@renderer/config'
+import { PROJECT_START_DATE } from '../config'
 import { useResizableSidebar } from '@app/hooks/useResizableSidebar'
 import type { Task } from '@types'
 
@@ -50,7 +51,7 @@ const App: React.FC = () => {
       </div>
       <DateHeader
         viewport={viewport}
-        projectStart={new Date('2024-01-01')}
+        projectStart={PROJECT_START_DATE}
         leftMargin={TIMELINE_CONFIG.LEFT_MARGIN + sidebarWidth}
         dayWidth={TIMELINE_CONFIG.DAY_WIDTH}
         onZoomChange={(z, anchorLocalX) => {
@@ -64,7 +65,7 @@ const App: React.FC = () => {
         }}
       />
       <div className="content">
-        <aside className="sidebar" style={{ width: sidebarWidth }}>
+        <aside className="sidebar" style={{ width: sidebarWidth, height: '100%' }}>
           <Sidebar
             staffs={staffs}
             viewport={viewport}

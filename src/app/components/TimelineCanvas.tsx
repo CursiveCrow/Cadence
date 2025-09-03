@@ -48,11 +48,15 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
   const pxPerDay = (z: number) => TIMELINE.DAY_WIDTH * Math.max(0.1, z)
 
   const onPointerDown: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
-    ;(e.target as HTMLCanvasElement).setPointerCapture(e.pointerId)
+    ; (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId)
     setDrag({ startX: e.clientX, startY: e.clientY, startV: { ...viewport } })
   }
 
   const onPointerMove: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
+    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect()
+    const localX = e.clientX - rect.left
+    const localY = e.clientY - rect.top
+    try { rendererRef.current?.setHover?.(localX, localY); rendererRef.current?.render() } catch { }
     if (!drag) return
     const dx = e.clientX - drag.startX
     const dy = e.clientY - drag.startY
@@ -63,7 +67,7 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
   }
 
   const onPointerUp: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
-    ;(e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId)
+    ; (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId)
     // simple click selection if minimal movement
     if (drag) {
       const moved = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY)
