@@ -1,0 +1,66 @@
+import React, { useState } from 'react'
+import type { Staff } from '@types'
+import { computeDateHeaderHeight } from './DateHeader'
+import { TIMELINE } from '@renderer/utils'
+
+interface SidebarProps {
+  staffs: Staff[]
+  viewport: { x: number; y: number; zoom: number }
+  onAddNote: () => void
+  onOpenStaffManager: () => void
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, onAddNote, onOpenStaffManager }) => {
+  const headerH = computeDateHeaderHeight(viewport.zoom || 1)
+  const [tsEditing, setTsEditing] = useState<{ id: string; value: string; rect: DOMRect } | null>(null)
+
+  return (
+    <div className="sidebar ui-surface-1 ui-border-r ui-text" style={{ position: 'relative', overflow: 'hidden' }}>
+      <div className="ui-flex ui-justify-between ui-items-center" style={{ marginBottom: 8, gap: 6 }}>
+        <strong className="ui-text-sm" style={{ color: '#bcc3d6' }}>Staves</strong>
+        <div className="ui-flex ui-gap-2">
+          <button className="ui-btn ui-btn-primary ui-rounded-md ui-text-sm ui-focus-ring" onClick={onAddNote}>+ Add Note</button>
+          <button className="ui-btn ui-rounded-md ui-text-sm ui-focus-ring" onClick={onOpenStaffManager}>Manage</button>
+        </div>
+      </div>
+
+      {/* Staff labels follow their staff centers */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        {staffs.map((s, index) => {
+          const staffStartY = TIMELINE.TOP_MARGIN + index * TIMELINE.STAFF_SPACING
+          const centerY = staffStartY + ((s.numberOfLines - 1) * TIMELINE.STAFF_LINE_SPACING) / 2
+          const top = headerH + (centerY - viewport.y)
+          const ts = (s.timeSignature || '4/4').split('/')
+          return (
+            <div key={s.id} className="ui-flex ui-items-center" style={{ position: 'absolute', top, left: 0, right: 0, transform: 'translateY(-50%)', gap: 8, paddingRight: 8 }}>
+              <span className="ui-font-700 ui-text-sm" style={{ color: '#bcc3d6', whiteSpace: 'nowrap' }}>{s.name}</span>
+              <div style={{ flex: 1 }} />
+              <button
+                className="ui-timesig"
+                style={{ pointerEvents: 'auto', background: 'transparent', border: 0, cursor: 'pointer' }}
+                title="Edit time signature"
+                onClick={(e) => {
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                  setTsEditing({ id: s.id, value: s.timeSignature || '4/4', rect: r })
+                }}
+              >
+                <span className="ui-timesig-num">{ts[0]}</span>
+                <span className="ui-timesig-den">{ts[1]}</span>
+              </button>
+            </div>
+          )
+        })}
+      </div>
+      {tsEditing && (
+        <div style={{ position: 'fixed', top: Math.max(8, tsEditing.rect.top - 6), left: tsEditing.rect.right + 8, zIndex: 1000 }} className="ui-surface-1 ui-shadow ui-rounded-lg ui-p-3">
+          <div className="ui-text-sm ui-mb-2">Time signature</div>
+          <input value={tsEditing.value} onChange={(e) => setTsEditing({ ...tsEditing, value: e.target.value })} className="ui-input" />
+          <div className="ui-flex ui-gap-2" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
+            <button className="ui-btn ui-rounded-md" onClick={() => setTsEditing(null)}>Cancel</button>
+            <button className="ui-btn ui-btn-primary ui-rounded-md" onClick={() => setTsEditing(null)}>Save</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

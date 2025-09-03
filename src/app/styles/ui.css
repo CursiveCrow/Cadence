@@ -1,0 +1,17 @@
+@import "./tokens.css";
+
+.ui-datehdr { background: linear-gradient(180deg, var(--ui-surface-1) 0%, var(--ui-surface-1-focus) 100%); }
+.ui-datehdr-band { height: 24px; border-bottom: 1px solid var(--ui-color-border); }
+.ui-datehdr-label { color: var(--ui-color-text); font-size: 11px; letter-spacing: 0.3px; text-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+.ui-datehdr-month { opacity: 0.95; }
+.ui-datehdr-day { opacity: 0.9; }
+.ui-datehdr-hour { opacity: 0.85; }
+.ui-datehdr-tick { position: absolute; top: 2px; bottom: 2px; width: 1px; background: var(--ui-color-border); opacity: 0.35; }
+.ui-datehdr-tick-strong { opacity: 0.6; }
+.ui-datehdr-sep { height: 1px; background: var(--ui-color-border); opacity: 0.5; }
+
+/* Header + App base */
+body { background: #0f1115; color: #e6e6e6; }
+.header { background: #12151c; border-bottom: 1px solid #222732; }
+.sidebar { background: #11141b; border-right: 1px solid #222732; }
+

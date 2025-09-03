@@ -28,8 +28,7 @@ export default defineConfig({
         react(),
         electron([
             {
-                // with root set to 'src', entries should be relative to it
-                entry: 'main/index.ts',
+                entry: 'src/main/index.ts',
                 vite: {
                     build: {
                         outDir: 'dist-electron/main',
@@ -40,7 +39,7 @@ export default defineConfig({
                 }
             },
             {
-                entry: 'preload/index.ts',
+                entry: 'src/preload/index.ts',
                 vite: {
                     build: {
                         outDir: 'dist-electron/preload',
