@@ -90,7 +90,7 @@ export function drawLabelWithMast(params: {
     const vX = fx0 - stemStartX
     const vY = labelTop - stemStartY
     let bottomLeftX = fx0
-    if (Math.abs(vY) > 0.0001) {
+    if (Math.abs(vY) > 1e-4) {
         const k = (labelBottom - labelTop) / vY
         bottomLeftX = Math.round(fx0 + k * vX)
     }

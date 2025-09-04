@@ -1,5 +1,4 @@
-import { computeViewportAlignment, getTimeScaleForZoom, DAY_THRESHOLD, HOUR_THRESHOLD } from './layout'
-import type { TimelineConfig } from './config'
+import { getTimeScaleForZoom, DAY_THRESHOLD, HOUR_THRESHOLD } from './layout'
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
@@ -40,9 +39,8 @@ export function computeDateHeaderViewModel(params: DateHeaderParams): DateHeader
   const screenWidth = Math.max(0, Math.floor(width)) || 1200
   const dayWidthCss = dayWidth * zoom
   const leftMarginCss = leftMargin
-  const alignment = computeViewportAlignment({ LEFT_MARGIN: leftMarginCss, DAY_WIDTH: dayWidthCss, TOP_MARGIN: 0, STAFF_SPACING: 0, STAFF_LINE_SPACING: 0 } as TimelineConfig, viewport.x || 0)
-  const worldDayToScreenX = (dayIndex: number) => leftMarginCss + (dayIndex - alignment.viewportXDaysQuantized) * dayWidthCss
-  const visibleDays = Math.ceil(screenWidth / Math.max(dayWidthCss, 0.0001)) + 5
+  const worldDayToScreenX = (dayIndex: number) => leftMarginCss + (dayIndex - (viewport.x || 0)) * dayWidthCss
+  const visibleDays = Math.ceil(screenWidth / Math.max(dayWidthCss, 1e-4)) + 5
 
   const scale = getTimeScaleForZoom(zoom)
   const monthLabels: { x: number; text: string }[] = []
@@ -53,15 +51,15 @@ export function computeDateHeaderViewModel(params: DateHeaderParams): DateHeader
   const hourTickXs: number[] = []
 
   const base = new Date(Date.UTC(projectStart.getUTCFullYear(), projectStart.getUTCMonth(), projectStart.getUTCDate()))
-  const leftMostDays = Math.floor(alignment.viewportXDaysQuantized - leftMarginCss / Math.max(dayWidthCss, 0.0001))
+  const leftMostDays = Math.floor((viewport.x || 0) - leftMarginCss / Math.max(dayWidthCss, 1e-4))
 
   if (scale === 'month') {
     const stepDays = 30
-    const remainder = (alignment.viewportXDaysQuantized % stepDays + stepDays) % stepDays
+    const remainder = (((viewport.x || 0) % stepDays) + stepDays) % stepDays
     let xCss = leftMarginCss - remainder * dayWidthCss
     const limitCss = screenWidth + 2 * dayWidthCss * visibleDays
     while (xCss < leftMarginCss + limitCss) {
-      const dayIndex = Math.round((xCss - leftMarginCss) / Math.max(dayWidthCss, 0.0001))
+      const dayIndex = Math.round((xCss - leftMarginCss) / Math.max(dayWidthCss, 1e-4))
       const date = new Date(base.getTime())
       date.setUTCDate(date.getUTCDate() + dayIndex)
       const text = date.toLocaleDateString('en-US', { month: 'short' })
@@ -89,10 +87,10 @@ export function computeDateHeaderViewModel(params: DateHeaderParams): DateHeader
   }
 
   const stepDaysUniform = scale === 'hour' ? 1 / 24 : scale === 'day' ? 1 : scale === 'week' ? 7 : 30
-  const remainderDays = (alignment.viewportXDaysQuantized % stepDaysUniform + stepDaysUniform) % stepDaysUniform
+  const remainderDays = ((viewport.x || 0) % stepDaysUniform + stepDaysUniform) % stepDaysUniform
   const firstTickX = leftMarginCss + (0 - remainderDays) * dayWidthCss
 
-  const remainderDay = (alignment.viewportXDaysQuantized % 1 + 1) % 1
+  const remainderDay = ((viewport.x || 0) % 1 + 1) % 1
   let x = leftMarginCss - remainderDay * dayWidthCss
   const limit = screenWidth + 2 * dayWidthCss
   while (x < leftMarginCss + limit) {
@@ -114,7 +112,7 @@ export function computeDateHeaderViewModel(params: DateHeaderParams): DateHeader
       if (hour12 === 0) hour12 = 12
       const ap = hourInDay < 12 ? 'a' : 'p'
       const text = `${hour12}${ap}`
-      const xScreen = leftMarginCss + ((h / 24) - alignment.viewportXDaysQuantized) * dayWidthCss
+      const xScreen = leftMarginCss + ((h / 24) - (viewport.x || 0)) * dayWidthCss
       hourLabels.push({ x: xScreen, text })
     }
 

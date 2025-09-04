@@ -1,8 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useMemo } from 'react'
 import type { ViewportState } from '@app/store/ui'
 import type { Staff, Task, Dependency } from '@types'
 import { Renderer } from '@renderer/Renderer'
-import { TIMELINE } from '@renderer/utils'
+import { pixelsPerDay, screenXToWorldDays, isoFromDayIndex, dayIndexFromISO, applyAnchorZoom } from '@renderer'
+import { TIMELINE, computeScaledTimeline, staffCenterY } from '@renderer/utils'
+import { PROJECT_START_DATE } from '../../config'
 import { useDispatch } from 'react-redux'
 import { addTask, updateTask } from '@app/store/tasks'
 import { addDependency } from '@app/store/dependencies'
@@ -27,6 +29,7 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
   const viewportRef = useRef(viewport)
   useEffect(() => { viewportRef.current = viewport }, [viewport])
   const taskOpRef = useRef<{ mode: 'none' | 'move' | 'resize' | 'dep'; taskId?: string; clickOffsetX?: number; initialDuration?: number; sourceRect?: { x: number; y: number; w: number; h: number }; startX?: number; startY?: number }>({ mode: 'none' })
+  const scaled = useMemo(() => computeScaledTimeline(verticalScale || 1), [verticalScale])
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -50,7 +53,7 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
   }, [])
 
   // Helpers
-  const pxPerDay = (z: number) => TIMELINE.DAY_WIDTH * Math.max(0.1, z)
+  const pxPerDay = (z: number) => pixelsPerDay(z, TIMELINE.DAY_WIDTH)
 
   const onPointerDown: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
     ; (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId)
@@ -103,12 +106,8 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
       const t = tasks.find(tt => tt.id === op.taskId)
       if (!t) return
       const ppd = pxPerDay(viewport.zoom)
-      // compute start day index
-      const startDate = new Date(Date.UTC(2024, 0, 1))
-      const parts = t.startDate.split('-').map(Number)
-      const startMs = Date.UTC(parts[0]!, (parts[1]! - 1), parts[2]!)
-      const dayIndex = Math.max(0, Math.round((startMs - startDate.getTime()) / (24 * 3600 * 1000)))
-      const worldAtX = Math.max(0, viewport.x + Math.max(0, localX - TIMELINE.LEFT_MARGIN) / ppd)
+      const dayIndex = Math.max(0, dayIndexFromISO(t.startDate, PROJECT_START_DATE))
+      const worldAtX = screenXToWorldDays(localX, viewport, TIMELINE.LEFT_MARGIN, TIMELINE.DAY_WIDTH)
       const rightIndex = Math.max(dayIndex + 1, Math.round(worldAtX))
       const newDur = Math.max(1, rightIndex - dayIndex)
       const xStartPx = TIMELINE.LEFT_MARGIN + (dayIndex - viewport.x) * ppd
@@ -122,17 +121,16 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
       const t = tasks.find(tt => tt.id === op.taskId)
       if (!t) return
       const ppd = pxPerDay(viewport.zoom)
-      const snappedLocalStart = Math.max(0, (localX - (op.clickOffsetX || 0) - TIMELINE.LEFT_MARGIN))
-      const dayIndex = Math.max(0, Math.round(viewport.x + snappedLocalStart / ppd))
+      const snappedLocalStart = Math.max(0, (localX - (op.clickOffsetX || 0)))
+      const worldAtX = screenXToWorldDays(snappedLocalStart, viewport, TIMELINE.LEFT_MARGIN, TIMELINE.DAY_WIDTH)
+      const dayIndex = Math.max(0, Math.round(worldAtX))
       // clamp by incoming dependencies
       let minIdx = 0
       for (const d of dependencies) {
         if (d.dstTaskId === t.id) {
           const src = tasks.find(tsk => tsk.id === d.srcTaskId)
           if (src) {
-            const parts = src.startDate.split('-').map(Number)
-            const base = Date.UTC(2024, 0, 1)
-            const sidx = Math.max(0, Math.round((Date.UTC(parts[0]!, (parts[1]! - 1), parts[2]!) - base) / (24 * 3600 * 1000)))
+            const sidx = Math.max(0, dayIndexFromISO(src.startDate, PROJECT_START_DATE))
             const req = sidx + src.durationDays
             if (req > minIdx) minIdx = req
           }
@@ -141,11 +139,11 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
       const clampedDay = Math.max(dayIndex, minIdx)
       const m = r.getMetrics()
       const sb = m.staffBlocks.find(b => localY >= b.yTop && localY <= b.yBottom) || m.staffBlocks[0]
-      const lineStep = (sb?.lineSpacing || 18) / 2
+      const lineStep = (scaled.lineSpacing) / 2
       const lineIndex = Math.max(0, Math.round(((localY) - (sb?.yTop || 0)) / Math.max(1, lineStep)))
       const hpx = Math.max(18, Math.min(28, Math.floor(lineStep * 1.8)))
       const xStartPx = TIMELINE.LEFT_MARGIN + (clampedDay - viewport.x) * ppd
-      const yTop = (sb?.yTop || 0) + lineIndex * lineStep - hpx / 2
+      const yTop = staffCenterY((sb?.yTop || 0), lineIndex, scaled.lineSpacing) - hpx / 2
       const wpx = Math.max(ppd * (t.durationDays || 1), 4)
       r.drawDragPreview(xStartPx, yTop, wpx, hpx)
       return
@@ -197,11 +195,8 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
         const rect = (e.target as HTMLCanvasElement).getBoundingClientRect()
         const localX = e.clientX - rect.left
         const ppd = pxPerDay(viewport.zoom)
-        const startDate = new Date(Date.UTC(2024, 0, 1))
-        const parts = t.startDate.split('-').map(Number)
-        const startMs = Date.UTC(parts[0]!, (parts[1]! - 1), parts[2]!)
-        const dayIndex = Math.max(0, Math.round((startMs - startDate.getTime()) / (24 * 3600 * 1000)))
-        const worldAtX = Math.max(0, viewport.x + Math.max(0, localX - TIMELINE.LEFT_MARGIN) / ppd)
+        const dayIndex = Math.max(0, dayIndexFromISO(t.startDate, PROJECT_START_DATE))
+        const worldAtX = screenXToWorldDays(localX, viewport, TIMELINE.LEFT_MARGIN, TIMELINE.DAY_WIDTH)
         const rightIndex = Math.max(dayIndex + 1, Math.round(worldAtX))
         const newDur = Math.max(1, rightIndex - dayIndex)
         dispatch(updateTask({ id: t.id, updates: { durationDays: newDur } }))
@@ -231,16 +226,14 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
           return
         }
         const ppd = pxPerDay(viewport.zoom)
-        const snappedLocalStart = Math.max(0, (localX - (op.clickOffsetX || 0) - TIMELINE.LEFT_MARGIN))
-        const initialDay = Math.max(0, Math.round(viewport.x + snappedLocalStart / ppd))
+        const snappedLocalStart = Math.max(0, (localX - (op.clickOffsetX || 0)))
+        const initialDay = Math.max(0, Math.round(screenXToWorldDays(snappedLocalStart, viewport, TIMELINE.LEFT_MARGIN, TIMELINE.DAY_WIDTH)))
         let minIdx = 0
         for (const d of dependencies) {
           if (d.dstTaskId === t.id) {
             const src = tasks.find(tsk => tsk.id === d.srcTaskId)
             if (src) {
-              const parts = src.startDate.split('-').map(Number)
-              const base = Date.UTC(2024, 0, 1)
-              const sidx = Math.max(0, Math.round((Date.UTC(parts[0]!, (parts[1]! - 1), parts[2]!) - base) / (24 * 3600 * 1000)))
+              const sidx = Math.max(0, dayIndexFromISO(src.startDate, PROJECT_START_DATE))
               const req = sidx + src.durationDays
               if (req > minIdx) minIdx = req
             }
@@ -249,15 +242,10 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
         const dayIndex = Math.max(initialDay, minIdx)
         const m = r.getMetrics()
         const sb = m.staffBlocks.find(b => localY >= b.yTop && b.yBottom >= localY) || m.staffBlocks[0]
-        const lineStep = (sb?.lineSpacing || 18) / 2
+        const lineStep = (scaled.lineSpacing) / 2
         const staffLine = Math.max(0, Math.round(((localY) - (sb?.yTop || 0)) / Math.max(1, lineStep)))
-        const base = new Date(Date.UTC(2024, 0, 1))
-        const start = new Date(base.getTime())
-        start.setUTCDate(start.getUTCDate() + dayIndex)
-        const yyyy = start.getUTCFullYear()
-        const mm = String(start.getUTCMonth() + 1).padStart(2, '0')
-        const dd = String(start.getUTCDate()).padStart(2, '0')
-        dispatch(updateTask({ id: t.id, updates: { startDate: `${yyyy}-${mm}-${dd}`, staffId: (sb as any)?.id || t.staffId, staffLine } }))
+        const iso = isoFromDayIndex(dayIndex, PROJECT_START_DATE)
+        dispatch(updateTask({ id: t.id, updates: { startDate: iso, staffId: (sb as any)?.id || t.staffId, staffLine } }))
       }
       r?.clearPreview()
       taskOpRef.current = { mode: 'none' }
@@ -296,18 +284,12 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
       const vp = viewportRef.current
       if (e.ctrlKey || e.metaKey) {
         const factor = Math.exp(-e.deltaY * 0.001)
-        const z0 = vp.zoom
-        const z1 = Math.max(0.1, Math.min(20, z0 * factor))
-        const ppd0 = pxPerDay(z0)
-        const ppd1 = pxPerDay(z1)
+        const z1 = Math.max(0.1, Math.min(20, (vp.zoom || 1) * factor))
         const rect = el.getBoundingClientRect()
         const localX = e.clientX - rect.left
-        const anchorPxFromGrid = Math.max(0, localX - TIMELINE.LEFT_MARGIN)
-        const worldAtAnchor = vp.x + anchorPxFromGrid / ppd0
-        const rawX = (worldAtAnchor - anchorPxFromGrid / ppd1)
-        const newX = Math.max(0, Math.round(rawX * ppd1) / ppd1)
+        const next = applyAnchorZoom(vp, z1, localX, TIMELINE.LEFT_MARGIN, TIMELINE.DAY_WIDTH)
         if (rafId) cancelAnimationFrame(rafId)
-        rafId = requestAnimationFrame(() => onViewportChange({ x: newX, y: vp.y, zoom: z1 }))
+        rafId = requestAnimationFrame(() => onViewportChange(next))
       } else if (e.shiftKey) {
         const factor = Math.exp(-e.deltaY * 0.001)
         const newS = Math.max(0.5, Math.min(3, (verticalScale || 1) * factor))
@@ -335,19 +317,14 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
     if (!staff) return
     const lineStep = staff.lineSpacing / 2
     const lineIndex = Math.max(0, Math.round((localY - staff.yTop) / lineStep))
-    const ppd = pxPerDay(viewport.zoom)
-    const world = Math.max(0, viewport.x + Math.max(0, localX - TIMELINE.LEFT_MARGIN) / ppd)
+    const world = screenXToWorldDays(localX, viewport, TIMELINE.LEFT_MARGIN, TIMELINE.DAY_WIDTH)
     const day = Math.round(world)
-    const startDate = new Date(Date.UTC(2024, 0, 1))
-    startDate.setUTCDate(startDate.getUTCDate() + day)
-    const yyyy = startDate.getUTCFullYear()
-    const mm = String(startDate.getUTCMonth() + 1).padStart(2, '0')
-    const dd = String(startDate.getUTCDate()).padStart(2, '0')
+    const iso = isoFromDayIndex(day, PROJECT_START_DATE)
     const now = new Date().toISOString()
     dispatch(addTask({
       id: `task-${Date.now()}`,
       title: 'New Note',
-      startDate: `${yyyy}-${mm}-${dd}`,
+      startDate: iso,
       durationDays: 2,
       status: 'not_started' as any,
       staffId: staff.id,

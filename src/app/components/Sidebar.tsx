@@ -1,20 +1,22 @@
-import React, { useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import type { Staff } from '@types'
 import { computeDateHeaderHeight } from './DateHeader'
-import { TIMELINE } from '@renderer/utils'
+import { computeScaledTimeline, staffCenterY } from '@renderer'
 
 interface SidebarProps {
   staffs: Staff[]
   viewport: { x: number; y: number; zoom: number }
+  verticalScale?: number
   onAddNote: () => void
   onOpenStaffManager: () => void
   onChangeTimeSignature?: (staffId: string, timeSignature: string) => void
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, onAddNote, onOpenStaffManager, onChangeTimeSignature }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, verticalScale = 1, onAddNote, onOpenStaffManager, onChangeTimeSignature }) => {
   const headerH = computeDateHeaderHeight(viewport.zoom || 1)
   const [tsEditing, setTsEditing] = useState<{ id: string; value: string; rect: DOMRect } | null>(null)
   const headerRef = useRef<HTMLDivElement>(null)
+  const scaled = useMemo(() => computeScaledTimeline(verticalScale || 1), [verticalScale])
 
   return (
     <div
@@ -33,9 +35,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, onAddNote, o
       {/* Staff labels follow their staff centers */}
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: (headerRef.current?.offsetHeight || 0), pointerEvents: 'none', zIndex: 1, paddingLeft: 12, paddingRight: 12 }}>
         {staffs.map((s, index) => {
-          const staffStartY = TIMELINE.TOP_MARGIN + index * TIMELINE.STAFF_SPACING
-          const centerY = staffStartY + ((s.numberOfLines - 1) * TIMELINE.STAFF_LINE_SPACING) / 2
-          const top = (centerY - viewport.y)
+          const yTop = (scaled.topMargin - viewport.y) + index * scaled.staffSpacing
+          const centerY = staffCenterY(yTop, (s.numberOfLines - 1), scaled.lineSpacing)
+          const top = centerY
           const ts = (s.timeSignature || '4/4').split('/')
           return (
             <div key={s.id} className="ui-flex ui-items-center" style={{ position: 'absolute', top, left: 0, right: 0, transform: 'translateY(-50%)', gap: 8, paddingRight: 12, justifyContent: 'flex-end' }}>

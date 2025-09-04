@@ -11,6 +11,7 @@ import { setSelection, setSelectionWithAnchor, setViewport } from '@app/store/ui
 import { addTask, updateTask } from '@app/store/tasks'
 import { addDependency } from '@app/store/dependencies'
 import { TIMELINE_CONFIG } from '@renderer/config'
+import { applyAnchorZoom, dayIndexFromISO, pixelsPerDay } from '@renderer'
 import { PROJECT_START_DATE } from '../config'
 import { useResizableSidebar } from '@app/hooks/useResizableSidebar'
 import type { Task } from '@types'
@@ -40,8 +41,8 @@ const App: React.FC = () => {
     if (selection.length === 0) return null
     const selected = tasks.find(t => t.id === selection[0])
     if (!selected) return null
-    const day = Math.floor((new Date(selected.startDate).getTime() - new Date('2024-01-01').getTime()) / (24 * 3600 * 1000))
-    const x = TIMELINE_CONFIG.LEFT_MARGIN + (day - viewport.x) * TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.1, viewport.zoom)
+    const day = dayIndexFromISO(selected.startDate, PROJECT_START_DATE)
+    const x = TIMELINE_CONFIG.LEFT_MARGIN + (day - viewport.x) * pixelsPerDay(viewport.zoom, TIMELINE_CONFIG.DAY_WIDTH)
     const staffIndex = Math.max(0, staffs.findIndex(s => s.id === selected.staffId))
     const y = TIMELINE_CONFIG.TOP_MARGIN + staffIndex * TIMELINE_CONFIG.STAFF_SPACING + selected.staffLine * (TIMELINE_CONFIG.STAFF_LINE_SPACING / 2)
     return { x: x + 80, y }
@@ -90,6 +91,7 @@ const App: React.FC = () => {
           <Sidebar
             staffs={staffs}
             viewport={viewport}
+            verticalScale={verticalScale}
             onAddNote={() => {
               const randomStaff = staffs[Math.floor(Math.random() * staffs.length)] || staffs[0]
               const now = new Date().toISOString()
@@ -116,13 +118,8 @@ const App: React.FC = () => {
               leftMargin={TIMELINE_CONFIG.LEFT_MARGIN}
               dayWidth={TIMELINE_CONFIG.DAY_WIDTH}
               onZoomChange={(z, anchorLocalX) => {
-                const ppd0 = TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.0001, viewport.zoom)
-                const ppd1 = TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.1, z)
-                // anchorLocalX is relative to the header within main; subtract internal left margin only
-                const anchorPxFromGrid = Math.max(0, anchorLocalX - (TIMELINE_CONFIG.LEFT_MARGIN))
-                const worldAtAnchor = viewport.x + anchorPxFromGrid / ppd0
-                const newX = Math.max(0, Math.round(worldAtAnchor - anchorPxFromGrid / ppd1))
-                dispatch(setViewport({ x: newX, y: viewport.y, zoom: z }))
+                const next = applyAnchorZoom(viewport, z, anchorLocalX, TIMELINE_CONFIG.LEFT_MARGIN, TIMELINE_CONFIG.DAY_WIDTH)
+                dispatch(setViewport(next))
               }}
             />
           </div>

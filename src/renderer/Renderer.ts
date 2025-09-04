@@ -1,9 +1,9 @@
 import { Application, Container, Graphics, Text } from 'pixi.js'
-import { TIMELINE } from './utils'
+import { TIMELINE, dayIndexFromISO, pixelsPerDay, computeScaledTimeline, safeDiv, EPS, nearlyZero } from './utils'
 import { drawGridBackground, drawStaffLines } from './draw/grid'
 import { drawLabelWithMast, drawNoteHeadAndLine, statusToColor } from './draw/notes'
 import { drawMeasurePair, drawTodayMarker } from './draw/markers'
-import { computeViewportAlignment } from './layout'
+// Removed alignment quantization; use straightforward world↔screen math
 import { computeDateHeaderHeight } from './dateHeader'
 import { PROJECT_START_DATE } from '../config'
 import type { Staff, Task, Dependency } from '@types'
@@ -135,13 +135,10 @@ export class Renderer {
     const height = Math.max(1, this.app.screen.height)
     const { LEFT_MARGIN, DAY_WIDTH } = TIMELINE
     const { zoom, x, y } = this.viewport
-    const pxPerDay = DAY_WIDTH * Math.max(0.1, zoom)
-    const HEADER = computeDateHeaderHeight(zoom || 1)
+    const pxPerDay = pixelsPerDay(zoom, DAY_WIDTH)
     this.metrics = { pxPerDay, staffBlocks: [] }
     this.layout = []
-    // Quantize the world position to whole pixels to avoid subpixel blur during panning
-    const align = computeViewportAlignment({ LEFT_MARGIN, DAY_WIDTH: pxPerDay, TOP_MARGIN: 0, STAFF_SPACING: 0, STAFF_LINE_SPACING: 0 } as any, x)
-    const vx = align.viewportXDaysQuantized
+    const vx = x
 
     // Content background (cached meta to avoid redundant redraw)
     const bg = new Graphics()
@@ -156,9 +153,10 @@ export class Renderer {
     }
 
     // Vertical scaling for staff geometry
-    const scaledTopMargin = Math.round(TIMELINE.TOP_MARGIN * this.verticalScale)
-    const scaledStaffSpacing = Math.max(20, Math.round(TIMELINE.STAFF_SPACING * this.verticalScale))
-    const scaledLineSpacing = Math.max(8, Math.round(TIMELINE.STAFF_LINE_SPACING * this.verticalScale))
+    const scaled = computeScaledTimeline(this.verticalScale)
+    const scaledTopMargin = scaled.topMargin
+    const scaledStaffSpacing = scaled.staffSpacing
+    const scaledLineSpacing = scaled.lineSpacing
 
     // Draw staffs as groups of lines
     let yCursor = scaledTopMargin - y
@@ -177,8 +175,8 @@ export class Renderer {
       const pairSpacingPx = 4
       const thickW = 3
       const thinW = 1
-      const leftWorldDays = vx + (0 - LEFT_MARGIN) / Math.max(pxPerDay, 0.0001)
-      const rightWorldDays = vx + (width - LEFT_MARGIN) / Math.max(pxPerDay, 0.0001)
+      const leftWorldDays = vx + (0 - LEFT_MARGIN) / Math.max(pxPerDay, EPS)
+      const rightWorldDays = vx + (width - LEFT_MARGIN) / Math.max(pxPerDay, EPS)
       const firstK = Math.floor((leftWorldDays - offsetDays) / stepDays) - 1
       const lastK = Math.ceil((rightWorldDays - offsetDays) / stepDays) + 1
       for (const sb of this.metrics.staffBlocks) {
@@ -199,15 +197,14 @@ export class Renderer {
 
     // Today marker
     try {
-      const baseUTC = Date.UTC(PROJECT_START_DATE.getUTCFullYear(), PROJECT_START_DATE.getUTCMonth(), PROJECT_START_DATE.getUTCDate())
       const now = new Date()
-      const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-      const msPerDay = 24 * 60 * 60 * 1000
-      const dayIndex = Math.floor((todayUTC - baseUTC) / msPerDay)
-      if (Number.isFinite(dayIndex)) {
-        const xToday = LEFT_MARGIN + (dayIndex - vx) * pxPerDay
-        this.layers.background.addChild(drawTodayMarker(xToday, Math.max(0, height)))
-      }
+      const yyyy = now.getUTCFullYear()
+      const mm = String(now.getUTCMonth() + 1).padStart(2, '0')
+      const dd = String(now.getUTCDate()).padStart(2, '0')
+      const isoToday = `${yyyy}-${mm}-${dd}`
+      const dayIndex = dayIndexFromISO(isoToday, PROJECT_START_DATE)
+      const xToday = LEFT_MARGIN + (dayIndex - vx) * pxPerDay
+      this.layers.background.addChild(drawTodayMarker(xToday, Math.max(0, height)))
     } catch { }
 
     // Draw tasks (note pill shape with status glyph)
@@ -220,11 +217,7 @@ export class Renderer {
       const yTop = centerY - h / 2
 
       // compute x from startDate relative to PROJECT_START_DATE
-      const start = Date.UTC(PROJECT_START_DATE.getUTCFullYear(), PROJECT_START_DATE.getUTCMonth(), PROJECT_START_DATE.getUTCDate())
-      const parts = task.startDate.split('-').map(Number)
-      if (parts.length !== 3 || Number.isNaN(parts[0]!)) continue
-      const d = Date.UTC(parts[0]!, (parts[1]! - 1), parts[2]!)
-      const day = Math.max(0, Math.round((d - start) / (24 * 3600 * 1000)))
+      const day = dayIndexFromISO(task.startDate, PROJECT_START_DATE)
       const xLeft = LEFT_MARGIN + (day - vx) * pxPerDay
       const w = Math.max(4, Math.round(task.durationDays * pxPerDay))
 
@@ -337,7 +330,7 @@ export class Renderer {
             const len = Math.hypot(dx, dy) || 1
             const ux = dx / len
             const uy = dy / len
-            const lbLocalX = Math.abs(uy) > 0.0001 ? (boxH / uy) * ux : 0
+            const lbLocalX = nearlyZero(uy) ? 0 : (boxH / uy) * ux
 
             const bg = this.tooltipBox || new Graphics()
             bg.clear()
@@ -476,69 +469,7 @@ export class Renderer {
     this.depPreviewG = null
   }
 
-  // Note pill with left circular head
-  private drawNotePill(x: number, topY: number, width: number, height: number, selected: boolean, status?: string): Graphics {
-    const g = new Graphics()
-    const radius = Math.max(4, Math.floor(height / 2))
-    const headColor = this.statusToColor(status || '')
-    const strokeColor = selected ? 0xFCD34D : 0xffffff
-    const centerY = topY + radius
-    const headX = x + radius
-
-    // Duration line (stylized, behind the head)
-    try {
-      const pxPerDay = Math.max(1, this.metrics.pxPerDay)
-      const trackStart = Math.round(headX + 4)
-      const trackEnd = Math.round(x + width - 2)
-      if (trackEnd > trackStart) {
-        const trackW = Math.max(1, trackEnd - trackStart)
-        const trackY = Math.round(centerY - 1)
-        // subtle base
-        g.rect(trackStart, trackY, trackW, 2)
-        g.fill({ color: 0x000000, alpha: 0.25 })
-        // color overlay
-        g.rect(trackStart, trackY, trackW, 2)
-        g.fill({ color: headColor, alpha: 0.35 })
-        // rounded cap at the end
-        g.circle(trackEnd, centerY, 2)
-        g.fill({ color: headColor, alpha: 0.9 })
-        // day tick marks along the line
-        const durationDays = Math.max(1, Math.round(width / pxPerDay))
-        for (let k = 1; k < durationDays; k++) {
-          const tx = Math.round(x + k * pxPerDay)
-          if (tx > trackStart && tx < trackEnd) {
-            g.moveTo(tx + 0.5, centerY - 3)
-            g.lineTo(tx + 0.5, centerY + 3)
-            g.stroke({ width: 1, color: 0xffffff, alpha: 0.12 })
-          }
-        }
-      }
-    } catch { }
-
-    // Head (circle only) with subtle inner highlight
-    g.circle(headX, centerY, radius)
-    g.fill({ color: headColor, alpha: 0.95 })
-    g.stroke({ width: selected ? 2 : 1, color: strokeColor, alpha: selected ? 1 : 0.3 })
-    g.circle(headX, centerY, Math.max(2, radius - 2))
-    g.fill({ color: 0xffffff, alpha: 0.25 })
-    return g
-  }
-
-  private statusToColor(status: string): number {
-    switch (status) {
-      case 'in_progress':
-        return 0x3B82F6 // blue-500
-      case 'completed':
-        return 0x10B981 // emerald-500
-      case 'blocked':
-        return 0xEF4444 // red-500
-      case 'cancelled':
-        return 0x9CA3AF // gray-400
-      case 'not_started':
-      default:
-        return 0x6B7280 // gray-500
-    }
-  }
+  // statusToAccidental remains for glyph selection; colors come from draw/notes.ts
 
   private statusToAccidental(status: string): string {
     switch (status) {
