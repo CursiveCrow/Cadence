@@ -1,18 +1,34 @@
-import { Graphics, Text } from 'pixi.js'
+import { Graphics, Text, BlurFilter } from 'pixi.js'
 
 export function statusToColor(status: string): number {
     switch (status) {
         case 'in_progress':
-            return 0x3B82F6
+            return 0x2563EB // Bright blue
         case 'completed':
-            return 0x10B981
+            return 0x22C55E // Vibrant green
         case 'blocked':
-            return 0xEF4444
+            return 0xEF4444 // Red
         case 'cancelled':
-            return 0x9CA3AF
+            return 0x6B7280 // Gray
         case 'not_started':
         default:
-            return 0x6B7280
+            return 0xA855F7 // Purple (musical note default)
+    }
+}
+
+export function statusToGlowColor(status: string): number {
+    switch (status) {
+        case 'in_progress':
+            return 0x60A5FA // Light blue glow
+        case 'completed':
+            return 0x86EFAC // Light green glow
+        case 'blocked':
+            return 0xFCA5A5 // Light red glow
+        case 'cancelled':
+            return 0x9CA3AF // Light gray
+        case 'not_started':
+        default:
+            return 0xC084FC // Light purple glow
     }
 }
 
@@ -24,43 +40,105 @@ export function drawNoteHeadAndLine(params: {
     color: number
     selected?: boolean
     pxPerDay: number
+    status?: string
 }): Graphics {
-    const { x, yTop, width, height, color, selected, pxPerDay } = params
+    const { x, yTop, width, height, color, selected, pxPerDay, status = 'not_started' } = params
     const g = new Graphics()
-    const radius = Math.max(2, Math.floor(height / 2))
-    const centerY = yTop + radius
-    const headX = x + radius
+    const radius = Math.max(7, Math.floor(height * 0.45)) // Better proportions
+    const centerY = yTop + height / 2
+    const headX = x + radius + 2
+    const glowColor = statusToGlowColor(status)
 
-    // duration track behind the head with faint ledger ticks
-    const trackY = Math.round(centerY - 1)
-    const trackStart = Math.round(headX + 4)
-    const trackEnd = Math.round(x + width - 2)
+    // Duration track - clean and modern
+    const trackY = Math.round(centerY)
+    const trackStart = Math.round(headX + radius + 3)
+    const trackEnd = Math.round(x + width - 3)
+
     if (trackEnd > trackStart) {
         const trackW = Math.max(1, trackEnd - trackStart)
+
+        // Track shadow for depth
         g.rect(trackStart, trackY - 1, trackW, 3)
-        g.fill({ color: 0x000000, alpha: 0.24 })
-        g.rect(trackStart, trackY - 1, trackW, 3)
-        g.fill({ color, alpha: 0.35 })
+        g.fill({ color: 0x000000, alpha: 0.2 })
+
+        // Main duration track
+        g.rect(trackStart, trackY - 1, trackW, 2)
+        g.fill({ color, alpha: 0.5 })
+
+        // Track highlight
+        g.rect(trackStart, trackY - 1, Math.min(trackW * 0.3, 20), 1)
+        g.fill({ color: 0xffffff, alpha: 0.3 })
+
+        // End marker
         g.circle(trackEnd, centerY, 2)
-        g.fill({ color, alpha: 0.95 })
+        g.fill({ color, alpha: 0.8 })
+
+        // Day tick marks - subtle
         const days = Math.max(1, Math.round(width / Math.max(pxPerDay, 1)))
-        const step = Math.max(pxPerDay, 1)
-        for (let k = 1; k < days; k++) {
-            const tx = Math.round(x + k * step)
-            if (tx > trackStart && tx < trackEnd) {
-                g.moveTo(tx + 0.5, centerY - 3)
-                g.lineTo(tx + 0.5, centerY + 3)
-                g.stroke({ width: 1, color: 0xffffff, alpha: 0.12 })
+        if (pxPerDay > 30) { // Only show when zoomed in enough
+            for (let k = 1; k < days; k++) {
+                const tx = Math.round(x + k * pxPerDay)
+                if (tx > trackStart + 5 && tx < trackEnd - 5) {
+                    g.rect(tx, centerY - 2, 1, 4)
+                    g.fill({ color: 0xffffff, alpha: 0.15 })
+                }
             }
         }
     }
 
-    // head with glossy highlight and subtle shadow ring
+    // Note head - clean and musical
+
+    // Selection glow effect
+    if (selected) {
+        // Outer glow
+        for (let i = 3; i > 0; i--) {
+            g.circle(headX, centerY, radius + i * 2)
+            g.fill({ color: 0xFACC15, alpha: 0.08 * (4 - i) })
+        }
+    }
+
+    // Drop shadow for depth
+    g.circle(headX + 1, centerY + 1, radius)
+    g.fill({ color: 0x000000, alpha: 0.25 })
+
+    // Main note head - perfectly round
     g.circle(headX, centerY, radius)
-    g.fill({ color, alpha: 0.98 })
-    g.stroke({ width: selected ? 2 : 1, color: selected ? 0xFCD34D : 0xffffff, alpha: selected ? 1 : 0.35 })
-    g.circle(headX - Math.max(1, Math.floor(radius * 0.15)), centerY - Math.max(1, Math.floor(radius * 0.15)), Math.max(2, radius - 3))
-    g.fill({ color: 0xffffff, alpha: 0.22 })
+    g.fill({ color, alpha: 1 })
+
+    // Inner gradient for dimension
+    const gradientRadius = radius * 0.8
+    g.circle(headX, centerY, gradientRadius)
+    g.fill({ color, alpha: 0.9 })
+
+    // Top highlight for glossiness
+    g.ellipse(headX - radius * 0.25, centerY - radius * 0.35, radius * 0.5, radius * 0.35)
+    g.fill({ color: 0xffffff, alpha: 0.4 })
+
+    // Smaller inner highlight
+    g.circle(headX - radius * 0.3, centerY - radius * 0.3, radius * 0.2)
+    g.fill({ color: 0xffffff, alpha: 0.6 })
+
+    // Clean border
+    g.circle(headX, centerY, radius)
+    g.stroke({
+        width: selected ? 2 : 1,
+        color: selected ? 0xFACC15 : 0x000000,
+        alpha: selected ? 0.9 : 0.2
+    })
+
+    // Status indicator dot (subtle)
+    if (status === 'in_progress' || status === 'completed') {
+        const dotRadius = 2
+        const dotX = headX + radius * 0.5
+        const dotY = centerY - radius * 0.5
+
+        // Dot with glow
+        g.circle(dotX, dotY, dotRadius + 1)
+        g.fill({ color: glowColor, alpha: 0.3 })
+        g.circle(dotX, dotY, dotRadius)
+        g.fill({ color: glowColor, alpha: 1 })
+    }
+
     return g
 }
 

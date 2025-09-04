@@ -242,8 +242,18 @@ export class Renderer {
       if (yTop > height || yTop + h < 0) continue
 
       const selected = this.data.selection.includes(task.id)
-      const color = statusToColor((task as any).status || '')
-      this.layers.tasks.addChild(drawNoteHeadAndLine({ x: Math.round(xLeft), yTop: Math.round(yTop), width: Math.round(w), height: Math.round(h), color, selected, pxPerDay }))
+      const status = (task as any).status || 'not_started'
+      const color = statusToColor(status)
+      this.layers.tasks.addChild(drawNoteHeadAndLine({
+        x: Math.round(xLeft),
+        yTop: Math.round(yTop),
+        width: Math.round(w),
+        height: Math.round(h),
+        color,
+        selected,
+        pxPerDay,
+        status
+      }))
 
       const label = drawLabelWithMast({ xLeft: xLeft, yTop, h, text: task.title || '', headColor: color, width, height })
       for (const n of label.nodes) this.layers.tasks.addChild(n)
@@ -263,7 +273,7 @@ export class Renderer {
       this.layout.push({ id: task.id, x: xLeft, y: yTop, w, h })
     }
 
-    // Draw dependencies (smooth curve with arrowhead)
+    // Draw dependencies (musical slur curves)
     for (const dep of this.data.dependencies) {
       const src = this.layout.find(r => r.id === dep.srcTaskId)
       const dst = this.layout.find(r => r.id === dep.dstTaskId)
@@ -272,40 +282,94 @@ export class Renderer {
       const y0 = src.y + src.h / 2
       const x1 = dst.x
       const y1 = dst.y + dst.h / 2
-      const cx1 = x0 + Math.max(20, Math.abs(x1 - x0) * 0.3)
-      const cx2 = x1 - Math.max(20, Math.abs(x1 - x0) * 0.3)
+      const cx1 = x0 + Math.max(30, Math.abs(x1 - x0) * 0.4)
+      const cx2 = x1 - Math.max(30, Math.abs(x1 - x0) * 0.4)
       const line = new Graphics()
+
+      // Shadow curve
+      line.moveTo(Math.round(x0), Math.round(y0 + 1))
+      line.bezierCurveTo(Math.round(cx1), Math.round(y0 + 1), Math.round(cx2), Math.round(y1 + 1), Math.round(x1), Math.round(y1 + 1))
+      line.stroke({ width: 3, color: 0x000000, alpha: 0.2 })
+
+      // Main curve with gradient effect
       line.moveTo(Math.round(x0), Math.round(y0))
       line.bezierCurveTo(Math.round(cx1), Math.round(y0), Math.round(cx2), Math.round(y1), Math.round(x1), Math.round(y1))
-      line.stroke({ width: 2, color: 0x7f8ea3, alpha: 0.9 })
-      // arrowhead
+      line.stroke({ width: 2, color: 0x8B5CF6, alpha: 0.7 })
+
+      // Highlight curve
+      line.moveTo(Math.round(x0), Math.round(y0 - 1))
+      line.bezierCurveTo(Math.round(cx1), Math.round(y0 - 1), Math.round(cx2), Math.round(y1 - 1), Math.round(x1), Math.round(y1 - 1))
+      line.stroke({ width: 1, color: 0xC084FC, alpha: 0.4 })
+
+      // Musical tie endpoints (like slur notation)
+      line.circle(x0, y0, 3)
+      line.fill({ color: 0x8B5CF6, alpha: 0.9 })
+      line.circle(x0, y0, 1.5)
+      line.fill({ color: 0xffffff, alpha: 0.5 })
+
+      // Arrowhead with style
       const angle = Math.atan2(y1 - y0, x1 - x0)
       const arrow = 8
       line.beginPath()
       line.moveTo(Math.round(x1), Math.round(y1))
-      line.lineTo(Math.round(x1 - arrow * Math.cos(angle - Math.PI / 6)), Math.round(y1 - arrow * Math.sin(angle - Math.PI / 6)))
-      line.lineTo(Math.round(x1 - arrow * Math.cos(angle + Math.PI / 6)), Math.round(y1 - arrow * Math.sin(angle + Math.PI / 6)))
+      line.lineTo(Math.round(x1 - arrow * Math.cos(angle - Math.PI / 5)), Math.round(y1 - arrow * Math.sin(angle - Math.PI / 5)))
+      line.lineTo(Math.round(x1 - arrow * 0.6 * Math.cos(angle)), Math.round(y1 - arrow * 0.6 * Math.sin(angle)))
+      line.lineTo(Math.round(x1 - arrow * Math.cos(angle + Math.PI / 5)), Math.round(y1 - arrow * Math.sin(angle + Math.PI / 5)))
       line.closePath()
-      line.fill({ color: 0x7f8ea3, alpha: 0.9 })
+      line.fill({ color: 0x8B5CF6, alpha: 0.9 })
+
       this.layers.dependencies.addChild(line)
     }
 
-    // Hover vertical guideline and row highlight
+    // Hover vertical guideline with musical accent
     if (this.hoverX != null) {
       const gHover = new Graphics()
       const xh = Math.round(this.hoverX) + 0.5
-      gHover.moveTo(xh, 0)
-      gHover.lineTo(xh, height)
-      gHover.stroke({ width: 1, color: 0xffffff, alpha: 0.16 })
+
+      // Gradient line
+      for (let i = 0; i < height; i += 20) {
+        const alpha = 0.2 * (1 - i / height)
+        gHover.moveTo(xh, i)
+        gHover.lineTo(xh, Math.min(i + 10, height))
+        gHover.stroke({ width: 1, color: 0xA855F7, alpha })
+      }
+
+      // Accent dots at intersections
+      for (const sb of this.metrics.staffBlocks) {
+        for (let i = 0; i < 5; i++) {
+          const y = sb.yTop + i * sb.lineSpacing
+          gHover.circle(xh, y, 2)
+          gHover.fill({ color: 0xFACC15, alpha: 0.5 })
+        }
+      }
+
       this.layers.background.addChild(gHover)
     }
+
+    // Hover row highlight with glow
     if (this.hoverY != null && this.metrics.staffBlocks.length > 0) {
       const yHover = this.hoverY
       const sb = this.metrics.staffBlocks.find(b => yHover >= b.yTop && yHover <= b.yBottom)
       if (sb) {
         const r = new Graphics()
-        r.rect(-100000, Math.round(sb.yTop), 200000, Math.max(1, Math.round(sb.yBottom - sb.yTop)))
-        r.fill({ color: 0xffffff, alpha: 0.06 })
+        const height = Math.max(1, Math.round(sb.yBottom - sb.yTop))
+
+        // Gradient glow effect
+        for (let i = 0; i < 3; i++) {
+          r.rect(-100000, Math.round(sb.yTop - i * 2), 200000, height + i * 4)
+          r.fill({ color: 0xA855F7, alpha: 0.02 * (3 - i) })
+        }
+
+        // Main highlight
+        r.rect(-100000, Math.round(sb.yTop), 200000, height)
+        r.fill({ color: 0xffffff, alpha: 0.08 })
+
+        // Top and bottom accent lines
+        r.rect(-100000, Math.round(sb.yTop), 200000, 1)
+        r.fill({ color: 0xC084FC, alpha: 0.3 })
+        r.rect(-100000, Math.round(sb.yBottom), 200000, 1)
+        r.fill({ color: 0xC084FC, alpha: 0.3 })
+
         this.layers.background.addChild(r)
       }
     }
@@ -425,23 +489,46 @@ export class Renderer {
     const pw = Math.max(2, Math.round(w))
     const ph = Math.round(h)
     const radius = Math.max(4, Math.floor(ph / 2))
+
+    // Animated pulse effect (outer glow)
+    const time = Date.now() / 1000
+    const pulseScale = 1 + Math.sin(time * 4) * 0.1
+    const glowRadius = radius * pulseScale
+
+    // Outer glow rings
+    for (let i = 3; i > 0; i--) {
+      g.beginPath()
+      g.ellipse(px + radius, py + radius, glowRadius + i * 4, glowRadius * 0.9 + i * 3)
+      g.fill({ color: 0xA855F7, alpha: 0.08 * (4 - i) })
+    }
+
+    // Main preview shape with gradient effect
     g.beginPath()
     if (pw <= ph + 4) {
-      g.circle(px + radius, py + radius, radius)
+      g.ellipse(px + radius, py + radius, radius * 1.1, radius * 0.9)
     } else {
+      // Musical note-like shape for extended duration
       g.moveTo(px + radius, py)
-      g.lineTo(px + pw - 4, py)
-      g.quadraticCurveTo(px + pw, py, px + pw, py + 4)
-      g.lineTo(px + pw, py + ph - 4)
-      g.quadraticCurveTo(px + pw, py + ph, px + pw - 4, py + ph)
+      g.lineTo(px + pw - radius, py)
+      g.quadraticCurveTo(px + pw, py, px + pw, py + radius)
+      g.lineTo(px + pw, py + ph - radius)
+      g.quadraticCurveTo(px + pw, py + ph, px + pw - radius, py + ph)
       g.lineTo(px + radius, py + ph)
       g.arc(px + radius, py + radius, radius, Math.PI / 2, -Math.PI / 2, false)
     }
     g.closePath()
-    g.fill({ color: 0x10B981, alpha: 0.35 })
-    g.stroke({ width: 2, color: 0x10B981, alpha: 1 })
-    g.circle(px + radius, py + radius, Math.max(2, radius - 2))
-    g.fill({ color: 0xffffff, alpha: 0.18 })
+    g.fill({ color: 0xA855F7, alpha: 0.4 })
+    g.stroke({ width: 2, color: 0xC084FC, alpha: 1 })
+
+    // Inner highlight
+    g.beginPath()
+    g.ellipse(px + radius - radius * 0.2, py + radius - radius * 0.2, radius * 0.5, radius * 0.4)
+    g.fill({ color: 0xffffff, alpha: 0.6 })
+
+    // Musical accent dot
+    g.circle(px + radius, py + radius, 2)
+    g.fill({ color: 0xffffff, alpha: 0.9 })
+
     if (!g.parent) this.layers.tasks.addChild(g)
     this.previewG = g
   }
@@ -461,19 +548,62 @@ export class Renderer {
     const y0 = src.y + src.h / 2
     const x1 = dstPoint.x
     const y1 = dstPoint.y
-    const cx1 = x0 + Math.max(20, Math.abs(x1 - x0) * 0.3)
-    const cx2 = x1 - Math.max(20, Math.abs(x1 - x0) * 0.3)
+    const cx1 = x0 + Math.max(30, Math.abs(x1 - x0) * 0.4)
+    const cx2 = x1 - Math.max(30, Math.abs(x1 - x0) * 0.4)
+
+    // Animated flow effect
+    const time = Date.now() / 500
+    const dashOffset = (time % 10) * 5
+
+    // Draw multiple curves for a flowing effect
+    for (let i = 0; i < 3; i++) {
+      const offset = i * 2
+      g.moveTo(Math.round(x0), Math.round(y0 + offset - 2))
+      g.bezierCurveTo(
+        Math.round(cx1), Math.round(y0 + offset - 2),
+        Math.round(cx2), Math.round(y1 + offset - 2),
+        Math.round(x1), Math.round(y1 + offset - 2)
+      )
+      g.stroke({
+        width: 3 - i,
+        color: i === 0 ? 0xA855F7 : 0xC084FC,
+        alpha: 0.6 - i * 0.15
+      })
+    }
+
+    // Main curve with gradient
     g.moveTo(Math.round(x0), Math.round(y0))
     g.bezierCurveTo(Math.round(cx1), Math.round(y0), Math.round(cx2), Math.round(y1), Math.round(x1), Math.round(y1))
-    g.stroke({ width: 2, color: 0x10B981, alpha: 0.9 })
+    g.stroke({ width: 2, color: 0xFACC15, alpha: 0.9 })
+
+    // Arrowhead with glow
     const angle = Math.atan2(y1 - y0, x1 - x0)
-    const arrow = 8
+    const arrow = 10
+
+    // Glow behind arrow
+    g.beginPath()
+    g.circle(x1, y1, 8)
+    g.fill({ color: 0xFACC15, alpha: 0.3 })
+
+    // Arrow shape
     g.beginPath()
     g.moveTo(Math.round(x1), Math.round(y1))
-    g.lineTo(Math.round(x1 - arrow * Math.cos(angle - Math.PI / 6)), Math.round(y1 - arrow * Math.sin(angle - Math.PI / 6)))
-    g.lineTo(Math.round(x1 - arrow * Math.cos(angle + Math.PI / 6)), Math.round(y1 - arrow * Math.sin(angle + Math.PI / 6)))
+    g.lineTo(Math.round(x1 - arrow * Math.cos(angle - Math.PI / 5)), Math.round(y1 - arrow * Math.sin(angle - Math.PI / 5)))
+    g.lineTo(Math.round(x1 - arrow * 0.7 * Math.cos(angle)), Math.round(y1 - arrow * 0.7 * Math.sin(angle)))
+    g.lineTo(Math.round(x1 - arrow * Math.cos(angle + Math.PI / 5)), Math.round(y1 - arrow * Math.sin(angle + Math.PI / 5)))
     g.closePath()
-    g.fill({ color: 0x10B981, alpha: 0.9 })
+    g.fill({ color: 0xFACC15, alpha: 1 })
+
+    // Add pulse dots along the curve
+    const steps = 5
+    for (let t = 0.2; t <= 0.8; t += 0.6 / steps) {
+      const px = Math.round(Math.pow(1 - t, 3) * x0 + 3 * Math.pow(1 - t, 2) * t * cx1 + 3 * (1 - t) * Math.pow(t, 2) * cx2 + Math.pow(t, 3) * x1)
+      const py = Math.round(Math.pow(1 - t, 3) * y0 + 3 * Math.pow(1 - t, 2) * t * y0 + 3 * (1 - t) * Math.pow(t, 2) * y1 + Math.pow(t, 3) * y1)
+      const pulseSize = 1 + Math.sin((time + t * 10) * 2) * 0.5
+      g.circle(px, py, pulseSize)
+      g.fill({ color: 0xC084FC, alpha: 0.8 })
+    }
+
     if (!g.parent) this.layers.dependencies.addChild(g)
     this.depPreviewG = g
   }

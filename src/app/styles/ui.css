@@ -1,76 +1,236 @@
 @import './tokens.css';
 
-.ui-datehdr {
-  background: var(--ui-surface-2);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px rgba(0, 0, 0, 0.25);
+/* Smooth animations for all UI elements */
+* {
+  transition: background-color var(--ui-transition-fast), border-color var(--ui-transition-fast),
+    opacity var(--ui-transition-fast);
 }
+
+/* Date Header with glass morphism effect */
+.ui-datehdr {
+  background: linear-gradient(180deg, rgba(20, 25, 35, 0.85) 0%, rgba(15, 19, 28, 0.85) 100%);
+  backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 16px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+  z-index: 10;
+}
+
+.ui-datehdr::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ui-color-primary) 20%,
+    var(--ui-color-accent) 50%,
+    var(--ui-color-primary) 80%,
+    transparent 100%
+  );
+  opacity: 0.3;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateX(-20%);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateX(20%);
+  }
+}
+
 .ui-datehdr-band {
   height: 24px;
   border-bottom: 1px solid var(--ui-color-border);
+  position: relative;
+  transition: background-color var(--ui-transition-base);
 }
+
+.ui-datehdr-band:hover {
+  background: var(--ui-surface-glass);
+}
+
 .ui-datehdr-label {
   color: var(--ui-color-text);
   font-size: 11px;
-  letter-spacing: 0.3px;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  transition: color var(--ui-transition-fast);
 }
+
+.ui-datehdr-label:hover {
+  color: var(--ui-color-text-soft);
+}
+
 .ui-datehdr-month {
-  opacity: 0.95;
+  opacity: 1;
+  font-weight: 600;
 }
 .ui-datehdr-day {
-  opacity: 0.9;
-}
-.ui-datehdr-hour {
   opacity: 0.85;
 }
+.ui-datehdr-hour {
+  opacity: 0.7;
+  font-size: 10px;
+}
+
 .ui-datehdr-tick {
   position: absolute;
   top: 2px;
   bottom: 2px;
   width: 1px;
-  background: var(--ui-color-border);
-  opacity: 0.35;
+  background: linear-gradient(180deg, transparent 0%, var(--ui-color-border) 50%, transparent 100%);
+  opacity: 0.4;
 }
+
 .ui-datehdr-tick-strong {
-  opacity: 0.6;
+  opacity: 0.7;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--ui-color-primary) 50%,
+    transparent 100%
+  );
+  width: 2px;
 }
+
 .ui-datehdr-sep {
   height: 1px;
-  background: var(--ui-color-border);
-  opacity: 0.5;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ui-color-border) 10%,
+    var(--ui-color-border) 90%,
+    transparent 100%
+  );
+  opacity: 0.6;
 }
 
 /* Header + App base */
 body {
   background: var(--ui-color-bg);
   color: var(--ui-color-text);
-  font-feature-settings: 'liga' 1, 'kern' 1;
+  font-feature-settings: 'liga' 1, 'kern' 1, 'calt' 1;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  position: relative;
 }
+
+/* Musical paper background effect */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--ui-music-paper-bg);
+  pointer-events: none;
+  z-index: 0;
+}
+
 .header {
-  background: linear-gradient(180deg, rgba(18, 21, 28, 0.9) 0%, rgba(13, 17, 25, 0.9) 100%);
-  border-bottom: 1px solid var(--ui-color-border-strong);
-  backdrop-filter: blur(8px);
+  background: linear-gradient(135deg, rgba(20, 25, 35, 0.92) 0%, rgba(15, 19, 28, 0.92) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 4px 20px rgba(0, 0, 0, 0.4);
+  position: relative;
+  z-index: 100;
 }
+
+/* Animated gradient border for header */
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--ui-color-primary) 0%,
+    var(--ui-color-accent) 25%,
+    var(--ui-color-primary-glow) 50%,
+    var(--ui-color-accent) 75%,
+    var(--ui-color-primary) 100%
+  );
+  opacity: 0.6;
+  animation: gradientShift 8s ease-in-out infinite;
+  background-size: 200% 100%;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
 .sidebar {
-  background: linear-gradient(180deg, #0f141d 0%, #0d1118 100%);
+  background: linear-gradient(180deg, rgba(17, 20, 29, 0.98) 0%, rgba(12, 15, 22, 0.98) 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
   position: relative;
   z-index: 3;
   box-sizing: border-box;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3), inset -1px 0 0 rgba(255, 255, 255, 0.03);
+  overflow: visible;
 }
+
+/* Musical staff lines decoration in sidebar */
+.sidebar::before {
+  content: '';
+  position: absolute;
+  top: 80px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent,
+    transparent 24px,
+    var(--ui-staff-line) 24px,
+    var(--ui-staff-line) 25px
+  );
+  opacity: 0.1;
+  pointer-events: none;
+}
+
 .sidebar > div:first-child {
   /* ensure the top content hugs the title bar */
   margin-top: 0;
+  position: relative;
+  z-index: 1;
 }
+
 .content {
   position: relative;
+  background: var(--ui-color-bg);
 }
+
 .main {
   position: relative;
   z-index: 1;
 }
+
 .canvas {
   z-index: 0;
+  position: relative;
 }
 
 /* Resizer sits on top of the sidebar border without creating a visible gap */
@@ -208,40 +368,118 @@ body {
 .ui-rounded-xl {
   border-radius: var(--ui-radius-xl);
 }
+/* Modern musical button styles with animations */
 .ui-btn {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
   color: var(--ui-color-text);
   border: 1px solid var(--ui-color-border);
-  padding: 8px 12px;
-  border-radius: 10px;
+  padding: 8px 16px;
+  border-radius: var(--ui-radius-lg);
   cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease, transform 80ms ease,
-    box-shadow 160ms ease;
+  font-weight: 500;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--ui-transition-base);
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
 }
+
+.ui-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  transition: width var(--ui-transition-slow), height var(--ui-transition-slow);
+  border-radius: 50%;
+}
+
 .ui-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.08) 100%);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px) scale(1.02);
+  border-color: rgba(255, 255, 255, 0.2);
 }
+
+.ui-btn:hover::before {
+  width: 100%;
+  height: 100%;
+}
+
 .ui-btn:active {
-  transform: translateY(1px);
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 3px rgba(0, 0, 0, 0.2);
 }
+
 .ui-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.4;
   cursor: not-allowed;
+  transform: none;
+  filter: grayscale(0.5);
 }
+
+/* Primary button with glow effect */
 .ui-btn-primary {
-  background: var(--ui-color-primary-weak);
+  background: linear-gradient(
+    135deg,
+    var(--ui-color-primary) 0%,
+    var(--ui-color-primary-glow) 100%
+  );
   border-color: var(--ui-color-primary-border);
+  color: white;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  animation: glow 2s ease-in-out infinite;
 }
+
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 4px 14px rgba(168, 85, 247, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(168, 85, 247, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+}
+
 .ui-btn-primary:hover {
-  background: rgba(139, 92, 246, 0.18);
+  background: linear-gradient(
+    135deg,
+    var(--ui-color-primary-glow) 0%,
+    var(--ui-color-primary) 100%
+  );
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 8px 25px rgba(168, 85, 247, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
+
+/* Ghost button with subtle animation */
 .ui-btn-ghost {
   background: transparent;
   border-color: transparent;
+  position: relative;
 }
+
+.ui-btn-ghost::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: var(--ui-color-primary);
+  transform: translateX(-50%);
+  transition: width var(--ui-transition-spring);
+}
+
 .ui-btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ui-color-primary-glow);
+}
+
+.ui-btn-ghost:hover::after {
+  width: 80%;
 }
 
 .ui-focus-ring:focus-visible {

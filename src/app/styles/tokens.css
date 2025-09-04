@@ -1,55 +1,71 @@
 @charset "UTF-8";
 :root {
-  /* Base Colors (Dark default) */
-  --ui-color-bg: #0b0f14; /* deeper ink-like backdrop */
-  --ui-color-text: #e7ebf3;
-  --ui-color-muted: #a6aec3;
-  --ui-color-border: rgba(255, 255, 255, 0.14);
-  --ui-color-border-strong: rgba(255, 255, 255, 0.22);
-  --ui-color-shadow: rgba(0, 0, 0, 0.5);
-  --ui-color-primary: #8b5cf6; /* viola */
-  --ui-color-primary-weak: rgba(139, 92, 246, 0.12);
-  --ui-color-primary-border: rgba(139, 92, 246, 0.32);
-  --ui-color-danger-weak: rgba(239, 68, 68, 0.22);
-  --ui-color-danger: #fca5a5;
-  /* Accent used for highlights like Today/Selection */
-  --ui-color-accent: #fcd34d; /* warm amber like golden notation */
+  /* Base Colors - Sheet Music Inspired Dark Theme */
+  --ui-color-bg: #0a0d11; /* rich dark ink backdrop */
+  --ui-color-text: #f1f5f9;
+  --ui-color-text-soft: #cbd5e1;
+  --ui-color-muted: #94a3b8;
+  --ui-color-border: rgba(255, 255, 255, 0.11);
+  --ui-color-border-strong: rgba(255, 255, 255, 0.18);
+  --ui-color-shadow: rgba(0, 0, 0, 0.6);
+  --ui-color-primary: #a855f7; /* vibrant purple - musical note color */
+  --ui-color-primary-glow: #c084fc; /* brighter for glow effects */
+  --ui-color-primary-weak: rgba(168, 85, 247, 0.15);
+  --ui-color-primary-border: rgba(168, 85, 247, 0.35);
+  --ui-color-danger-weak: rgba(239, 68, 68, 0.18);
+  --ui-color-danger: #f87171;
+  /* Accent for highlights - golden like brass instruments */
+  --ui-color-accent: #facc15;
+  --ui-color-accent-glow: #fde047;
 
-  /* Semantic Colors (Status & Dependencies) */
-  --ui-status-not-started-bg: #1f2a3a;
-  --ui-status-not-started-text: #e7ebf3;
-  --ui-status-in-progress-bg: #1e3a8a;
-  --ui-status-in-progress-text: #bfdbfe;
-  --ui-status-completed-bg: #14532d;
-  --ui-status-completed-text: #bbf7d0;
-  --ui-status-blocked-bg: #7f1d1d;
-  --ui-status-blocked-text: #fecaca;
-  --ui-status-cancelled-bg: #374151;
-  --ui-status-cancelled-text: #d1d5db;
+  /* Musical Note Colors - for different note types */
+  --ui-note-whole: #e9d5ff; /* lavender */
+  --ui-note-half: #c084fc; /* purple */
+  --ui-note-quarter: #a855f7; /* deep purple */
+  --ui-note-eighth: #9333ea; /* violet */
+  --ui-note-sixteenth: #7e22ce; /* deep violet */
 
-  --ui-dependency-valid: #10b981; /* emerald */
-  --ui-dependency-warning: #f59e0b; /* amber */
-  --ui-dependency-invalid: #ef4444; /* red */
+  /* Semantic Colors (Status & Dependencies) - Musical dynamics inspired */
+  --ui-status-not-started-bg: rgba(30, 41, 59, 0.5);
+  --ui-status-not-started-text: #cbd5e1;
+  --ui-status-in-progress-bg: rgba(37, 99, 235, 0.2);
+  --ui-status-in-progress-text: #93c5fd;
+  --ui-status-completed-bg: rgba(34, 197, 94, 0.2);
+  --ui-status-completed-text: #86efac;
+  --ui-status-blocked-bg: rgba(239, 68, 68, 0.2);
+  --ui-status-blocked-text: #fca5a5;
+  --ui-status-cancelled-bg: rgba(107, 114, 128, 0.2);
+  --ui-status-cancelled-text: #9ca3af;
 
-  /* Surfaces */
-  --ui-surface-1: rgba(16, 20, 28, 0.92);
-  --ui-surface-1-border: rgba(255, 255, 255, 0.08);
-  --ui-surface-1-focus: rgba(22, 26, 36, 1);
-  /* Secondary surface for headers/sidebars for clearer separation */
-  --ui-surface-2: linear-gradient(180deg, #12151c 0%, #0d1119 100%);
+  --ui-dependency-valid: #22c55e;
+  --ui-dependency-warning: #f59e0b;
+  --ui-dependency-invalid: #ef4444;
 
-  /* Grid and staff tokens (sheet-music inspiration) */
-  --ui-grid-major: #e6e7ec;
-  --ui-grid-minor: #cfd6e3;
-  --ui-staff-line: #cfd6e3;
-  --ui-music-paper-tint: rgba(255, 255, 255, 0.03);
-  --ui-music-paper-tint-strong: rgba(255, 255, 255, 0.05);
+  /* Surfaces with subtle gradients */
+  --ui-surface-1: linear-gradient(135deg, rgba(20, 25, 35, 0.95) 0%, rgba(15, 19, 28, 0.95) 100%);
+  --ui-surface-1-border: rgba(255, 255, 255, 0.07);
+  --ui-surface-1-focus: rgba(25, 30, 42, 1);
+  --ui-surface-2: linear-gradient(180deg, #14181f 0%, #0f131a 100%);
+  --ui-surface-glass: rgba(255, 255, 255, 0.02);
+
+  /* Grid and staff tokens - Vintage sheet music feel */
+  --ui-grid-major: rgba(241, 245, 249, 0.08);
+  --ui-grid-minor: rgba(241, 245, 249, 0.04);
+  --ui-staff-line: rgba(241, 245, 249, 0.12);
+  --ui-music-paper-bg: radial-gradient(
+    ellipse at top,
+    rgba(168, 85, 247, 0.02) 0%,
+    transparent 60%
+  );
+  --ui-music-paper-tint: rgba(168, 85, 247, 0.02);
+  --ui-music-paper-tint-strong: rgba(168, 85, 247, 0.04);
 
   /* Radii */
   --ui-radius-sm: 4px;
   --ui-radius-md: 8px;
   --ui-radius-lg: 10px;
   --ui-radius-xl: 14px;
+  --ui-radius-full: 9999px;
 
   /* Spacing */
   --ui-space-1: 4px;
@@ -62,6 +78,16 @@
   --ui-font-size-sm: 12px;
   --ui-font-size-md: 14px;
   --ui-font-size-lg: 18px;
+  --ui-font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  --ui-font-musical: 'Georgia', 'Times New Roman', serif;
+
+  /* Animations & Transitions */
+  --ui-transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ui-transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ui-transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ui-transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ui-animation-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ui-animation-smooth: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Light Theme */
