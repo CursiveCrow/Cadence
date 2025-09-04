@@ -31,20 +31,22 @@ export function drawNoteHeadAndLine(params: {
     const centerY = yTop + radius
     const headX = x + radius
 
+    // simple duration track behind the head
+    const trackY = Math.round(centerY - 1)
     const trackStart = Math.round(headX + 4)
     const trackEnd = Math.round(x + width - 2)
     if (trackEnd > trackStart) {
         const trackW = Math.max(1, trackEnd - trackStart)
-        const trackY = Math.round(centerY - 1)
         g.rect(trackStart, trackY, trackW, 2)
         g.fill({ color: 0x000000, alpha: 0.25 })
         g.rect(trackStart, trackY, trackW, 2)
         g.fill({ color, alpha: 0.35 })
         g.circle(trackEnd, centerY, 2)
         g.fill({ color, alpha: 0.9 })
-        const durationDays = Math.max(1, Math.round(width / Math.max(1, pxPerDay)))
-        for (let k = 1; k < durationDays; k++) {
-            const tx = Math.round(x + k * Math.max(1, pxPerDay))
+        const days = Math.max(1, Math.round(width / Math.max(pxPerDay, 1)))
+        const step = Math.max(pxPerDay, 1)
+        for (let k = 1; k < days; k++) {
+            const tx = Math.round(x + k * step)
             if (tx > trackStart && tx < trackEnd) {
                 g.moveTo(tx + 0.5, centerY - 3)
                 g.lineTo(tx + 0.5, centerY + 3)
@@ -53,6 +55,7 @@ export function drawNoteHeadAndLine(params: {
         }
     }
 
+    // head with highlight
     g.circle(headX, centerY, radius)
     g.fill({ color, alpha: 0.95 })
     g.stroke({ width: selected ? 2 : 1, color: selected ? 0xFCD34D : 0xffffff, alpha: selected ? 1 : 0.3 })
@@ -72,42 +75,43 @@ export function drawLabelWithMast(params: {
 }): { nodes: (Graphics | Text)[]; box: { x: number; y: number; w: number; h: number } } {
     const { xLeft, yTop, h, text, headColor, width, height } = params
     const nodes: (Graphics | Text)[] = []
-    const title = new Text({ text, style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 10, fill: 0xffffff } })
+    const title = new Text({ text, style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 10, fill: headColor } })
     const padX = 6
     const padY = 2
     const pillW = Math.round(title.width + padX * 2)
     const pillH = Math.round(title.height + padY * 2)
-    const desiredX = Math.round(xLeft + h + 10)
-    const desiredY = Math.round(yTop - pillH - .5)
-    const labelX = Math.max(0 + 2, Math.min(width - pillW - 2, desiredX))
-    const labelY = Math.max(2, Math.min(height - pillH - 2, desiredY))
-    const fx0 = Math.round(labelX - padX)
-    const labelTop = Math.round(labelY - padY)
-    const labelBottom = labelTop + pillH
+    const labelX = Math.max(2, Math.min(width - pillW - 2, Math.round(xLeft + h + 10)))
+    const labelY = Math.max(2, Math.min(height - pillH - 2, Math.round(yTop - pillH - 1)))
+    const boxX = Math.round(labelX - padX)
+    const boxY = Math.round(labelY - padY)
 
+    // Slanted left edge aligned to stem angle; bottom-left corner lies on the mast line
+    const eps = 1e-4
+    const labelTop = boxY
+    const labelBottom = boxY + pillH
     const stemStartX = Math.round(xLeft + h - 1)
-    const stemStartY = Math.round(yTop + h / 2 - Math.max(2, Math.floor(h * 0.15)))
-    const vX = fx0 - stemStartX
+    const stemStartY = Math.round(yTop + h / 2)
+    const vX = boxX - stemStartX
     const vY = labelTop - stemStartY
-    let bottomLeftX = fx0
-    if (Math.abs(vY) > 1e-4) {
-        const k = (labelBottom - labelTop) / vY
-        bottomLeftX = Math.round(fx0 + k * vX)
-    }
+    const k = Math.abs(vY) > eps ? (labelBottom - labelTop) / vY : 0
+    const bottomLeftX = Math.round(boxX + k * vX)
 
+    // polygon with slanted left edge (top-left -> top-right -> bottom-right -> bottom-left)
     const gBox = new Graphics()
     gBox.beginPath()
-    gBox.moveTo(fx0, labelTop)
-    gBox.lineTo(fx0 + pillW, labelTop)
-    gBox.lineTo(fx0 + pillW, labelBottom)
+    gBox.moveTo(boxX, labelTop)
+    gBox.lineTo(boxX + pillW, labelTop)
+    gBox.lineTo(boxX + pillW, labelBottom)
     gBox.lineTo(bottomLeftX, labelBottom)
     gBox.closePath()
     gBox.fill({ color: 0x000000, alpha: 0.25 })
+    gBox.stroke({ width: 1, color: headColor, alpha: 0.7 })
     nodes.push(gBox)
 
+    // Mast goes to bottom-left corner to align the stem with the label's left edge
     const mast = new Graphics()
     mast.moveTo(stemStartX, stemStartY)
-    mast.lineTo(fx0, labelTop)
+    mast.lineTo(bottomLeftX, labelBottom)
     mast.stroke({ width: 2, color: headColor, alpha: 0.95 })
     nodes.push(mast)
 
@@ -115,7 +119,7 @@ export function drawLabelWithMast(params: {
     title.y = Math.round(labelY)
     nodes.push(title)
 
-    return { nodes, box: { x: fx0, y: labelTop, w: pillW, h: pillH } }
+    return { nodes, box: { x: boxX, y: boxY, w: pillW, h: pillH } }
 }
 
 

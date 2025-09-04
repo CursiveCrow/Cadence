@@ -12,33 +12,32 @@ export function drawGridBackground(params: {
 
     const grid = new Graphics()
     const vx = viewportXDays
-    const gridStartWorld = Math.max(0, Math.floor(vx))
-    const gridEndWorld = Math.ceil(vx + (width - LEFT_MARGIN) / pxPerDay)
-    for (let day = gridStartWorld; day <= gridEndWorld; day++) {
+    const startDay = Math.max(0, Math.floor(vx))
+    const endDay = Math.ceil(vx + (width - LEFT_MARGIN) / Math.max(pxPerDay, 1e-4))
+    for (let day = startDay; day <= endDay; day++) {
         const gx = LEFT_MARGIN + (day - vx) * pxPerDay
-        // weekend tint (approximation: shift by one to align weeks visually)
+        const xInt = Math.round(gx)
+        const wBand = Math.max(0.5, pxPerDay)
+        if (xInt <= LEFT_MARGIN + 1) continue
+
+        // weekend tint (shift by one to align visually)
         const dow = (day + 1) % 7
         if (dow === 6 || dow === 0) {
-            const xBand2 = Math.round(gx)
-            const wBand2 = Math.max(0.5, pxPerDay)
-            if (xBand2 > LEFT_MARGIN + 1) {
-                grid.rect(xBand2, 0, wBand2, Math.max(0, height))
-                grid.fill({ color: 0xffffff, alpha: 0.02 })
-            }
+            grid.rect(xInt, 0, wBand, Math.max(0, height))
+            grid.fill({ color: 0xffffff, alpha: 0.02 })
         }
+
+        // alternating subtle banding for readability
         if (day % 2 !== 0) {
-            const xBand = Math.round(gx)
-            const wBand = Math.max(0.5, pxPerDay)
-            if (xBand > LEFT_MARGIN + 1) {
-                grid.rect(xBand, 0, wBand, Math.max(0, height))
-                grid.fill({ color: 0xffffff, alpha: 0.03 })
-            }
+            grid.rect(xInt, 0, wBand, Math.max(0, height))
+            grid.fill({ color: 0xffffff, alpha: 0.03 })
         }
-        if (gx > LEFT_MARGIN + 1) {
-            grid.moveTo(Math.round(gx) + 0.5, 0)
-            grid.lineTo(Math.round(gx) + 0.5, height)
-            grid.stroke({ width: 1, color: (day % 7 === 0) ? 0x2b3242 : 0x1c2230, alpha: 0.9 })
-        }
+
+        // grid line
+        const xl = xInt + 0.5
+        grid.moveTo(xl, 0)
+        grid.lineTo(xl, height)
+        grid.stroke({ width: 1, color: (day % 7 === 0) ? 0x2b3242 : 0x1c2230, alpha: 0.9 })
     }
     nodes.push(grid)
     return nodes
