@@ -164,8 +164,9 @@ export class Renderer {
       const spacing = scaledLineSpacing
       this.layers.background.addChild(drawStaffLines({ width, LEFT_MARGIN, yTop: yCursor, lineSpacing: spacing, lines: staff.numberOfLines }))
 
-      this.metrics.staffBlocks.push({ id: staff.id, yTop: yCursor, yBottom: yCursor + staff.numberOfLines * spacing, lineSpacing: spacing })
-      yCursor += staff.numberOfLines * spacing + scaledStaffSpacing - staff.numberOfLines * spacing
+      // yBottom aligns with the last staff line (not one line beyond)
+      this.metrics.staffBlocks.push({ id: staff.id, yTop: yCursor, yBottom: yCursor + (staff.numberOfLines - 1) * spacing, lineSpacing: spacing })
+      yCursor += scaledStaffSpacing
     }
 
     // Measure markers (paired bars) per staff

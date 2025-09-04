@@ -108,10 +108,10 @@ export function drawLabelWithMast(params: {
     gBox.stroke({ width: 1, color: headColor, alpha: 0.7 })
     nodes.push(gBox)
 
-    // Mast goes to bottom-left corner to align the stem with the label's left edge
+    // Mast goes to top-left corner; left edge remains aligned via bottomLeftX computation
     const mast = new Graphics()
     mast.moveTo(stemStartX, stemStartY)
-    mast.lineTo(bottomLeftX, labelBottom)
+    mast.lineTo(boxX, labelTop)
     mast.stroke({ width: 2, color: headColor, alpha: 0.95 })
     nodes.push(mast)
 
