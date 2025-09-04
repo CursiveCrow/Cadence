@@ -50,9 +50,13 @@ body {
 }
 .sidebar {
   background: #11141b;
-  border-right: 1px solid #222732;
   position: relative;
   z-index: 3;
+  box-sizing: border-box;
+}
+.sidebar > div:first-child {
+  /* ensure the top content hugs the title bar */
+  margin-top: 0;
 }
 .content {
   position: relative;
@@ -65,10 +69,20 @@ body {
   z-index: 0;
 }
 
-/* Ensure the app sidebar surface has no outer border except the right divider */
+/* Resizer sits on top of the sidebar border without creating a visible gap */
+.vertical-resizer {
+  position: absolute;
+  width: 10px; /* centered on the sidebar border */
+  cursor: col-resize;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--ui-color-border);
+}
+
+/* Ensure the app sidebar surface has no outer border; divider is rendered by resizer */
 .sidebar.ui-surface-1 {
   border: 0 !important;
-  border-right: 1px solid var(--ui-color-border) !important;
   /* Force opaque background so timeline never shows through */
   background: #11141b !important;
   position: relative;

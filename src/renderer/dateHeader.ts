@@ -65,7 +65,7 @@ export function computeDateHeaderViewModel(params: DateHeaderParams): DateHeader
       const date = new Date(base.getTime())
       date.setUTCDate(date.getUTCDate() + dayIndex)
       const text = date.toLocaleDateString('en-US', { month: 'short' })
-      monthTickXs.push(xCss)
+      if (xCss > leftMarginCss + 1) monthTickXs.push(xCss)
       monthLabels.push({ x: xCss + 6, text })
       xCss += stepDays * dayWidthCss
     }
@@ -83,7 +83,7 @@ export function computeDateHeaderViewModel(params: DateHeaderParams): DateHeader
       const text = cursor.toLocaleDateString('en-US', { month: 'short' })
       const xScreen = worldDayToScreenX(dayIndex)
       monthLabels.push({ x: xScreen + 6, text })
-      monthTickXs.push(xScreen)
+      if (xScreen > leftMarginCss + 1) monthTickXs.push(xScreen)
       cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1))
     }
   }
@@ -96,7 +96,7 @@ export function computeDateHeaderViewModel(params: DateHeaderParams): DateHeader
   let x = leftMarginCss - remainderDay * dayWidthCss
   const limit = screenWidth + 2 * dayWidthCss
   while (x < leftMarginCss + limit) {
-    dayTickXs.push(x)
+    if (x > leftMarginCss + 1) dayTickXs.push(x)
     x += dayWidthCss
   }
 
@@ -123,7 +123,7 @@ export function computeDateHeaderViewModel(params: DateHeaderParams): DateHeader
     xh -= hourStepPx * 48
     const limitH = screenWidth + 3 * dayWidthCss
     while (xh < leftMargin + limitH) {
-      hourTickXs.push(xh)
+      if (xh > leftMarginCss + 1) hourTickXs.push(xh)
       xh += hourStepPx
     }
 

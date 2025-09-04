@@ -123,13 +123,7 @@ export class Renderer {
     bg.fill({ color: 0x0f1115, alpha: 1 })
     this.layers.background.addChild(bg)
 
-    // Left margin panel for staff labels (renderer leaves empty; sidebar handles labels)
-    if (LEFT_MARGIN > 0) {
-      const lm = new Graphics()
-      lm.rect(0, 0, LEFT_MARGIN, Math.max(0, height))
-      lm.fill({ color: 0x11141b, alpha: 1 })
-      this.layers.background.addChild(lm)
-    }
+    // No internal left gutter: sidebar owns the left column; canvas starts at x=0
 
     // Alternating day bands (subtle) and vertical day grid + weekend tint
     const grid = new Graphics()
@@ -139,19 +133,29 @@ export class Renderer {
       const gx = LEFT_MARGIN + (day - vx) * pxPerDay
       // alternating bands
       if (day % 2 !== 0) {
-        grid.rect(gx, 0, Math.max(0.5, pxPerDay), Math.max(0, height))
-        grid.fill({ color: 0xffffff, alpha: 0.03 })
+        const xBand = Math.round(gx)
+        const wBand = Math.max(0.5, pxPerDay)
+        if (xBand > LEFT_MARGIN + 1) {
+          grid.rect(xBand, 0, wBand, Math.max(0, height))
+          grid.fill({ color: 0xffffff, alpha: 0.03 })
+        }
       }
       // Weekend tint (approx)
       const dow = (day + 1) % 7
       if (dow === 6 || dow === 0) {
-        grid.rect(gx, 0, Math.max(0.5, pxPerDay), Math.max(0, height))
-        grid.fill({ color: 0xffffff, alpha: 0.02 })
+        const xBand2 = Math.round(gx)
+        const wBand2 = Math.max(0.5, pxPerDay)
+        if (xBand2 > LEFT_MARGIN + 1) {
+          grid.rect(xBand2, 0, wBand2, Math.max(0, height))
+          grid.fill({ color: 0xffffff, alpha: 0.02 })
+        }
       }
       // Grid line
-      grid.moveTo(gx + 0.5, 0)
-      grid.lineTo(gx + 0.5, height)
-      grid.stroke({ width: 1, color: (day % 7 === 0) ? 0x2b3242 : 0x1c2230, alpha: 0.9 })
+      if (gx > LEFT_MARGIN + 1) {
+        grid.moveTo(Math.round(gx) + 0.5, 0)
+        grid.lineTo(Math.round(gx) + 0.5, height)
+        grid.stroke({ width: 1, color: (day % 7 === 0) ? 0x2b3242 : 0x1c2230, alpha: 0.9 })
+      }
     }
     this.layers.background.addChild(grid)
 
@@ -195,7 +199,8 @@ export class Renderer {
           const xThick = Math.round(xScreen) + (thickW % 2 ? 0.5 : 0)
           const xThin = Math.round(xScreen - pairSpacingPx) + (thinW % 2 ? 0.5 : 0)
           if (xThin > width + 2) break
-          if (xThick < LEFT_MARGIN - 2) continue
+          if (xThick < LEFT_MARGIN + 2) continue
+          if (xThin < LEFT_MARGIN + 2) continue
           const gmm = new Graphics()
           const yTopStaff = Math.round(sb.yTop)
           const yBottomStaff = Math.round(sb.yBottom)

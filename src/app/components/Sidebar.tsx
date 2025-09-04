@@ -21,25 +21,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, onAddNote, o
       className="sidebar ui-surface-1 ui-text"
       style={{ position: 'relative', overflow: 'hidden', height: '100%' }}
     >
-      <div ref={headerRef} className="ui-flex ui-justify-between ui-items-center" style={{ marginBottom: 8, gap: 6 }}>
+      {/* Internal top padding that does not create a gap with the header */}
+      <div ref={headerRef} className="ui-flex ui-items-center" style={{ marginTop: 12, marginBottom: 8, gap: 6, paddingRight: 0, justifyContent: 'flex-start' }}>
         <strong className="ui-text-sm" style={{ color: '#bcc3d6' }}>Staves</strong>
-        <div className="ui-flex ui-gap-2">
+        <div className="ui-flex ui-gap-2" style={{ marginLeft: 8 }}>
           <button className="ui-btn ui-btn-primary ui-rounded-md ui-text-sm ui-focus-ring" onClick={onAddNote}>+ Add Note</button>
           <button className="ui-btn ui-rounded-md ui-text-sm ui-focus-ring" onClick={onOpenStaffManager}>Manage</button>
         </div>
       </div>
 
       {/* Staff labels follow their staff centers */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: (headerRef.current?.offsetHeight || 0), pointerEvents: 'none', zIndex: 1, paddingLeft: 12 }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: (headerRef.current?.offsetHeight || 0), pointerEvents: 'none', zIndex: 1, paddingLeft: 12, paddingRight: 12 }}>
         {staffs.map((s, index) => {
           const staffStartY = TIMELINE.TOP_MARGIN + index * TIMELINE.STAFF_SPACING
           const centerY = staffStartY + ((s.numberOfLines - 1) * TIMELINE.STAFF_LINE_SPACING) / 2
           const top = (centerY - viewport.y)
           const ts = (s.timeSignature || '4/4').split('/')
           return (
-            <div key={s.id} className="ui-flex ui-items-center" style={{ position: 'absolute', top, left: 0, right: 0, transform: 'translateY(-50%)', gap: 8, paddingRight: 8 }}>
-              <span className="ui-font-700 ui-text-sm" style={{ color: '#bcc3d6', whiteSpace: 'nowrap' }}>{s.name}</span>
-              <div style={{ flex: 1 }} />
+            <div key={s.id} className="ui-flex ui-items-center" style={{ position: 'absolute', top, left: 0, right: 0, transform: 'translateY(-50%)', gap: 8, paddingRight: 12, justifyContent: 'flex-end' }}>
+              <span className="ui-font-700 ui-text-sm" style={{ color: '#bcc3d6', whiteSpace: 'nowrap', textAlign: 'right' }}>{s.name}</span>
               <button
                 className="ui-timesig"
                 style={{ pointerEvents: 'auto', background: 'transparent', border: 0, cursor: 'pointer' }}

@@ -32,7 +32,8 @@ export default defineConfig({
                 entry: 'main/index.ts',
                 vite: {
                     build: {
-                        outDir: 'dist-electron/main',
+                        // ensure output is at project root under dist-electron
+                        outDir: '../dist-electron/main',
                         rollupOptions: {
                             external: ['electron']
                         }
@@ -43,7 +44,7 @@ export default defineConfig({
                 entry: 'preload/index.ts',
                 vite: {
                     build: {
-                        outDir: 'dist-electron/preload',
+                        outDir: '../dist-electron/preload',
                         rollupOptions: {
                             external: ['electron']
                         }

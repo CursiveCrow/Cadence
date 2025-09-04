@@ -50,21 +50,7 @@ const App: React.FC = () => {
         }}>Link Selected</button>
         <button onClick={() => setShowStaffManager(true)}>Manage Staffs</button>
       </div>
-      <DateHeader
-        viewport={viewport}
-        projectStart={PROJECT_START_DATE}
-        leftMargin={TIMELINE_CONFIG.LEFT_MARGIN + sidebarWidth}
-        dayWidth={TIMELINE_CONFIG.DAY_WIDTH}
-        onZoomChange={(z, anchorLocalX) => {
-          const ppd0 = TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.0001, viewport.zoom)
-          const ppd1 = TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.1, z)
-          // anchorLocalX is relative to window; subtract sidebar + internal left margin
-          const anchorPxFromGrid = Math.max(0, anchorLocalX - (TIMELINE_CONFIG.LEFT_MARGIN + sidebarWidth))
-          const worldAtAnchor = viewport.x + anchorPxFromGrid / ppd0
-          const newX = Math.max(0, Math.round(worldAtAnchor - anchorPxFromGrid / ppd1))
-          dispatch(setViewport({ x: newX, y: viewport.y, zoom: z }))
-        }}
-      />
+
       <div className="content" onKeyDown={(e) => {
         if (e.key === 'Delete' && selection.length > 0) {
           for (const id of selection) {
@@ -72,7 +58,7 @@ const App: React.FC = () => {
           }
         }
       }} tabIndex={0} style={{ position: 'relative' }}>
-        <aside className="sidebar" style={{ width: sidebarWidth, height: '100%' }}>
+        <aside className="sidebar" style={{ width: Math.round(sidebarWidth), height: '100%', boxSizing: 'border-box' as any }}>
           <Sidebar
             staffs={staffs}
             viewport={viewport}
@@ -86,8 +72,32 @@ const App: React.FC = () => {
             onChangeTimeSignature={(id, value) => dispatch({ type: 'staffs/updateStaff', payload: { id, updates: { timeSignature: value } } })}
           />
         </aside>
-        <div className="vertical-resizer" ref={resizerRef as any} onMouseDown={beginResize} onDoubleClick={resetSidebarWidth} />
+        <div
+          className="vertical-resizer"
+          ref={resizerRef as any}
+          onMouseDown={beginResize}
+          onDoubleClick={resetSidebarWidth}
+          style={{ position: 'absolute', left: Math.round(sidebarWidth), top: 0, bottom: 0 }}
+        />
         <main className="main">
+          {/* Date header sits within the main area so it does not overlap the sidebar */}
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, zIndex: 2 }}>
+            <DateHeader
+              viewport={viewport}
+              projectStart={PROJECT_START_DATE}
+              leftMargin={TIMELINE_CONFIG.LEFT_MARGIN}
+              dayWidth={TIMELINE_CONFIG.DAY_WIDTH}
+              onZoomChange={(z, anchorLocalX) => {
+                const ppd0 = TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.0001, viewport.zoom)
+                const ppd1 = TIMELINE_CONFIG.DAY_WIDTH * Math.max(0.1, z)
+                // anchorLocalX is relative to the header within main; subtract internal left margin only
+                const anchorPxFromGrid = Math.max(0, anchorLocalX - (TIMELINE_CONFIG.LEFT_MARGIN))
+                const worldAtAnchor = viewport.x + anchorPxFromGrid / ppd0
+                const newX = Math.max(0, Math.round(worldAtAnchor - anchorPxFromGrid / ppd1))
+                dispatch(setViewport({ x: newX, y: viewport.y, zoom: z }))
+              }}
+            />
+          </div>
           <TimelineCanvas
             viewport={viewport}
             staffs={staffs}
