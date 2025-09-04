@@ -1,9 +1,9 @@
 export const TIMELINE = {
   LEFT_MARGIN: 0,
   HEADER: 56,
-  DAY_WIDTH: 24, // px per day at zoom 1
+  DAY_WIDTH: 60, // px per day at zoom 1
   STAFF_GAP: 20,
-  TOP_MARGIN: 100, // distance from header to first staff center
+  TOP_MARGIN: 60, // distance from header to first staff center
   STAFF_SPACING: 120,
   STAFF_LINE_SPACING: 18,
 }

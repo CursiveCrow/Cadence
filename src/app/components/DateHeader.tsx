@@ -24,18 +24,18 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 1) return // middle button for zoom scrub
-    ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
+      ; (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
     const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
     const originLocalX = e.clientX - rect.left
     const startZoom = zoom
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - (rect.left + originLocalX)
       const factor = Math.pow(1.01, dx)
-      const next = Math.max(0.1, Math.min(10, Math.round(startZoom * factor * 100) / 100))
+      const next = Math.max(0.1, Math.min(20, Math.round(startZoom * factor * 100) / 100))
       onZoomChange?.(next, originLocalX)
     }
     const onUp = (ev: PointerEvent) => {
-      try { (e.currentTarget as HTMLDivElement).releasePointerCapture(ev.pointerId) } catch {}
+      try { (e.currentTarget as HTMLDivElement).releasePointerCapture(ev.pointerId) } catch { }
       window.removeEventListener('pointermove', onMove, true)
       window.removeEventListener('pointerup', onUp, true)
     }

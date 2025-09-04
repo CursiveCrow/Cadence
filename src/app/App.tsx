@@ -18,6 +18,7 @@ import type { Task } from '@types'
 const App: React.FC = () => {
   const dispatch = useDispatch()
   const viewport = useSelector((s: RootState) => s.ui.viewport)
+  const verticalScale = useSelector((s: RootState) => (s as any).ui.verticalScale as number)
   const selection = useSelector((s: RootState) => s.ui.selection)
   const staffs = useSelector((s: RootState) => s.staffs.list)
   const tasks = useSelector((s: RootState) => s.tasks.list)
@@ -64,7 +65,13 @@ const App: React.FC = () => {
           dispatch(setViewport({ x: newX, y: viewport.y, zoom: z }))
         }}
       />
-      <div className="content">
+      <div className="content" onKeyDown={(e) => {
+        if (e.key === 'Delete' && selection.length > 0) {
+          for (const id of selection) {
+            dispatch({ type: 'tasks/deleteTask', payload: id })
+          }
+        }
+      }} tabIndex={0} style={{ position: 'relative' }}>
         <aside className="sidebar" style={{ width: sidebarWidth, height: '100%' }}>
           <Sidebar
             staffs={staffs}
@@ -76,6 +83,7 @@ const App: React.FC = () => {
               dispatch(addTask(newTask))
             }}
             onOpenStaffManager={() => setShowStaffManager(true)}
+            onChangeTimeSignature={(id, value) => dispatch({ type: 'staffs/updateStaff', payload: { id, updates: { timeSignature: value } } })}
           />
         </aside>
         <div className="vertical-resizer" ref={resizerRef as any} onMouseDown={beginResize} onDoubleClick={resetSidebarWidth} />
@@ -88,6 +96,8 @@ const App: React.FC = () => {
             selection={selection}
             onViewportChange={(v) => dispatch(setViewport(v))}
             onSelect={(ids, anchor) => anchor ? dispatch(setSelectionWithAnchor({ ids, anchor })) : dispatch(setSelection(ids))}
+            verticalScale={verticalScale}
+            onVerticalScaleChange={(s) => dispatch({ type: 'ui/setVerticalScale', payload: s })}
           />
         </main>
       </div>

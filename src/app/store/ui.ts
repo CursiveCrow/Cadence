@@ -7,6 +7,7 @@ export interface UIState {
   selection: string[]
   selectionAnchor: { x: number; y: number } | null
   viewport: ViewportState
+  verticalScale: number
 }
 
 const initialState: UIState = {
@@ -14,6 +15,7 @@ const initialState: UIState = {
   selection: [],
   selectionAnchor: null,
   viewport: { x: 0, y: 0, zoom: 1 },
+  verticalScale: 1,
 }
 
 const uiSlice = createSlice({
@@ -28,9 +30,10 @@ const uiSlice = createSlice({
     },
     setViewport: (state, action: PayloadAction<ViewportState>) => { state.viewport = action.payload },
     updateViewport: (state, action: PayloadAction<Partial<ViewportState>>) => { state.viewport = { ...state.viewport, ...action.payload } },
+    setVerticalScale: (state, action: PayloadAction<number>) => { state.verticalScale = Math.max(0.5, Math.min(3, action.payload)) },
   },
 })
 
-export const { setActiveProject, setSelection, setSelectionWithAnchor, setViewport, updateViewport } = uiSlice.actions
+export const { setActiveProject, setSelection, setSelectionWithAnchor, setViewport, updateViewport, setVerticalScale } = uiSlice.actions
 export default uiSlice.reducer
 

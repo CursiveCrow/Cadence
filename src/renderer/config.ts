@@ -8,8 +8,8 @@ export type TimelineConfig = {
 
 export const TIMELINE_CONFIG: TimelineConfig = {
   LEFT_MARGIN: 0,
-  TOP_MARGIN: 100,
-  DAY_WIDTH: 24,
+  TOP_MARGIN: 60,
+  DAY_WIDTH: 60,
   STAFF_SPACING: 120,
   STAFF_LINE_SPACING: 18,
 }

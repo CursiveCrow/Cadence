@@ -8,9 +8,10 @@ interface SidebarProps {
   viewport: { x: number; y: number; zoom: number }
   onAddNote: () => void
   onOpenStaffManager: () => void
+  onChangeTimeSignature?: (staffId: string, timeSignature: string) => void
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, onAddNote, onOpenStaffManager }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, onAddNote, onOpenStaffManager, onChangeTimeSignature }) => {
   const headerH = computeDateHeaderHeight(viewport.zoom || 1)
   const [tsEditing, setTsEditing] = useState<{ id: string; value: string; rect: DOMRect } | null>(null)
   const headerRef = useRef<HTMLDivElement>(null)
@@ -61,7 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, onAddNote, o
           <input value={tsEditing.value} onChange={(e) => setTsEditing({ ...tsEditing, value: e.target.value })} className="ui-input" />
           <div className="ui-flex ui-gap-2" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
             <button className="ui-btn ui-rounded-md" onClick={() => setTsEditing(null)}>Cancel</button>
-            <button className="ui-btn ui-btn-primary ui-rounded-md" onClick={() => setTsEditing(null)}>Save</button>
+            <button className="ui-btn ui-btn-primary ui-rounded-md" onClick={() => { if (tsEditing) { onChangeTimeSignature?.(tsEditing.id, tsEditing.value) }; setTsEditing(null) }}>Save</button>
           </div>
         </div>
       )}

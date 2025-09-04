@@ -51,12 +51,28 @@ body {
 .sidebar {
   background: #11141b;
   border-right: 1px solid #222732;
+  position: relative;
+  z-index: 3;
+}
+.content {
+  position: relative;
+}
+.main {
+  position: relative;
+  z-index: 1;
+}
+.canvas {
+  z-index: 0;
 }
 
 /* Ensure the app sidebar surface has no outer border except the right divider */
 .sidebar.ui-surface-1 {
   border: 0 !important;
   border-right: 1px solid var(--ui-color-border) !important;
+  /* Force opaque background so timeline never shows through */
+  background: #11141b !important;
+  position: relative;
+  z-index: 3;
 }
 
 /* Minimal utility set for parity with old UI */
