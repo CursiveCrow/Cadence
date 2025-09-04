@@ -1,11 +1,11 @@
 export const TIMELINE = {
   LEFT_MARGIN: 0,
   HEADER: 56,
-  DAY_WIDTH: 60, // px per day at zoom 1
-  STAFF_GAP: 20,
-  TOP_MARGIN: 60, // distance from header to first staff center
-  STAFF_SPACING: 120,
-  STAFF_LINE_SPACING: 18,
+  DAY_WIDTH: 80, // px per day at zoom 1 (bigger base sizing)
+  STAFF_GAP: 24,
+  TOP_MARGIN: 72, // distance from header to first staff center
+  STAFF_SPACING: 150,
+  STAFF_LINE_SPACING: 22,
 }
 
 export function dprScale(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {

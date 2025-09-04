@@ -107,7 +107,7 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
       const xStartPx = TIMELINE.LEFT_MARGIN + (dayIndex - viewport.x) * ppd
       const metrics = r.getMetrics()
       const rectTask = r.getTaskRect(t.id)
-      const hpx = Math.max(12, Math.min(18, Math.floor((metrics.staffBlocks[0]?.lineSpacing || 18) / 2)))
+      const hpx = Math.max(18, Math.min(28, Math.floor(((metrics.staffBlocks[0]?.lineSpacing || 18) / 2) * 1.8)))
       r.drawDragPreview(xStartPx, (rectTask?.y || 0), newDur * ppd, hpx)
       return
     }
@@ -136,7 +136,7 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
       const sb = m.staffBlocks.find(b => localY >= b.yTop && localY <= b.yBottom) || m.staffBlocks[0]
       const lineStep = (sb?.lineSpacing || 18) / 2
       const lineIndex = Math.max(0, Math.round(((localY) - (sb?.yTop || 0)) / Math.max(1, lineStep)))
-      const hpx = Math.max(12, Math.min(18, Math.floor(lineStep)))
+      const hpx = Math.max(18, Math.min(28, Math.floor(lineStep * 1.8)))
       const xStartPx = TIMELINE.LEFT_MARGIN + (clampedDay - viewport.x) * ppd
       const yTop = (sb?.yTop || 0) + lineIndex * lineStep - hpx / 2
       const wpx = Math.max(ppd * (t.durationDays || 1), 4)

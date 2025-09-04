@@ -41,16 +41,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, onAddNote, o
             <div key={s.id} className="ui-flex ui-items-center" style={{ position: 'absolute', top, left: 0, right: 0, transform: 'translateY(-50%)', gap: 8, paddingRight: 12, justifyContent: 'flex-end' }}>
               <span className="ui-font-700 ui-text-sm" style={{ color: '#bcc3d6', whiteSpace: 'nowrap', textAlign: 'right' }}>{s.name}</span>
               <button
-                className="ui-timesig"
-                style={{ pointerEvents: 'auto', background: 'transparent', border: 0, cursor: 'pointer' }}
+                className="ui-btn ui-btn-ghost ui-rounded-md ui-text-sm"
+                style={{ pointerEvents: 'auto' }}
                 title="Edit time signature"
                 onClick={(e) => {
                   const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
                   setTsEditing({ id: s.id, value: s.timeSignature || '4/4', rect: r })
                 }}
               >
-                <span className="ui-timesig-num">{ts[0]}</span>
-                <span className="ui-timesig-den">{ts[1]}</span>
+                <span className="ui-font-700" style={{ marginRight: 6 }}>{ts[0]}</span>
+                <span className="ui-text-muted">{ts[1]}</span>
               </button>
             </div>
           )
@@ -58,7 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, onAddNote, o
       </div>
       {tsEditing && (
         <div style={{ position: 'fixed', top: Math.max(8, tsEditing.rect.top - 6), left: tsEditing.rect.right + 8, zIndex: 1000 }} className="ui-surface-1 ui-shadow ui-rounded-lg ui-p-3">
-          <div className="ui-text-sm ui-mb-2">Time signature</div>
+          <div className="ui-text-sm ui-mb-2 ui-font-700">Time signature</div>
           <input value={tsEditing.value} onChange={(e) => setTsEditing({ ...tsEditing, value: e.target.value })} className="ui-input" />
           <div className="ui-flex ui-gap-2" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
             <button className="ui-btn ui-rounded-md" onClick={() => setTsEditing(null)}>Cancel</button>

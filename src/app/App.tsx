@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '@app/store/store'
 import TimelineCanvas from '@app/components/TimelineCanvas'
@@ -25,6 +25,17 @@ const App: React.FC = () => {
   const dependencies = useSelector((s: RootState) => s.dependencies.list)
   const { sidebarWidth, resizerRef, beginResize, resetSidebarWidth } = useResizableSidebar()
   const [showStaffManager, setShowStaffManager] = useState(false)
+  const [theme, setTheme] = useState<'dark' | 'light' | 'high-contrast'>('dark')
+
+  // Apply theme to :root via data-theme. Dark is the default base; remove attribute for it.
+  useEffect(() => {
+    const root = document.documentElement
+    if (theme === 'dark') {
+      root.removeAttribute('data-theme')
+    } else {
+      root.setAttribute('data-theme', theme)
+    }
+  }, [theme])
   const popupPosition = useMemo(() => {
     if (selection.length === 0) return null
     const selected = tasks.find(t => t.id === selection[0])
@@ -40,15 +51,32 @@ const App: React.FC = () => {
 
   return (
     <div className="app-root">
-      <div className="header">
-        <span className="badge">Cadence</span>
-        <div style={{ opacity: 0.8, flex: 1 }}>Simplified Architecture</div>
-        <button disabled={selection.length !== 2} onClick={() => {
-          if (selection.length === 2) {
-            dispatch(addDependency({ id: `dep-${Date.now()}`, srcTaskId: selection[0], dstTaskId: selection[1], type: 'finish_to_start', projectId: 'demo', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as any))
-          }
-        }}>Link Selected</button>
-        <button onClick={() => setShowStaffManager(true)}>Manage Staffs</button>
+      <div className="header ui-border-b ui-px-3 ui-py-2">
+        <div className="ui-flex ui-items-center ui-justify-between ui-gap-3" style={{ width: '100%' }}>
+          <div className="ui-flex ui-items-center ui-gap-3" style={{ minWidth: 0 }}>
+            <span className="ui-badge">Cadence</span>
+            <div className="ui-text-muted" style={{ opacity: 0.9, whiteSpace: 'nowrap' }}>Simplified Architecture</div>
+          </div>
+          <div className="ui-flex ui-items-center ui-gap-3">
+            <select className="ui-input ui-text-sm" value={theme} onChange={(e) => setTheme(e.target.value as any)} title="Theme">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="high-contrast">High Contrast</option>
+            </select>
+            <button
+              className="ui-btn ui-btn-primary ui-rounded-md ui-text-sm ui-focus-ring"
+              disabled={selection.length !== 2}
+              onClick={() => {
+                if (selection.length === 2) {
+                  dispatch(addDependency({ id: `dep-${Date.now()}`, srcTaskId: selection[0], dstTaskId: selection[1], type: 'finish_to_start', projectId: 'demo', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as any))
+                }
+              }}
+            >
+              Link Selected
+            </button>
+            <button className="ui-btn ui-rounded-md ui-text-sm ui-focus-ring" onClick={() => setShowStaffManager(true)}>Manage Staffs</button>
+          </div>
+        </div>
       </div>
 
       <div className="content" onKeyDown={(e) => {

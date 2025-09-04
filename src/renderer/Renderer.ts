@@ -1,5 +1,8 @@
 import { Application, Container, Graphics, Text } from 'pixi.js'
 import { TIMELINE } from './utils'
+import { drawGridBackground, drawStaffLines } from './draw/grid'
+import { drawLabelWithMast, drawNoteHeadAndLine, statusToColor } from './draw/notes'
+import { drawMeasurePair, drawTodayMarker } from './draw/markers'
 import { computeViewportAlignment } from './layout'
 import { computeDateHeaderHeight } from './dateHeader'
 import { PROJECT_START_DATE } from '../config'
@@ -125,39 +128,9 @@ export class Renderer {
 
     // No internal left gutter: sidebar owns the left column; canvas starts at x=0
 
-    // Alternating day bands (subtle) and vertical day grid + weekend tint
-    const grid = new Graphics()
-    const gridStartWorld = Math.max(0, Math.floor(vx))
-    const gridEndWorld = Math.ceil(vx + (width - LEFT_MARGIN) / pxPerDay)
-    for (let day = gridStartWorld; day <= gridEndWorld; day++) {
-      const gx = LEFT_MARGIN + (day - vx) * pxPerDay
-      // alternating bands
-      if (day % 2 !== 0) {
-        const xBand = Math.round(gx)
-        const wBand = Math.max(0.5, pxPerDay)
-        if (xBand > LEFT_MARGIN + 1) {
-          grid.rect(xBand, 0, wBand, Math.max(0, height))
-          grid.fill({ color: 0xffffff, alpha: 0.03 })
-        }
-      }
-      // Weekend tint (approx)
-      const dow = (day + 1) % 7
-      if (dow === 6 || dow === 0) {
-        const xBand2 = Math.round(gx)
-        const wBand2 = Math.max(0.5, pxPerDay)
-        if (xBand2 > LEFT_MARGIN + 1) {
-          grid.rect(xBand2, 0, wBand2, Math.max(0, height))
-          grid.fill({ color: 0xffffff, alpha: 0.02 })
-        }
-      }
-      // Grid line
-      if (gx > LEFT_MARGIN + 1) {
-        grid.moveTo(Math.round(gx) + 0.5, 0)
-        grid.lineTo(Math.round(gx) + 0.5, height)
-        grid.stroke({ width: 1, color: (day % 7 === 0) ? 0x2b3242 : 0x1c2230, alpha: 0.9 })
-      }
+    for (const g of drawGridBackground({ width, height, LEFT_MARGIN, pxPerDay, viewportXDays: vx })) {
+      this.layers.background.addChild(g)
     }
-    this.layers.background.addChild(grid)
 
     // Vertical scaling for staff geometry
     const scaledTopMargin = Math.round(TIMELINE.TOP_MARGIN * this.verticalScale)
@@ -167,15 +140,8 @@ export class Renderer {
     // Draw staffs as groups of lines
     let yCursor = scaledTopMargin - y
     for (const staff of this.data.staffs) {
-      const s = new Graphics()
       const spacing = scaledLineSpacing
-      for (let i = 0; i < staff.numberOfLines; i++) {
-        const ly = yCursor + i * spacing
-        s.moveTo(LEFT_MARGIN, Math.round(ly) + 0.5)
-        s.lineTo(width, Math.round(ly) + 0.5)
-        s.stroke({ width: 1, color: 0x2b3242, alpha: 0.8 })
-      }
-      this.layers.background.addChild(s)
+      this.layers.background.addChild(drawStaffLines({ width, LEFT_MARGIN, yTop: yCursor, lineSpacing: spacing, lines: staff.numberOfLines }))
 
       this.metrics.staffBlocks.push({ id: staff.id, yTop: yCursor, yBottom: yCursor + staff.numberOfLines * spacing, lineSpacing: spacing })
       yCursor += staff.numberOfLines * spacing + scaledStaffSpacing - staff.numberOfLines * spacing
@@ -201,16 +167,9 @@ export class Renderer {
           if (xThin > width + 2) break
           if (xThick < LEFT_MARGIN + 2) continue
           if (xThin < LEFT_MARGIN + 2) continue
-          const gmm = new Graphics()
           const yTopStaff = Math.round(sb.yTop)
           const yBottomStaff = Math.round(sb.yBottom)
-          gmm.moveTo(xThick, yTopStaff)
-          gmm.lineTo(xThick, yBottomStaff)
-          gmm.stroke({ width: thickW, color: 0xffffff, alpha: 0.35 })
-          gmm.moveTo(xThin, yTopStaff)
-          gmm.lineTo(xThin, yBottomStaff)
-          gmm.stroke({ width: thinW, color: 0xffffff, alpha: 0.25 })
-          this.layers.background.addChild(gmm)
+          this.layers.background.addChild(drawMeasurePair(xThick, xThin, yTopStaff, yBottomStaff))
         }
       }
     } catch { }
@@ -224,11 +183,7 @@ export class Renderer {
       const dayIndex = Math.floor((todayUTC - baseUTC) / msPerDay)
       if (Number.isFinite(dayIndex)) {
         const xToday = LEFT_MARGIN + (dayIndex - vx) * pxPerDay
-        const line = new Graphics()
-        line.moveTo(Math.round(xToday) + 0.5, 0)
-        line.lineTo(Math.round(xToday) + 0.5, Math.max(0, height))
-        line.stroke({ width: 2, color: 0xF59E0B, alpha: 0.9 })
-        this.layers.background.addChild(line)
+        this.layers.background.addChild(drawTodayMarker(xToday, Math.max(0, height)))
       }
     } catch { }
 
@@ -238,7 +193,7 @@ export class Renderer {
       if (!staffBlock) continue
       const lineStep = staffBlock.lineSpacing / 2
       const centerY = staffBlock.yTop + task.staffLine * lineStep
-      const h = Math.max(12, Math.min(18, Math.floor(lineStep)))
+      const h = Math.max(22, Math.min(15, Math.floor(lineStep * 1.5)))
       const yTop = centerY - h / 2
 
       // compute x from startDate relative to PROJECT_START_DATE
@@ -254,17 +209,11 @@ export class Renderer {
       if (yTop > height || yTop + h < 0) continue
 
       const selected = this.data.selection.includes(task.id)
-      const note = this.drawNotePill(Math.round(xLeft), Math.round(yTop), Math.round(w), Math.round(h), selected)
-      this.layers.tasks.addChild(note)
+      const color = statusToColor((task as any).status || '')
+      this.layers.tasks.addChild(drawNoteHeadAndLine({ x: Math.round(xLeft), yTop: Math.round(yTop), width: Math.round(w), height: Math.round(h), color, selected, pxPerDay }))
 
-      // title text
-      const title = new Text({
-        text: task.title || '',
-        style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 10, fill: 0xffffff }
-      })
-      title.x = Math.round(xLeft + h + 6)
-      title.y = Math.round(yTop + (h - title.height) / 2)
-      this.layers.tasks.addChild(title)
+      const label = drawLabelWithMast({ xLeft: xLeft, yTop, h, text: task.title || '', headColor: color, width, height })
+      for (const n of label.nodes) this.layers.tasks.addChild(n)
 
       // status glyph inside left circle
       const glyph = this.statusToAccidental((task as any).status || '')
@@ -505,38 +454,67 @@ export class Renderer {
   }
 
   // Note pill with left circular head
-  private drawNotePill(x: number, topY: number, width: number, height: number, selected: boolean): Graphics {
+  private drawNotePill(x: number, topY: number, width: number, height: number, selected: boolean, status?: string): Graphics {
     const g = new Graphics()
     const radius = Math.max(4, Math.floor(height / 2))
-    const bodyColor = selected ? 0x3b82f6 : 0x8b5cf6
+    const headColor = this.statusToColor(status || '')
     const strokeColor = selected ? 0xFCD34D : 0xffffff
+    const centerY = topY + radius
+    const headX = x + radius
 
-    // Shadow/outline
-    g.roundRect(x + 2, topY + 2, Math.max(2, width), height, Math.max(4, Math.floor(height / 3)))
-    g.fill({ color: 0x000000, alpha: 0.2 })
+    // Duration line (stylized, behind the head)
+    try {
+      const pxPerDay = Math.max(1, this.metrics.pxPerDay)
+      const trackStart = Math.round(headX + 4)
+      const trackEnd = Math.round(x + width - 2)
+      if (trackEnd > trackStart) {
+        const trackW = Math.max(1, trackEnd - trackStart)
+        const trackY = Math.round(centerY - 1)
+        // subtle base
+        g.rect(trackStart, trackY, trackW, 2)
+        g.fill({ color: 0x000000, alpha: 0.25 })
+        // color overlay
+        g.rect(trackStart, trackY, trackW, 2)
+        g.fill({ color: headColor, alpha: 0.35 })
+        // rounded cap at the end
+        g.circle(trackEnd, centerY, 2)
+        g.fill({ color: headColor, alpha: 0.9 })
+        // day tick marks along the line
+        const durationDays = Math.max(1, Math.round(width / pxPerDay))
+        for (let k = 1; k < durationDays; k++) {
+          const tx = Math.round(x + k * pxPerDay)
+          if (tx > trackStart && tx < trackEnd) {
+            g.moveTo(tx + 0.5, centerY - 3)
+            g.lineTo(tx + 0.5, centerY + 3)
+            g.stroke({ width: 1, color: 0xffffff, alpha: 0.12 })
+          }
+        }
+      }
+    } catch { }
 
-    // Body with rounded right side
-    g.beginPath()
-    if (width <= height + 4) {
-      // Small: circle only
-      g.circle(x + radius, topY + radius, radius)
-    } else {
-      g.moveTo(x + radius, topY)
-      g.lineTo(x + width - 4, topY)
-      g.quadraticCurveTo(x + width, topY, x + width, topY + 4)
-      g.lineTo(x + width, topY + height - 4)
-      g.quadraticCurveTo(x + width, topY + height, x + width - 4, topY + height)
-      g.lineTo(x + radius, topY + height)
-      g.arc(x + radius, topY + radius, radius, Math.PI / 2, -Math.PI / 2, false)
-    }
-    g.closePath()
-    g.fill({ color: bodyColor, alpha: 0.9 })
+    // Head (circle only) with subtle inner highlight
+    g.circle(headX, centerY, radius)
+    g.fill({ color: headColor, alpha: 0.95 })
     g.stroke({ width: selected ? 2 : 1, color: strokeColor, alpha: selected ? 1 : 0.3 })
-
-    // Inner white circle on the left
-    g.circle(x + radius, topY + radius, Math.max(2, radius - 2))
-    g.fill({ color: 0xffffff, alpha: 0.2 })
+    g.circle(headX, centerY, Math.max(2, radius - 2))
+    g.fill({ color: 0xffffff, alpha: 0.25 })
     return g
+  }
+
+  private statusToColor(status: string): number {
+    switch (status) {
+      case 'in_progress':
+        return 0x3B82F6 // blue-500
+      case 'completed':
+        return 0x10B981 // emerald-500
+      case 'blocked':
+        return 0xEF4444 // red-500
+      case 'cancelled':
+        return 0x9CA3AF // gray-400
+      case 'not_started':
+      default:
+        return 0x6B7280 // gray-500
+    }
   }
 
   private statusToAccidental(status: string): string {
