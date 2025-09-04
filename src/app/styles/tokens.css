@@ -1,22 +1,23 @@
 @charset "UTF-8";
 :root {
   /* Base Colors (Dark default) */
-  --ui-color-bg: rgba(30, 30, 30, 0.95);
-  --ui-color-text: #e5e7eb;
-  --ui-color-muted: #9ca3af;
-  --ui-color-border: rgba(255, 255, 255, 0.2);
-  --ui-color-shadow: rgba(0, 0, 0, 0.4);
-  --ui-color-primary: #8b5cf6;
-  --ui-color-primary-weak: rgba(139, 92, 246, 0.1);
-  --ui-color-primary-border: rgba(139, 92, 246, 0.3);
-  --ui-color-danger-weak: rgba(239, 68, 68, 0.2);
+  --ui-color-bg: #0b0f14; /* deeper ink-like backdrop */
+  --ui-color-text: #e7ebf3;
+  --ui-color-muted: #a6aec3;
+  --ui-color-border: rgba(255, 255, 255, 0.14);
+  --ui-color-border-strong: rgba(255, 255, 255, 0.22);
+  --ui-color-shadow: rgba(0, 0, 0, 0.5);
+  --ui-color-primary: #8b5cf6; /* viola */
+  --ui-color-primary-weak: rgba(139, 92, 246, 0.12);
+  --ui-color-primary-border: rgba(139, 92, 246, 0.32);
+  --ui-color-danger-weak: rgba(239, 68, 68, 0.22);
   --ui-color-danger: #fca5a5;
   /* Accent used for highlights like Today/Selection */
-  --ui-color-accent: #f59e0b;
+  --ui-color-accent: #fcd34d; /* warm amber like golden notation */
 
   /* Semantic Colors (Status & Dependencies) */
-  --ui-status-not-started-bg: #1f2937;
-  --ui-status-not-started-text: #e5e7eb;
+  --ui-status-not-started-bg: #1f2a3a;
+  --ui-status-not-started-text: #e7ebf3;
   --ui-status-in-progress-bg: #1e3a8a;
   --ui-status-in-progress-text: #bfdbfe;
   --ui-status-completed-bg: #14532d;
@@ -31,22 +32,24 @@
   --ui-dependency-invalid: #ef4444; /* red */
 
   /* Surfaces */
-  --ui-surface-1: rgba(55, 65, 81, 0.8);
-  --ui-surface-1-border: rgba(75, 85, 99, 0.8);
-  --ui-surface-1-focus: rgba(55, 65, 81, 1);
+  --ui-surface-1: rgba(16, 20, 28, 0.92);
+  --ui-surface-1-border: rgba(255, 255, 255, 0.08);
+  --ui-surface-1-focus: rgba(22, 26, 36, 1);
   /* Secondary surface for headers/sidebars for clearer separation */
-  --ui-surface-2: rgba(45, 55, 72, 0.9);
+  --ui-surface-2: linear-gradient(180deg, #12151c 0%, #0d1119 100%);
 
-  /* Grid and staff tokens */
-  --ui-grid-major: #ffffff;
-  --ui-grid-minor: #ffffff;
-  --ui-staff-line: #d1d5db;
+  /* Grid and staff tokens (sheet-music inspiration) */
+  --ui-grid-major: #e6e7ec;
+  --ui-grid-minor: #cfd6e3;
+  --ui-staff-line: #cfd6e3;
+  --ui-music-paper-tint: rgba(255, 255, 255, 0.03);
+  --ui-music-paper-tint-strong: rgba(255, 255, 255, 0.05);
 
   /* Radii */
   --ui-radius-sm: 4px;
-  --ui-radius-md: 6px;
-  --ui-radius-lg: 8px;
-  --ui-radius-xl: 12px;
+  --ui-radius-md: 8px;
+  --ui-radius-lg: 10px;
+  --ui-radius-xl: 14px;
 
   /* Spacing */
   --ui-space-1: 4px;
@@ -62,15 +65,16 @@
 }
 
 /* Light Theme */
-:root[data-theme="light"] {
-  --ui-color-bg: rgba(255, 255, 255, 0.98);
+:root[data-theme='light'] {
+  --ui-color-bg: #ffffff;
   --ui-color-text: #111827;
   --ui-color-muted: #6b7280;
-  --ui-color-border: rgba(0, 0, 0, 0.14);
-  --ui-color-shadow: rgba(0, 0, 0, 0.15);
+  --ui-color-border: rgba(0, 0, 0, 0.12);
+  --ui-color-border-strong: rgba(0, 0, 0, 0.18);
+  --ui-color-shadow: rgba(0, 0, 0, 0.18);
   --ui-color-primary: #7c3aed;
   --ui-color-primary-weak: rgba(124, 58, 237, 0.08);
-  --ui-color-primary-border: rgba(124, 58, 237, 0.3);
+  --ui-color-primary-border: rgba(124, 58, 237, 0.28);
   --ui-color-danger-weak: rgba(239, 68, 68, 0.12);
   --ui-color-danger: #ef4444;
   --ui-color-accent: #f59e0b;
@@ -86,10 +90,10 @@
   --ui-status-cancelled-bg: #e5e7eb;
   --ui-status-cancelled-text: #374151;
 
-  --ui-surface-1: rgba(249, 250, 251, 0.9);
+  --ui-surface-1: rgba(249, 250, 251, 0.92);
   --ui-surface-1-border: rgba(229, 231, 235, 1);
   --ui-surface-1-focus: rgba(243, 244, 246, 1);
-  --ui-surface-2: rgba(243, 244, 246, 1);
+  --ui-surface-2: #f3f4f6;
 
   --ui-grid-major: #000000;
   --ui-grid-minor: #000000;
@@ -97,7 +101,7 @@
 }
 
 /* High Contrast Theme */
-:root[data-theme="high-contrast"] {
+:root[data-theme='high-contrast'] {
   --ui-color-bg: #000000;
   --ui-color-text: #ffffff;
   --ui-color-muted: #c5c5c5;
@@ -130,4 +134,3 @@
   --ui-grid-minor: #ffffff;
   --ui-staff-line: #ffffff;
 }
-

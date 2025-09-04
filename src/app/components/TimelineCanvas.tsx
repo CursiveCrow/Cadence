@@ -55,6 +55,44 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
   // Helpers
   const pxPerDay = (z: number) => pixelsPerDay(z, TIMELINE.DAY_WIDTH)
 
+  // Time signature helpers
+  const getTimeSignature = (staffId: string): { n: number; d: number } => {
+    const ts = (staffs.find(s => s.id === staffId)?.timeSignature || '4/4').split('/')
+    const n = Math.max(1, parseInt(ts[0] || '4', 10) || 4)
+    const d = Math.max(1, parseInt(ts[1] || '4', 10) || 4)
+    return { n, d }
+  }
+
+  const countNotesOnDay = (staffId: string, dayIndex: number, ignoreTaskId?: string): number => {
+    let count = 0
+    for (const t of tasks) {
+      if (ignoreTaskId && t.id === ignoreTaskId) continue
+      if (t.staffId !== staffId) continue
+      const di = Math.max(0, dayIndexFromISO(t.startDate, PROJECT_START_DATE))
+      if (di === dayIndex) count++
+    }
+    return count
+  }
+
+  // Enforce daily capacity based on numerator (max notes per day). If desired day is full,
+  // find the next available day within the same measure; if the whole measure is full,
+  // push to the first day of the next measure and repeat (bounded loop to avoid runaway).
+  const findAvailableDay = (staffId: string, desiredDay: number, ignoreTaskId?: string): number => {
+    const { n, d } = getTimeSignature(staffId)
+    let measureStart = Math.floor(Math.max(0, desiredDay) / d) * d
+    let relative = Math.max(0, desiredDay) - measureStart
+    for (let attempts = 0; attempts < 64; attempts++) {
+      for (let i = 0; i < d; i++) {
+        const cand = measureStart + ((relative + i) % d)
+        if (countNotesOnDay(staffId, cand, ignoreTaskId) < n) return cand
+      }
+      // whole measure is full; move to next measure
+      measureStart += d
+      relative = 0
+    }
+    return Math.max(0, desiredDay)
+  }
+
   const onPointerDown: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
     ; (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId)
     const rect = (e.target as HTMLCanvasElement).getBoundingClientRect()
@@ -142,7 +180,8 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
       const lineStep = (scaled.lineSpacing) / 2
       const lineIndex = Math.max(0, Math.round(((localY) - (sb?.yTop || 0)) / Math.max(1, lineStep)))
       const hpx = Math.max(18, Math.min(28, Math.floor(lineStep * 1.8)))
-      const xStartPx = TIMELINE.LEFT_MARGIN + (clampedDay - viewport.x) * ppd
+      const allowedDay = findAvailableDay((sb as any)?.id || t.staffId, clampedDay, t.id)
+      const xStartPx = TIMELINE.LEFT_MARGIN + (allowedDay - viewport.x) * ppd
       const yTop = staffCenterY((sb?.yTop || 0), lineIndex, scaled.lineSpacing) - hpx / 2
       const wpx = Math.max(ppd * (t.durationDays || 1), 4)
       r.drawDragPreview(xStartPx, yTop, wpx, hpx)
@@ -244,8 +283,10 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
         const sb = m.staffBlocks.find(b => localY >= b.yTop && b.yBottom >= localY) || m.staffBlocks[0]
         const lineStep = (scaled.lineSpacing) / 2
         const staffLine = Math.max(0, Math.round(((localY) - (sb?.yTop || 0)) / Math.max(1, lineStep)))
-        const iso = isoFromDayIndex(dayIndex, PROJECT_START_DATE)
-        dispatch(updateTask({ id: t.id, updates: { startDate: iso, staffId: (sb as any)?.id || t.staffId, staffLine } }))
+        const staffId = (sb as any)?.id || t.staffId
+        const allowedDay = findAvailableDay(staffId, dayIndex, t.id)
+        const iso = isoFromDayIndex(allowedDay, PROJECT_START_DATE)
+        dispatch(updateTask({ id: t.id, updates: { startDate: iso, staffId, staffLine } }))
       }
       r?.clearPreview()
       taskOpRef.current = { mode: 'none' }
@@ -318,7 +359,9 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
     const lineStep = staff.lineSpacing / 2
     const lineIndex = Math.max(0, Math.round((localY - staff.yTop) / lineStep))
     const world = screenXToWorldDays(localX, viewport, TIMELINE.LEFT_MARGIN, TIMELINE.DAY_WIDTH)
-    const day = Math.round(world)
+    const dayDesired = Math.round(world)
+    const staffId = (staff as any).id as string
+    const day = findAvailableDay(staffId, dayDesired)
     const iso = isoFromDayIndex(day, PROJECT_START_DATE)
     const now = new Date().toISOString()
     dispatch(addTask({

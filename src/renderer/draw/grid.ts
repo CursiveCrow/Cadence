@@ -24,20 +24,21 @@ export function drawGridBackground(params: {
         const dow = (day + 1) % 7
         if (dow === 6 || dow === 0) {
             grid.rect(xInt, 0, wBand, Math.max(0, height))
-            grid.fill({ color: 0xffffff, alpha: 0.02 })
+            grid.fill({ color: 0xffffff, alpha: 0.025 })
         }
 
         // alternating subtle banding for readability
         if (day % 2 !== 0) {
             grid.rect(xInt, 0, wBand, Math.max(0, height))
-            grid.fill({ color: 0xffffff, alpha: 0.03 })
+            grid.fill({ color: 0xffffff, alpha: 0.035 })
         }
 
         // grid line
         const xl = xInt + 0.5
         grid.moveTo(xl, 0)
         grid.lineTo(xl, height)
-        grid.stroke({ width: 1, color: (day % 7 === 0) ? 0x2b3242 : 0x1c2230, alpha: 0.9 })
+        // every 7th line slightly stronger, like bar lines in sheet music
+        grid.stroke({ width: 1, color: (day % 7 === 0) ? 0x2e3648 : 0x1a2130, alpha: 0.9 })
     }
     nodes.push(grid)
     return nodes
@@ -56,7 +57,14 @@ export function drawStaffLines(params: {
         const ly = yTop + i * lineSpacing
         s.moveTo(LEFT_MARGIN, Math.round(ly) + 0.5)
         s.lineTo(width, Math.round(ly) + 0.5)
-        s.stroke({ width: 1, color: 0x2b3242, alpha: 0.8 })
+        s.stroke({ width: 1, color: 0x323a4d, alpha: 0.9 })
+        // subtle paper grain tint between lines to evoke staff paper
+        if (i < lines - 1) {
+            const bandTop = Math.round(ly) + 0.5
+            const bandH = Math.max(0.5, Math.round(lineSpacing) - 1)
+            s.rect(LEFT_MARGIN, bandTop, Math.max(0, width - LEFT_MARGIN), bandH)
+            s.fill({ color: 0xffffff, alpha: 0.01 })
+        }
     }
     return s
 }

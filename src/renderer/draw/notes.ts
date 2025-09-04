@@ -31,18 +31,18 @@ export function drawNoteHeadAndLine(params: {
     const centerY = yTop + radius
     const headX = x + radius
 
-    // simple duration track behind the head
+    // duration track behind the head with faint ledger ticks
     const trackY = Math.round(centerY - 1)
     const trackStart = Math.round(headX + 4)
     const trackEnd = Math.round(x + width - 2)
     if (trackEnd > trackStart) {
         const trackW = Math.max(1, trackEnd - trackStart)
-        g.rect(trackStart, trackY, trackW, 2)
-        g.fill({ color: 0x000000, alpha: 0.25 })
-        g.rect(trackStart, trackY, trackW, 2)
+        g.rect(trackStart, trackY - 1, trackW, 3)
+        g.fill({ color: 0x000000, alpha: 0.24 })
+        g.rect(trackStart, trackY - 1, trackW, 3)
         g.fill({ color, alpha: 0.35 })
         g.circle(trackEnd, centerY, 2)
-        g.fill({ color, alpha: 0.9 })
+        g.fill({ color, alpha: 0.95 })
         const days = Math.max(1, Math.round(width / Math.max(pxPerDay, 1)))
         const step = Math.max(pxPerDay, 1)
         for (let k = 1; k < days; k++) {
@@ -55,12 +55,12 @@ export function drawNoteHeadAndLine(params: {
         }
     }
 
-    // head with highlight
+    // head with glossy highlight and subtle shadow ring
     g.circle(headX, centerY, radius)
-    g.fill({ color, alpha: 0.95 })
-    g.stroke({ width: selected ? 2 : 1, color: selected ? 0xFCD34D : 0xffffff, alpha: selected ? 1 : 0.3 })
-    g.circle(headX, centerY, Math.max(2, radius - 2))
-    g.fill({ color: 0xffffff, alpha: 0.25 })
+    g.fill({ color, alpha: 0.98 })
+    g.stroke({ width: selected ? 2 : 1, color: selected ? 0xFCD34D : 0xffffff, alpha: selected ? 1 : 0.35 })
+    g.circle(headX - Math.max(1, Math.floor(radius * 0.15)), centerY - Math.max(1, Math.floor(radius * 0.15)), Math.max(2, radius - 3))
+    g.fill({ color: 0xffffff, alpha: 0.22 })
     return g
 }
 
@@ -104,8 +104,8 @@ export function drawLabelWithMast(params: {
     gBox.lineTo(boxX + pillW, labelBottom)
     gBox.lineTo(bottomLeftX, labelBottom)
     gBox.closePath()
-    gBox.fill({ color: 0x000000, alpha: 0.25 })
-    gBox.stroke({ width: 1, color: headColor, alpha: 0.7 })
+    gBox.fill({ color: 0x000000, alpha: 0.28 })
+    gBox.stroke({ width: 1, color: headColor, alpha: 0.75 })
     nodes.push(gBox)
 
     // Mast goes to top-left corner; left edge remains aligned via bottomLeftX computation

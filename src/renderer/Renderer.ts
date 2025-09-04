@@ -86,6 +86,18 @@ export class Renderer {
     }
   }
 
+  // Map time signature "N/D" to days-per-measure where the denominator D directly
+  // defines the number of days per measure. If invalid, default to 4.
+  private measureLengthDaysFromTimeSignature(sig?: string): number {
+    try {
+      const parts = (sig || '4/4').split('/')
+      const d = Math.max(1, Math.round(parseInt(parts[1] || '4', 10)))
+      return Math.max(1, d)
+    } catch {
+      return 4
+    }
+  }
+
   setViewport(v: { x: number; y: number; zoom: number }) {
     this.viewport = { ...v }
   }
@@ -143,7 +155,10 @@ export class Renderer {
     // Content background (cached meta to avoid redundant redraw)
     const bg = new Graphics()
     bg.rect(0, 0, width, Math.max(0, height))
-    bg.fill({ color: 0x0f1115, alpha: 1 })
+    bg.fill({ color: 0x0b0f14, alpha: 1 })
+    // subtle vignette edges to create depth and focus
+    bg.rect(0, 0, width, Math.max(0, height))
+    bg.fill({ color: 0x000000, alpha: 0.06 })
     this.layers.background.addChild(bg)
 
     // No internal left gutter: sidebar owns the left column; canvas starts at x=0
@@ -169,18 +184,19 @@ export class Renderer {
       yCursor += scaledStaffSpacing
     }
 
-    // Measure markers (paired bars) per staff
+    // Measure markers (paired bars) per staff, based on each staff's time signature
     try {
-      const stepDays = 7
       const offsetDays = 0
       const pairSpacingPx = 4
       const thickW = 3
       const thinW = 1
       const leftWorldDays = vx + (0 - LEFT_MARGIN) / Math.max(pxPerDay, EPS)
       const rightWorldDays = vx + (width - LEFT_MARGIN) / Math.max(pxPerDay, EPS)
-      const firstK = Math.floor((leftWorldDays - offsetDays) / stepDays) - 1
-      const lastK = Math.ceil((rightWorldDays - offsetDays) / stepDays) + 1
       for (const sb of this.metrics.staffBlocks) {
+        const staff = (this.data.staffs || []).find(s => s.id === sb.id)
+        const stepDays = this.measureLengthDaysFromTimeSignature(staff?.timeSignature)
+        const firstK = Math.floor((leftWorldDays - offsetDays) / Math.max(stepDays, EPS)) - 1
+        const lastK = Math.ceil((rightWorldDays - offsetDays) / Math.max(stepDays, EPS)) + 1
         for (let k = firstK; k <= lastK; k++) {
           const dayIndex = k * stepDays + offsetDays
           const xScreen = LEFT_MARGIN + (dayIndex - vx) * pxPerDay
@@ -280,7 +296,7 @@ export class Renderer {
       const xh = Math.round(this.hoverX) + 0.5
       gHover.moveTo(xh, 0)
       gHover.lineTo(xh, height)
-      gHover.stroke({ width: 1, color: 0xffffff, alpha: 0.12 })
+      gHover.stroke({ width: 1, color: 0xffffff, alpha: 0.16 })
       this.layers.background.addChild(gHover)
     }
     if (this.hoverY != null && this.metrics.staffBlocks.length > 0) {
@@ -289,7 +305,7 @@ export class Renderer {
       if (sb) {
         const r = new Graphics()
         r.rect(-100000, Math.round(sb.yTop), 200000, Math.max(1, Math.round(sb.yBottom - sb.yTop)))
-        r.fill({ color: 0xffffff, alpha: 0.05 })
+        r.fill({ color: 0xffffff, alpha: 0.06 })
         this.layers.background.addChild(r)
       }
     }
