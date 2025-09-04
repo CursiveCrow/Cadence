@@ -84,8 +84,15 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
     const rect = (e.target as HTMLCanvasElement).getBoundingClientRect()
     const localX = e.clientX - rect.left
     const localY = e.clientY - rect.top
-    try { rendererRef.current?.setHover?.(localX, localY); rendererRef.current?.render() } catch { }
     const op = taskOpRef.current
+    // Only update hover + schedule a full render when not dragging/resizing/creating deps
+    if (op.mode === 'none') {
+      try {
+        const r = rendererRef.current
+        r?.setHover?.(localX, localY)
+        if (r) requestAnimationFrame(() => { try { r.render() } catch { } })
+      } catch { }
+    }
     const r = rendererRef.current
     // hover handled in renderer via setHover
     if (op.mode === 'dep' && r) {
@@ -149,11 +156,11 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
     const dx = e.clientX - drag.startX
     const dy = e.clientY - drag.startY
     const ppd = pxPerDay(drag.startV.zoom)
-    // use fractional viewport values for smooth panning; avoid rounding
-    const newX = Math.max(0, (drag.startV.x - dx / ppd))
+    const rawX = (drag.startV.x - dx / ppd)
+    const newX = Math.max(0, Math.round(rawX * ppd) / ppd)
     const newY = Math.max(0, (drag.startV.y - dy))
     if (newX !== viewportRef.current.x || newY !== viewportRef.current.y) {
-      onViewportChange({ x: newX, y: newY, zoom: drag.startV.zoom })
+      requestAnimationFrame(() => onViewportChange({ x: newX, y: newY, zoom: drag.startV.zoom }))
     }
   }
 
@@ -283,6 +290,7 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
+    let rafId: number | null = null
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       const vp = viewportRef.current
@@ -296,21 +304,25 @@ const TimelineCanvas: React.FC<Props> = ({ viewport, staffs, tasks, dependencies
         const localX = e.clientX - rect.left
         const anchorPxFromGrid = Math.max(0, localX - TIMELINE.LEFT_MARGIN)
         const worldAtAnchor = vp.x + anchorPxFromGrid / ppd0
-        const newX = Math.max(0, (worldAtAnchor - anchorPxFromGrid / ppd1))
-        onViewportChange({ x: newX, y: vp.y, zoom: z1 })
+        const rawX = (worldAtAnchor - anchorPxFromGrid / ppd1)
+        const newX = Math.max(0, Math.round(rawX * ppd1) / ppd1)
+        if (rafId) cancelAnimationFrame(rafId)
+        rafId = requestAnimationFrame(() => onViewportChange({ x: newX, y: vp.y, zoom: z1 }))
       } else if (e.shiftKey) {
         const factor = Math.exp(-e.deltaY * 0.001)
         const newS = Math.max(0.5, Math.min(3, (verticalScale || 1) * factor))
         onVerticalScaleChange?.(newS)
       } else {
         const ppd = pxPerDay(vp.zoom)
-        const newX = Math.max(0, (vp.x + e.deltaX / ppd))
+        const rawX = (vp.x + e.deltaX / ppd)
+        const newX = Math.max(0, Math.round(rawX * ppd) / ppd)
         const newY = Math.max(0, (vp.y + e.deltaY))
-        onViewportChange({ x: newX, y: newY, zoom: vp.zoom })
+        if (rafId) cancelAnimationFrame(rafId)
+        rafId = requestAnimationFrame(() => onViewportChange({ x: newX, y: newY, zoom: vp.zoom }))
       }
     }
     el.addEventListener('wheel', onWheel, { passive: false })
-    return () => { el.removeEventListener('wheel', onWheel as any) }
+    return () => { el.removeEventListener('wheel', onWheel as any); if (rafId) cancelAnimationFrame(rafId) }
   }, [onViewportChange, verticalScale, onVerticalScaleChange])
 
   const onDoubleClick: React.MouseEventHandler<HTMLCanvasElement> = (e) => {

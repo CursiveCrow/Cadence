@@ -27,7 +27,7 @@ export function drawNoteHeadAndLine(params: {
 }): Graphics {
     const { x, yTop, width, height, color, selected, pxPerDay } = params
     const g = new Graphics()
-    const radius = Math.max(4, Math.floor(height / 2))
+    const radius = Math.max(2, Math.floor(height / 2))
     const centerY = yTop + radius
     const headX = x + radius
 
@@ -77,8 +77,8 @@ export function drawLabelWithMast(params: {
     const padY = 2
     const pillW = Math.round(title.width + padX * 2)
     const pillH = Math.round(title.height + padY * 2)
-    const desiredX = Math.round(xLeft + h + 12)
-    const desiredY = Math.round(yTop - pillH - 8)
+    const desiredX = Math.round(xLeft + h + 10)
+    const desiredY = Math.round(yTop - pillH - .5)
     const labelX = Math.max(0 + 2, Math.min(width - pillW - 2, desiredX))
     const labelY = Math.max(2, Math.min(height - pillH - 2, desiredY))
     const fx0 = Math.round(labelX - padX)
@@ -86,7 +86,7 @@ export function drawLabelWithMast(params: {
     const labelBottom = labelTop + pillH
 
     const stemStartX = Math.round(xLeft + h - 1)
-    const stemStartY = Math.round(yTop + h / 2 - Math.max(3, Math.floor(h * 0.2)))
+    const stemStartY = Math.round(yTop + h / 2 - Math.max(2, Math.floor(h * 0.15)))
     const vX = fx0 - stemStartX
     const vY = labelTop - stemStartY
     let bottomLeftX = fx0

@@ -36,6 +36,13 @@ export class Renderer {
     this.initPixi()
   }
 
+  // Simple, explicit note height calculator. Uses staff line spacing; clamps to sane bounds.
+  private computeNoteHeight(lineSpacing: number): number {
+    const raw = Math.round(lineSpacing * 0.8) // 80% of spacing feels balanced for circular head
+    const h = Math.max(12, Math.min(28, raw))
+    return h
+  }
+
   private async initPixi() {
     try {
       const rect = this.canvas.getBoundingClientRect()
@@ -98,15 +105,30 @@ export class Renderer {
 
   private clearContainers() {
     if (!this.layers) return
-    try { this.layers.background.removeChildren() } catch { }
-    try { this.layers.tasks.removeChildren() } catch { }
-    try { this.layers.dependencies.removeChildren() } catch { }
+    const destroyAll = (c: Container) => {
+      try {
+        const removed = c.removeChildren()
+        for (const ch of removed) {
+          try { (ch as any).destroy?.({ children: true }) } catch { }
+        }
+      } catch { }
+    }
+    destroyAll(this.layers.background)
+    destroyAll(this.layers.tasks)
+    destroyAll(this.layers.dependencies)
+    // Invalidate cached graphics that may have been destroyed by cleanup
+    this.previewG = null
+    this.depPreviewG = null
+    this.tooltipBox = null
+    this.tooltipStem = null
+    this.tooltipTitle = null
+    this.tooltipInfo = null
   }
 
   render() {
     if (!this.app || !this.layers || !this.ready) return
 
-    // Do not resize renderer every frame; handled by window resize hook
+    // Throttle re-rendering to animation frames to avoid event storm freezes
     this.clearContainers()
 
     const width = Math.max(1, this.app.screen.width)
@@ -117,6 +139,7 @@ export class Renderer {
     const HEADER = computeDateHeaderHeight(zoom || 1)
     this.metrics = { pxPerDay, staffBlocks: [] }
     this.layout = []
+    // Quantize the world position to whole pixels to avoid subpixel blur during panning
     const align = computeViewportAlignment({ LEFT_MARGIN, DAY_WIDTH: pxPerDay, TOP_MARGIN: 0, STAFF_SPACING: 0, STAFF_LINE_SPACING: 0 } as any, x)
     const vx = align.viewportXDaysQuantized
 
@@ -193,7 +216,7 @@ export class Renderer {
       if (!staffBlock) continue
       const lineStep = staffBlock.lineSpacing / 2
       const centerY = staffBlock.yTop + task.staffLine * lineStep
-      const h = Math.max(22, Math.min(15, Math.floor(lineStep * 1.5)))
+      const h = this.computeNoteHeight(staffBlock.lineSpacing)
       const yTop = centerY - h / 2
 
       // compute x from startDate relative to PROJECT_START_DATE
@@ -384,7 +407,8 @@ export class Renderer {
 
   drawDragPreview(x: number, y: number, w: number, h: number) {
     if (!this.layers) return
-    const g = this.previewG || new Graphics()
+    const reused = this.previewG && !(this.previewG as any)._destroyed
+    const g = reused ? this.previewG! : new Graphics()
     g.clear()
     const px = Math.round(x)
     const py = Math.round(y)
@@ -413,16 +437,15 @@ export class Renderer {
   }
 
   clearPreview() {
-    if (this.previewG && this.layers && this.previewG.parent) {
-      try { this.previewG.parent.removeChild(this.previewG) } catch { }
-      try { this.previewG.destroy() } catch { }
-    }
-    this.previewG = null
+    // Intentionally keep the preview graphic so the ghost remains visible until next draw
+    // We just clear its contents to avoid flicker when pointer stops briefly.
+    try { this.previewG?.clear() } catch { }
   }
 
   drawDependencyPreview(src: { x: number; y: number; w: number; h: number }, dstPoint: { x: number; y: number }) {
     if (!this.layers) return
-    const g = this.depPreviewG || new Graphics()
+    const reused = this.depPreviewG && !(this.depPreviewG as any)._destroyed
+    const g = reused ? this.depPreviewG! : new Graphics()
     g.clear()
     const x0 = src.x + src.w
     const y0 = src.y + src.h / 2
