@@ -8,6 +8,7 @@ You are an LLM working on the Cadence app. Your top priority is to preserve the 
   - `src/main` — Electron main process (direct Electron API; minimal IPC).
   - `src/preload` — Preload script (contextIsolation on; tiny surface).
   - `src/app` — React v18.2.0 app (components, hooks, store).
+  - `src/app/styles` — centralized styles and theming (tokens.css, base.css, utilities.css, layout.css, date-header.css, sidebar.css, task-details.css, modals.css, staff-manager.css).
   - `src/renderer` — PixiJS v8.13 renderer (single class; no extra layers).
   - `src/types` — domain types for Project/Task/Staff/etc.
   - `src/config` & `src/utils` — small shared helpers only.
@@ -30,6 +31,7 @@ You are an LLM working on the Cadence app. Your top priority is to preserve the 
 - Do not change tsconfig path aliases or Vite root without approval.
 - Do not introduce non-existent assets in HTML (e.g., `/assets/icon.png`).
 - Do not add new top‑level packages or monorepo structure.
+- Do not inline styles in components; use the centralized styles in `src/app/styles`.
 
 ## Strong Preferences
 
