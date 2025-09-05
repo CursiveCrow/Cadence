@@ -1,0 +1,212 @@
+.sidebar {
+  /* Defaults for wet-ink sheen variables; JS updates these per pointer */
+  --sheen-x: 140px;
+  --sheen-y: 100px;
+  --sheen-alpha-1: 0.02; /* extremely subtle core */
+  --sheen-alpha-2: 0.008; /* extremely soft halo */
+  --sheen-rot: 18deg; /* rotation for anisotropic streak */
+  --streak-alpha: 0.006; /* near imperceptible streak */
+  --edge-alpha: 0.08; /* rim highlight intensity */
+  --sheen-peak: 0.06; /* tiny glint peak for wet-ink look */
+  --absorb-alpha: 0.03; /* dark absorption ring around glint */
+  --glint-size: 10px; /* dynamic glint size */
+  --glint-offset-x: 10px;
+  --glint-offset-y: 12px;
+  --lobe-w: 60px; /* anisotropic lobe width */
+  --lobe-h: 36px; /* anisotropic lobe height */
+  --lobe-offset-x: 8px;
+  --lobe-offset-y: 4px;
+  --depth-size: 400px;
+  --depth-alpha: 0.08;
+  --lag-x: 140px;
+  --lag-y: 100px;
+  --lag-alpha: 0.04;
+  /* Removed static gradient fill; keep a subtle translucent base for glass */
+  background: rgba(5, 5, 5, 0.4);
+  border-right: 0; /* divider is drawn by .vertical-resizer */
+  position: relative;
+  z-index: 3;
+  box-sizing: border-box;
+  /* subtle inner highlights for glassy surface */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+  overflow: visible;
+  -webkit-backdrop-filter: blur(8px) saturate(115%);
+  backdrop-filter: blur(8px) saturate(115%);
+  /* paper/ink base: subtle absorption ring + faint micro-texture noise */
+  background-image: radial-gradient(
+      circle calc(var(--depth-size) * 1.2) at var(--lag-x) var(--lag-y),
+      rgba(0, 0, 0, 0) 20%,
+      rgba(0, 0, 0, var(--lag-alpha)) 100%
+    ),
+    radial-gradient(
+      circle var(--depth-size) at var(--sheen-x) var(--sheen-y),
+      rgba(0, 0, 0, 0) 10%,
+      rgba(0, 0, 0, var(--depth-alpha)) 100%
+    ),
+    radial-gradient(
+      circle 120px at calc(var(--sheen-x) + var(--glint-offset-x))
+        calc(var(--sheen-y) + var(--glint-offset-y)),
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, var(--absorb-alpha)) 45%,
+      rgba(0, 0, 0, 0) 72%
+    ),
+    radial-gradient(
+      0.8px 0.8px at 25% 30%,
+      rgba(255, 255, 255, 0.015) 0,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    radial-gradient(
+      0.8px 0.8px at 60% 65%,
+      rgba(255, 255, 255, 0.012) 0,
+      rgba(255, 255, 255, 0) 100%
+    );
+  background-blend-mode: multiply, multiply, multiply, screen, screen;
+}
+
+/* Sidebar header row */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  margin-top: 12px;
+  margin-bottom: 8px;
+  gap: 6px;
+  padding-right: 0;
+  justify-content: flex-start;
+}
+
+/* Sidebar labels overlay container */
+.sidebar-labels-layer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 1;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* Single label row */
+.sidebar-label-item {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 12px;
+  justify-content: flex-end;
+}
+
+.sidebar-label-name {
+  color: #bcc3d6;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.sidebar-controls {
+  margin-left: 8px;
+}
+
+.ui-pointer-auto {
+  pointer-events: auto;
+}
+
+/* Wet-ink sheen overlay that follows the cursor as a light source */
+.sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Wet-ink speculars: tiny glint, rim highlight, elliptical lobes (meniscus), large falloff */
+  background: radial-gradient(
+      circle var(--glint-size) at calc(var(--sheen-x) + var(--glint-offset-x))
+        calc(var(--sheen-y) + var(--glint-offset-y)),
+      rgba(220, 190, 255, var(--sheen-peak)) 0%,
+      rgba(220, 190, 255, 0) 65%
+    ),
+    radial-gradient(
+      2px 140px at calc(100% - 1px) var(--sheen-y),
+      rgba(220, 190, 255, var(--edge-peak, var(--edge-alpha))) 0%,
+      rgba(220, 190, 255, var(--edge-peak, var(--edge-alpha))) 4%,
+      rgba(220, 190, 255, var(--edge-alpha)) 10%,
+      rgba(220, 190, 255, 0) 96%
+    ),
+    radial-gradient(
+      ellipse var(--lobe-w) var(--lobe-h) at calc(var(--sheen-x) + var(--lobe-offset-x))
+        calc(var(--sheen-y) + var(--lobe-offset-y)),
+      rgba(220, 190, 255, var(--sheen-alpha-1)) 0%,
+      rgba(220, 190, 255, 0) 88%
+    ),
+    radial-gradient(
+      ellipse calc(var(--lobe-w) * 0.75) calc(var(--lobe-h) * 0.5) at
+        calc(var(--sheen-x) + var(--lobe-offset-x) + 10px)
+        calc(var(--sheen-y) + var(--lobe-offset-y) + 6px),
+      rgba(220, 190, 255, calc(var(--sheen-alpha-1) * 0.42)) 0%,
+      rgba(220, 190, 255, 0) 86%
+    ),
+    radial-gradient(
+      circle 600px at calc(var(--sheen-x) + 10px) calc(var(--sheen-y) + 16px),
+      rgba(220, 190, 255, var(--sheen-alpha-2)) 0%,
+      rgba(220, 190, 255, 0) 99%
+    );
+  mix-blend-mode: screen; /* behave like light on a glossy surface */
+  transition: opacity 160ms ease-out, background 0.12s ease-out;
+  opacity: 1; /* always present, intensity controlled by CSS vars */
+}
+
+/* Slim, rotated streak to mimic anisotropic wet-ink speculars */
+.sidebar::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  left: var(--sheen-x);
+  top: var(--sheen-y);
+  width: 220px;
+  height: 70px;
+  transform: translate(-50%, -50%) rotate(var(--sheen-rot));
+  border-radius: 70px;
+  /* multi-stop streak with a bright inner line and soft shoulders
+     plus a faint, slightly offset secondary streak for curvature */
+  background: linear-gradient(
+      90deg,
+      rgba(220, 190, 255, 0) 0%,
+      rgba(220, 190, 255, calc(var(--streak-alpha) * 0.7)) 22%,
+      rgba(220, 190, 255, calc(var(--streak-alpha) * 1.6)) 48%,
+      rgba(220, 190, 255, calc(var(--streak-alpha) * 0.7)) 78%,
+      rgba(220, 190, 255, 0) 100%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(220, 190, 255, 0) 0%,
+      rgba(220, 190, 255, calc(var(--streak-alpha) * 0.35)) 24%,
+      rgba(220, 190, 255, calc(var(--streak-alpha) * 0.9)) 50%,
+      rgba(220, 190, 255, calc(var(--streak-alpha) * 0.35)) 76%,
+      rgba(220, 190, 255, 0) 100%
+    );
+  background-repeat: no-repeat, no-repeat;
+  background-size: 100% 100%, 100% 100%;
+  background-position: 0 0, 6px 4px;
+  filter: blur(14px);
+  mix-blend-mode: color-dodge;
+  opacity: 1;
+  will-change: transform, left, top;
+  transition: left 0.12s ease-out, top 0.12s ease-out, transform 0.12s ease-out,
+    background 0.12s ease-out;
+}
+
+/* Resizer sits on top of the sidebar border without creating a visible gap */
+.vertical-resizer {
+  position: absolute;
+  width: 10px; /* 5px overlaps sidebar, 5px overlaps canvas; center is boundary */
+  cursor: col-resize;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  border-left: 0; /* transparent handle */
+  background: transparent;
+  outline: none;
+  /* no own shadow; shadow is drawn via ::after to the right */
+  box-shadow: none;
+}

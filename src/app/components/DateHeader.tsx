@@ -10,8 +10,6 @@ interface DateHeaderProps {
   onZoomChange?: (newZoom: number, anchorLocalX: number) => void
 }
 
-const bandStyle: React.CSSProperties = { position: 'absolute', left: 0, right: 0 }
-
 export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, leftMargin, dayWidth, onZoomChange }) => {
   const zoom = viewport.zoom || 1
   const containerRef = useRef<HTMLDivElement>(null)
@@ -52,33 +50,38 @@ export const DateHeader: React.FC<DateHeaderProps> = ({ viewport, projectStart, 
   const hourTop = bandH + bandH * hoursProgress
 
   return (
-    <div ref={containerRef} className="ui-datehdr" style={{ position: 'relative', height, userSelect: 'none', overflow: 'hidden' }} onPointerDown={onPointerDown}>
+    <div
+      ref={containerRef}
+      className="ui-datehdr"
+      style={{ position: 'absolute', left: 0, right: 0, top: 0, height }}
+      onPointerDown={onPointerDown}
+    >
       {/* Months band */}
-      <div style={{ ...bandStyle, top: monthTop }}>
+      <div className="ui-datehdr-layer" style={{ top: monthTop }}>
         {vm.monthLabels.map((d, i) => (
-          <div key={`m-${i}`} className="ui-datehdr-label ui-datehdr-month" style={{ position: 'absolute', left: d.x + 6, top: 6, fontWeight: 600 }}>{d.text}</div>
+          <div key={`m-${i}`} className="ui-datehdr-label ui-datehdr-month" style={{ left: d.x + 6 }}>{d.text}</div>
         ))}
         {vm.monthTickXs.map((x, i) => (
           <div key={`mt-${i}`} className="ui-datehdr-tick ui-datehdr-tick-strong" style={{ left: x }} />
         ))}
-        <div className="ui-datehdr-sep" style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }} />
+        <div className="ui-datehdr-sep" />
       </div>
 
       {/* Days band */}
-      <div style={{ ...bandStyle, top: dayTop, opacity: daysProgress }}>
+      <div className="ui-datehdr-layer" style={{ top: dayTop, opacity: daysProgress }}>
         {vm.dayLabels.map((d, i) => (
-          <div key={`d-${i}`} className="ui-datehdr-label ui-datehdr-day" style={{ position: 'absolute', left: d.x + 5, top: 0 }}>{d.text}</div>
+          <div key={`d-${i}`} className="ui-datehdr-label ui-datehdr-day" style={{ left: d.x + 5 }}>{d.text}</div>
         ))}
         {vm.dayTickXs.map((x, i) => (
           <div key={`dt-${i}`} className="ui-datehdr-tick" style={{ left: x }} />
         ))}
-        <div className="ui-datehdr-sep" style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }} />
+        <div className="ui-datehdr-sep" />
       </div>
 
       {/* Hours band */}
-      <div style={{ ...bandStyle, top: hourTop, opacity: hoursProgress }}>
+      <div className="ui-datehdr-layer" style={{ top: hourTop, opacity: hoursProgress }}>
         {vm.hourLabels.map((d, i) => (
-          <div key={`h-${i}`} className="ui-datehdr-label ui-datehdr-hour" style={{ position: 'absolute', left: d.x, top: 0 }}>{d.text}</div>
+          <div key={`h-${i}`} className="ui-datehdr-label ui-datehdr-hour" style={{ left: d.x }}>{d.text}</div>
         ))}
         {vm.hourTickXs.map((x, i) => (
           <div key={`ht-${i}`} className="ui-datehdr-tick" style={{ left: x }} />

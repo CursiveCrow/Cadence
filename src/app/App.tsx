@@ -53,10 +53,10 @@ const App: React.FC = () => {
   return (
     <div className="app-root">
       <div className="header ui-border-b ui-px-3 ui-py-2">
-        <div className="ui-flex ui-items-center ui-justify-between ui-gap-3" style={{ width: '100%' }}>
-          <div className="ui-flex ui-items-center ui-gap-3" style={{ minWidth: 0 }}>
+        <div className="ui-flex ui-items-center ui-justify-between ui-gap-3 ui-w-full">
+          <div className="ui-flex ui-items-center ui-gap-3 ui-min-w-0">
             <span className="ui-badge">Cadence</span>
-            <div className="ui-text-muted" style={{ opacity: 0.9, whiteSpace: 'nowrap' }}>Simplified Architecture</div>
+            <div className="ui-text-muted ui-opacity-90 ui-nowrap">Simplified Architecture</div>
           </div>
           <div className="ui-flex ui-items-center ui-gap-3">
             <select className="ui-input ui-text-sm" value={theme} onChange={(e) => setTheme(e.target.value as any)} title="Theme">
@@ -86,8 +86,8 @@ const App: React.FC = () => {
             dispatch({ type: 'tasks/deleteTask', payload: id })
           }
         }
-      }} tabIndex={0} style={{ position: 'relative' }}>
-        <aside className="sidebar" style={{ width: Math.round(sidebarWidth), height: '100%', boxSizing: 'border-box' as any }}>
+      }} tabIndex={0}>
+        <aside className="sidebar ui-h-full ui-box-border" style={{ width: Math.round(sidebarWidth) }}>
           <Sidebar
             staffs={staffs}
             viewport={viewport}
@@ -102,27 +102,19 @@ const App: React.FC = () => {
             onChangeTimeSignature={(id, value) => dispatch({ type: 'staffs/updateStaff', payload: { id, updates: { timeSignature: value } } })}
           />
         </aside>
-        <div
-          className="vertical-resizer"
-          ref={resizerRef as any}
-          onMouseDown={beginResize}
-          onDoubleClick={resetSidebarWidth}
-          style={{ position: 'absolute', left: Math.round(sidebarWidth), top: 0, bottom: 0 }}
-        />
+        <div className="vertical-resizer" ref={resizerRef as any} onMouseDown={beginResize} onDoubleClick={resetSidebarWidth} style={{ left: Math.round(sidebarWidth - 5), right: 'auto' }} />
         <main className="main">
-          {/* Date header sits within the main area so it does not overlap the sidebar */}
-          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, zIndex: 2 }}>
-            <DateHeader
-              viewport={viewport}
-              projectStart={PROJECT_START_DATE}
-              leftMargin={TIMELINE_CONFIG.LEFT_MARGIN}
-              dayWidth={TIMELINE_CONFIG.DAY_WIDTH}
-              onZoomChange={(z, anchorLocalX) => {
-                const next = applyAnchorZoom(viewport, z, anchorLocalX, TIMELINE_CONFIG.LEFT_MARGIN, TIMELINE_CONFIG.DAY_WIDTH)
-                dispatch(setViewport(next))
-              }}
-            />
-          </div>
+          {/* Date header self-positions absolutely at the top of main */}
+          <DateHeader
+            viewport={viewport}
+            projectStart={PROJECT_START_DATE}
+            leftMargin={TIMELINE_CONFIG.LEFT_MARGIN}
+            dayWidth={TIMELINE_CONFIG.DAY_WIDTH}
+            onZoomChange={(z, anchorLocalX) => {
+              const next = applyAnchorZoom(viewport, z, anchorLocalX, TIMELINE_CONFIG.LEFT_MARGIN, TIMELINE_CONFIG.DAY_WIDTH)
+              dispatch(setViewport(next))
+            }}
+          />
           <TimelineCanvas
             viewport={viewport}
             staffs={staffs}

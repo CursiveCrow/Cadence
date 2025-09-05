@@ -1,0 +1,14 @@
+.content {
+  position: relative;
+  background: var(--ui-color-bg);
+}
+
+.main {
+  position: relative;
+  z-index: 1;
+}
+
+.canvas {
+  z-index: 0;
+  position: relative;
+}

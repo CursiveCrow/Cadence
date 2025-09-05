@@ -12,7 +12,7 @@ interface TaskDetailsProps {
 
 export const TaskDetails: React.FC<TaskDetailsProps> = ({ task, staffs, selectionCount, position, onClose, onUpdateTask }) => {
   const field = (label: string, input: React.ReactNode) => (
-    <div style={{ display: 'grid', gridTemplateColumns: '96px 1fr', gap: 8, alignItems: 'center' }}>
+    <div className="td-field">
       <div className="ui-text-sm ui-text-muted">{label}</div>
       <div>{input}</div>
     </div>
@@ -25,7 +25,7 @@ export const TaskDetails: React.FC<TaskDetailsProps> = ({ task, staffs, selectio
   )
   return (
     <div style={{ position: 'absolute', left: Math.round(position.x), top: Math.round(position.y), zIndex: 1000 }}>
-      <div className="ui-surface-1 ui-shadow ui-rounded-lg ui-p-3" style={{ width: 340 }}>
+      <div className="ui-surface-1 ui-shadow ui-rounded-lg ui-p-3 ui-popover td-popover">
         <div className="ui-flex ui-items-center ui-justify-between ui-mb-2">
           <div className="ui-flex ui-items-center ui-gap-2">
             <strong className="ui-text">Task</strong>
@@ -51,7 +51,7 @@ export const TaskDetails: React.FC<TaskDetailsProps> = ({ task, staffs, selectio
           </select>
         ))}
         {field('Line', <input className="ui-input" type="number" min={0} value={task.staffLine} onChange={(e) => onUpdateTask({ staffLine: Math.max(0, parseInt(e.target.value, 10) || task.staffLine) })} />)}
-        <div className="ui-text-xs ui-text-muted" style={{ marginTop: 6 }}>Selected: {selectionCount}</div>
+        <div className="ui-text-xs ui-text-muted td-meta">Selected: {selectionCount}</div>
       </div>
     </div>
   )

@@ -1,0 +1,114 @@
+/* Date Header styles */
+.ui-datehdr {
+  background: radial-gradient(
+      120% 80% at 50% 0%,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0) 60%
+    ),
+    linear-gradient(180deg, rgba(10, 9, 8, 0.95) 0%, rgba(12, 11, 10, 0.9) 100%);
+  backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 6px 18px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  user-select: none;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.ui-datehdr::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ui-color-primary) 20%,
+    var(--ui-color-accent) 50%,
+    var(--ui-color-primary) 80%,
+    transparent 100%
+  );
+  opacity: 0.3;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateX(-20%);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateX(20%);
+  }
+}
+
+.ui-datehdr-label {
+  position: absolute;
+  color: var(--ui-color-text);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  transition: color var(--ui-transition-fast);
+}
+.ui-datehdr-label:hover {
+  color: var(--ui-color-text-soft);
+}
+.ui-datehdr-month {
+  opacity: 1;
+  font-weight: 600;
+  top: 6px;
+}
+.ui-datehdr-day {
+  opacity: 0.85;
+}
+.ui-datehdr-hour {
+  opacity: 0.7;
+  font-size: 10px;
+}
+.ui-datehdr-tick {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent 0%, var(--ui-color-border) 50%, transparent 100%);
+  opacity: 0.4;
+}
+.ui-datehdr-tick-strong {
+  opacity: 0.7;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--ui-color-primary) 50%,
+    transparent 100%
+  );
+  width: 2px;
+}
+.ui-datehdr-sep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ui-color-border) 10%,
+    var(--ui-color-border) 90%,
+    transparent 100%
+  );
+  opacity: 0.6;
+}
+.ui-datehdr-layer {
+  position: absolute;
+  left: 0;
+  right: 0;
+}

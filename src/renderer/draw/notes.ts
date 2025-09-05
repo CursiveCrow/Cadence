@@ -12,7 +12,7 @@ export function statusToColor(status: string): number {
             return 0x6B7280 // Gray
         case 'not_started':
         default:
-            return 0xA855F7 // Purple (musical note default)
+            return 0xE5E7EB // Soft white-grey for unstarted
     }
 }
 
@@ -41,8 +41,9 @@ export function drawNoteHeadAndLine(params: {
     selected?: boolean
     pxPerDay: number
     status?: string
+    hovered?: boolean
 }): Graphics {
-    const { x, yTop, width, height, color, selected, pxPerDay, status = 'not_started' } = params
+    const { x, yTop, width, height, color, selected, pxPerDay, status = 'not_started', hovered } = params
     const g = new Graphics()
     const radius = Math.max(7, Math.floor(height * 0.45)) // Better proportions
     const centerY = yTop + height / 2
@@ -63,11 +64,11 @@ export function drawNoteHeadAndLine(params: {
 
         // Main duration track
         g.rect(trackStart, trackY - 1, trackW, 2)
-        g.fill({ color, alpha: 0.5 })
+        g.fill({ color, alpha: hovered ? 0.65 : 0.5 })
 
         // Track highlight
         g.rect(trackStart, trackY - 1, Math.min(trackW * 0.3, 20), 1)
-        g.fill({ color: 0xffffff, alpha: 0.3 })
+        g.fill({ color: 0xffffff, alpha: hovered ? 0.45 : 0.3 })
 
         // End marker
         g.circle(trackEnd, centerY, 2)
@@ -88,42 +89,30 @@ export function drawNoteHeadAndLine(params: {
 
     // Note head - clean and musical
 
-    // Selection glow effect
-    if (selected) {
-        // Outer glow
+    // Selection/hover glow effect (matte, ink-like)
+    if (selected || hovered) {
         for (let i = 3; i > 0; i--) {
             g.circle(headX, centerY, radius + i * 2)
-            g.fill({ color: 0xFACC15, alpha: 0.08 * (4 - i) })
+            g.fill({ color: selected ? 0xFACC15 : 0xC084FC, alpha: (selected ? 0.05 : 0.04) * (4 - i) })
         }
     }
 
-    // Drop shadow for depth
-    g.circle(headX + 1, centerY + 1, radius)
-    g.fill({ color: 0x000000, alpha: 0.25 })
+    // Very soft ink feathering instead of shadow
+    g.circle(headX, centerY, radius + 1)
+    g.fill({ color, alpha: 0.08 })
 
     // Main note head - perfectly round
     g.circle(headX, centerY, radius)
     g.fill({ color, alpha: 1 })
 
-    // Inner gradient for dimension
-    const gradientRadius = radius * 0.8
-    g.circle(headX, centerY, gradientRadius)
-    g.fill({ color, alpha: 0.9 })
+    // Matte finish: remove specular highlights for ink-on-paper look
 
-    // Top highlight for glossiness
-    g.ellipse(headX - radius * 0.25, centerY - radius * 0.35, radius * 0.5, radius * 0.35)
-    g.fill({ color: 0xffffff, alpha: 0.4 })
-
-    // Smaller inner highlight
-    g.circle(headX - radius * 0.3, centerY - radius * 0.3, radius * 0.2)
-    g.fill({ color: 0xffffff, alpha: 0.6 })
-
-    // Clean border
+    // Clean border (slightly stronger to emulate ink edge)
     g.circle(headX, centerY, radius)
     g.stroke({
-        width: selected ? 2 : 1,
-        color: selected ? 0xFACC15 : 0x000000,
-        alpha: selected ? 0.9 : 0.2
+        width: selected ? 2 : (hovered ? 1.75 : 1.25),
+        color: selected ? 0xFACC15 : (hovered ? 0xC084FC : 0x000000),
+        alpha: selected ? 0.9 : (hovered ? 0.55 : 0.22)
     })
 
     // Status indicator dot (subtle)
@@ -150,8 +139,10 @@ export function drawLabelWithMast(params: {
     headColor: number
     width: number
     height: number
+    selected?: boolean
+    hovered?: boolean
 }): { nodes: (Graphics | Text)[]; box: { x: number; y: number; w: number; h: number } } {
-    const { xLeft, yTop, h, text, headColor, width, height } = params
+    const { xLeft, yTop, h, text, headColor, width, height, selected, hovered } = params
     const nodes: (Graphics | Text)[] = []
     const title = new Text({ text, style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 10, fill: headColor } })
     const padX = 6
@@ -182,19 +173,25 @@ export function drawLabelWithMast(params: {
     gBox.lineTo(boxX + pillW, labelBottom)
     gBox.lineTo(bottomLeftX, labelBottom)
     gBox.closePath()
-    gBox.fill({ color: 0x000000, alpha: 0.28 })
-    gBox.stroke({ width: 1, color: headColor, alpha: 0.75 })
+    gBox.fill({ color: 0x000000, alpha: hovered ? 0.35 : 0.28 })
+    gBox.stroke({ width: selected ? 2 : 1, color: headColor, alpha: selected ? 0.95 : (hovered ? 0.85 : 0.75) })
+    // top highlight
+    gBox.rect(boxX + 1, labelTop + 1, pillW - 2, 1)
+    gBox.fill({ color: 0xffffff, alpha: hovered ? 0.25 : 0.15 })
     nodes.push(gBox)
 
     // Mast goes to top-left corner; left edge remains aligned via bottomLeftX computation
     const mast = new Graphics()
     mast.moveTo(stemStartX, stemStartY)
     mast.lineTo(boxX, labelTop)
-    mast.stroke({ width: 2, color: headColor, alpha: 0.95 })
+    mast.stroke({ width: selected ? 3 : (hovered ? 2.5 : 2), color: headColor, alpha: 0.95 })
     nodes.push(mast)
 
     title.x = Math.round(labelX)
     title.y = Math.round(labelY)
+    if (hovered || selected) {
+        ; (title.style as any).fill = 0xffffff
+    }
     nodes.push(title)
 
     return { nodes, box: { x: boxX, y: boxY, w: pillW, h: pillH } }

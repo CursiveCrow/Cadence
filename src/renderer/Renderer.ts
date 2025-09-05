@@ -86,6 +86,27 @@ export class Renderer {
     }
   }
 
+  // Resolve a CSS variable color to a numeric hex for Pixi fills
+  private cssVarColorToHex(varName: string, fallback: number): number {
+    try {
+      const v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+      if (!v) return fallback
+      if (v.startsWith('#')) {
+        const hex = v.slice(1)
+        const n = parseInt(hex, 16)
+        if (!Number.isNaN(n)) return n
+      }
+      const m = v.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
+      if (m) {
+        const r = Math.max(0, Math.min(255, parseInt(m[1]!, 10)))
+        const g = Math.max(0, Math.min(255, parseInt(m[2]!, 10)))
+        const b = Math.max(0, Math.min(255, parseInt(m[3]!, 10)))
+        return (r << 16) | (g << 8) | b
+      }
+    } catch { }
+    return fallback
+  }
+
   // Map time signature "N/D" to days-per-measure where the denominator D directly
   // defines the number of days per measure. If invalid, default to 4.
   private measureLengthDaysFromTimeSignature(sig?: string): number {
@@ -152,10 +173,11 @@ export class Renderer {
     this.layout = []
     const vx = x
 
-    // Content background (cached meta to avoid redundant redraw)
+    // Content background (uses CSS variable --ui-color-bg)
     const bg = new Graphics()
+    const bgColor = this.cssVarColorToHex('--ui-color-bg', 0x292524)
     bg.rect(0, 0, width, Math.max(0, height))
-    bg.fill({ color: 0x0b0f14, alpha: 1 })
+    bg.fill({ color: bgColor, alpha: 1 })
     // subtle vignette edges to create depth and focus
     bg.rect(0, 0, width, Math.max(0, height))
     bg.fill({ color: 0x000000, alpha: 0.06 })
@@ -163,7 +185,7 @@ export class Renderer {
 
     // No internal left gutter: sidebar owns the left column; canvas starts at x=0
 
-    for (const g of drawGridBackground({ width, height, LEFT_MARGIN, pxPerDay, viewportXDays: vx })) {
+    for (const g of drawGridBackground({ width, height, LEFT_MARGIN, pxPerDay, viewportXDays: vx, bgColor })) {
       this.layers.background.addChild(g)
     }
 
@@ -244,6 +266,9 @@ export class Renderer {
       const selected = this.data.selection.includes(task.id)
       const status = (task as any).status || 'not_started'
       const color = statusToColor(status)
+      const isHovering = this.hoverX != null && this.hoverY != null
+        && (this.hoverX as number) >= xLeft && (this.hoverX as number) <= xLeft + w
+        && (this.hoverY as number) >= yTop && (this.hoverY as number) <= yTop + h
       this.layers.tasks.addChild(drawNoteHeadAndLine({
         x: Math.round(xLeft),
         yTop: Math.round(yTop),
@@ -252,10 +277,11 @@ export class Renderer {
         color,
         selected,
         pxPerDay,
-        status
+        status,
+        hovered: !!isHovering
       }))
 
-      const label = drawLabelWithMast({ xLeft: xLeft, yTop, h, text: task.title || '', headColor: color, width, height })
+      const label = drawLabelWithMast({ xLeft: xLeft, yTop, h, text: task.title || '', headColor: color, width, height, selected, hovered: !!isHovering })
       for (const n of label.nodes) this.layers.tasks.addChild(n)
 
       // status glyph inside left circle

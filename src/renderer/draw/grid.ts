@@ -6,15 +6,16 @@ export function drawGridBackground(params: {
     LEFT_MARGIN: number
     pxPerDay: number
     viewportXDays: number
+    bgColor?: number
 }): Graphics[] {
-    const { width, height, LEFT_MARGIN, pxPerDay, viewportXDays } = params
+    const { width, height, LEFT_MARGIN, pxPerDay, viewportXDays, bgColor = 0x292524 } = params
     const nodes: Graphics[] = []
 
     // Background gradient for depth
     const bg = new Graphics()
     bg.beginPath()
     bg.rect(LEFT_MARGIN, 0, width - LEFT_MARGIN, height)
-    bg.fill({ color: 0x0a0d11, alpha: 0.5 })
+    bg.fill({ color: bgColor, alpha: 0.5 })
     nodes.push(bg)
 
     const grid = new Graphics()
@@ -28,18 +29,7 @@ export function drawGridBackground(params: {
         const wBand = Math.max(0.5, pxPerDay)
         if (xInt <= LEFT_MARGIN + 1) continue
 
-        // weekend tint with purple hue (musical rest days)
-        const dow = (day + 1) % 7
-        if (dow === 6 || dow === 0) {
-            grid.rect(xInt, 0, wBand, Math.max(0, height))
-            grid.fill({ color: 0xa855f7, alpha: 0.015 })
-        }
-
-        // alternating subtle banding for readability (sheet music pages)
-        if (day % 2 !== 0) {
-            grid.rect(xInt, 0, wBand, Math.max(0, height))
-            grid.fill({ color: 0xffffff, alpha: 0.02 })
-        }
+        // Removed alternating/day band fills for a cleaner, ink-on-paper background
 
         // grid lines with musical bar styling
         const xl = xInt + 0.5
