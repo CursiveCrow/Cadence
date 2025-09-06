@@ -124,10 +124,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ staffs, viewport, verticalScal
       if (!raf) raf = window.requestAnimationFrame(update)
     }
 
+    const onWindowLeave = () => {
+      last.has = false
+      const r = host.getBoundingClientRect()
+      host.style.setProperty('--sheen-x', `${Math.round(r.width * 0.5)}px`)
+      host.style.setProperty('--sheen-y', `${Math.round(r.height * 0.5)}px`)
+      host.style.setProperty('--sheen-alpha-1', '0.020')
+      host.style.setProperty('--sheen-alpha-2', '0.010')
+      host.style.setProperty('--sheen-peak', '0.060')
+      host.style.setProperty('--streak-alpha', '0.006')
+      host.style.setProperty('--edge-alpha', '0.10')
+      host.style.setProperty('--edge-peak', '0.25')
+    }
+
     window.addEventListener('pointermove', onMove)
+    window.addEventListener('mouseleave', onWindowLeave)
     return () => {
       if (raf) cancelAnimationFrame(raf)
       window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('mouseleave', onWindowLeave)
     }
   }, [])
 
