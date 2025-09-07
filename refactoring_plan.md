@@ -69,7 +69,6 @@ src/
 3. Implement simple JSON persistence to localStorage/file system
 4. Direct Redux actions for all state updates
 
-
 ## Phase 2: Remove Ports/Adapters Pattern
 
 ### Direct Service Implementation
@@ -83,7 +82,6 @@ src/
 3. Remove PlatformPort interface
 4. Implement services directly where needed
 
-
 ## Phase 3: Simplify Renderer
 
 ### Single Renderer Class
@@ -96,7 +94,6 @@ src/
 2. Remove rendererPort abstraction
 3. Simplify GPU grid to basic canvas drawing
 
-
 ## Phase 4: Simplify Platform Services
 
 ### Direct Electron API Usage
@@ -108,7 +105,6 @@ src/
 1. Remove platform ports/adapters
 2. Use Electron APIs directly in main process
 3. Simple IPC without Zod validation
-
 
 ## Phase 5: Flatten Directory Structure
 
@@ -124,16 +120,26 @@ source/
 └── surface/
 ```
 
-### After
+### After (Updated)
 
 ```
 src/
-├── app/         # React app
-├── renderer/    # Canvas rendering
+├── state/       # Redux store and slices
+├── styles/      # Centralized CSS styles
+├── renderer/    # PixiJS rendering (single class + small helpers)
 ├── main/        # Electron main
 ├── types/       # Shared types
 └── utils/       # Shared utilities
 ```
+
+## Completed File Renames (Renderer)
+
+Applied to reduce ambiguity and reflect responsibilities:
+
+- `src/renderer/config.ts` → `src/renderer/timelineConfig.ts` (done)
+- `src/renderer/utils.ts` → `src/renderer/timelineMath.ts` (done)
+- `src/renderer/layout.ts` → `src/renderer/timeScale.ts` (done)
+- `src/renderer/draw/notes.ts` → `src/renderer/draw/tasks.ts` (done)
 
 ## Implementation Strategy
 
@@ -194,7 +200,6 @@ src/
 - Fewer dependencies
 - Clearer architecture
 - Easier onboarding
-
 
 ## Testing Strategy
 

@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron'
 import path from 'path'
 
@@ -16,16 +15,8 @@ export default defineConfig({
             }
         }
     },
-    resolve: {
-        alias: {
-            '@': path.resolve(__dirname, './src'),
-            '@types': path.resolve(__dirname, './src/types'),
-            '@app': path.resolve(__dirname, './src/app'),
-            '@renderer': path.resolve(__dirname, './src/renderer')
-        }
-    },
+    resolve: {},
     plugins: [
-        react(),
         electron([
             {
                 // with root set to 'src', entries should be relative to it

@@ -13,6 +13,7 @@ dist/
 dist-ssr/
 dist-electron/
 release/
+apps/web/
 coverage/
 .turbo/
 *.tsbuildinfo
@@ -34,4 +35,11 @@ storybook-static/
 
 # App-specific
 apps/desktop/.dev_pid
+
+# Previously committed build artifacts (cleanup)
+src/dist-electron/
+
+# Env files
+.env.local
+.env.*.local
 

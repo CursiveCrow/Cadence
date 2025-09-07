@@ -7,8 +7,8 @@ You are an LLM working on the Cadence app. Your top priority is to preserve the 
 - `src/` is the single source of truth:
   - `src/main` — Electron main process (direct Electron API; minimal IPC).
   - `src/preload` — Preload script (contextIsolation on; tiny surface).
-  - `src/app` — React v18.2.0 app (components, hooks, store).
-  - `src/app/styles` — centralized styles and theming (tokens.css, base.css, utilities.css, layout.css, date-header.css, sidebar.css, task-details.css, modals.css, staff-manager.css).
+  - `src/state` — Redux Toolkit slices and store (single source of truth).
+  - `src/styles` — centralized styles and theming (tokens.css, base.css, utilities.css, layout.css, date-header.css, sidebar.css, task-details.css, modals.css, staff-manager.css).
   - `src/renderer` — PixiJS v8.13 renderer (single class; no extra layers).
   - `src/types` — domain types for Project/Task/Staff/etc.
   - `src/config` & `src/utils` — small shared helpers only.
@@ -17,7 +17,7 @@ You are an LLM working on the Cadence app. Your top priority is to preserve the 
 - Renderer: `src/renderer/Renderer.ts` draws grid, staffs, tasks, dependencies.
   - One class using PixiJS v8.13 (Application with minimal Containers and Graphics). No engine/scene/dnd layers.
   - The canvas starts flush with the app sidebar (no internal left gutter).
-- Date header: implemented in React v18.2.0 (sliding months/days/hours bands). It must align with the canvas and respect the sidebar width.
+- Date header: implemented in Pixi (sliding months/days/hours bands) via `src/renderer/dateHeader.ts`, rendered in `Renderer.drawHud`. It must align with the canvas and respect the sidebar width.
 - Electron: direct APIs in `src/main/index.ts`; minimal IPC; no platform abstraction.
 - Build: Vite root is `src`; `vite-plugin-electron` entries are `main/index.ts` and `preload/index.ts`.
 
@@ -31,7 +31,7 @@ You are an LLM working on the Cadence app. Your top priority is to preserve the 
 - Do not change tsconfig path aliases or Vite root without approval.
 - Do not introduce non-existent assets in HTML (e.g., `/assets/icon.png`).
 - Do not add new top‑level packages or monorepo structure.
-- Do not inline styles in components; use the centralized styles in `src/app/styles`.
+- Do not inline styles in components; use the centralized styles in `src/styles`.
 
 ## Strong Preferences
 
@@ -59,9 +59,9 @@ You are an LLM working on the Cadence app. Your top priority is to preserve the 
 
 ## Safe Areas to Modify
 
-- Add/extend Redux slices (`src/app/store`) and lightweight components in `src/app/components`.
+- Add/extend Redux slices under `src/state`.
 - Improve `src/renderer/Renderer.ts` with small, testable functions (no new layers).
-- Extend `src/app/components/DateHeader.tsx` logic for labels/ticks/measure markers.
+- Extend timeline header logic in `src/renderer/dateHeader.ts` if needed.
 - Add tiny helpers to `src/utils` or `src/config` as needed.
 
 ## Red Flags — Stop and Ask First

@@ -1,12 +1,12 @@
-import { Application, Container, Graphics, Text } from 'pixi.js'
-import { TIMELINE, dayIndexFromISO, pixelsPerDay, computeScaledTimeline, safeDiv, EPS, nearlyZero } from './utils'
+import { Application, Container, Graphics, Text, Sprite, Texture } from 'pixi.js'
+import { TIMELINE, dayIndexFromISO, pixelsPerDay, computeScaledTimeline, EPS, nearlyZero } from './timelineMath'
 import { drawGridBackground, drawStaffLines } from './draw/grid'
-import { drawLabelWithMast, drawNoteHeadAndLine, statusToColor } from './draw/notes'
+import { statusToColor, renderNoteHeadAndLine, renderLabelWithMast } from './draw/tasks'
 import { drawMeasurePair, drawTodayMarker } from './draw/markers'
 // Removed alignment quantization; use straightforward world↔screen math
-import { computeDateHeaderHeight } from './dateHeader'
+import { computeDateHeaderHeight, computeDateHeaderViewModel } from './dateHeader'
 import { PROJECT_START_DATE } from '../config'
-import type { Staff, Task, Dependency } from '@types'
+import type { Staff, Task, Dependency } from '../types'
 
 interface Data { staffs: Staff[]; tasks: Task[]; dependencies: Dependency[]; selection: string[] }
 
@@ -14,7 +14,7 @@ export class Renderer {
   private canvas: HTMLCanvasElement
   private app: Application | null = null
   private root: Container | null = null
-  private layers: { viewport: Container; background: Container; tasks: Container; dependencies: Container } | null = null
+  private layers: { viewport: Container; background: Container; tasks: Container; dependencies: Container; hud: Container } | null = null
   private ready = false
   private hoverX: number | null = null
   private hoverY: number | null = null
@@ -25,6 +25,61 @@ export class Renderer {
   private tooltipStem: Graphics | null = null
   private tooltipTitle: Text | null = null
   private tooltipInfo: Text | null = null
+
+  // Persistent HUD layer and cached nodes (to reduce allocations per frame)
+  private hudPersistent: Container | null = null
+  private hudNodes: {
+    headerBg?: Graphics
+    sbLayer?: Container
+    sbMask?: Graphics
+    sbBg?: Graphics
+    bloomL?: Sprite
+    bloomS?: Sprite
+    streak?: Sprite
+    monthTicks?: Graphics
+    dayTicks?: Graphics
+    labelsMonth?: Text[]
+    labelsDay?: Text[]
+    labelsHour?: Text[]
+  } = {}
+
+  // Cached CSS color lookups
+  private colorCache: Map<string, number> = new Map()
+
+  // Task graphics cache
+  private taskCache: Map<string, { head: Graphics; labelBox: Graphics; labelMast: Graphics; labelText: Text; glyph?: Text }> = new Map()
+
+  // UI overlay state (header + sidebar drawn in screen space)
+  private ui: {
+    headerHeight: number
+    sidebarWidth: number
+    rects: Record<string, { x: number; y: number; w: number; h: number }>
+    modal: null | 'staffManager'
+    tmpStaffName: string
+    tmpStaffLines: number
+    sheenX: number
+    sheenY: number
+    lagX: number
+    lagY: number
+  } = { headerHeight: 56, sidebarWidth: 220, rects: {}, modal: null, tmpStaffName: '', tmpStaffLines: 5, sheenX: 0, sheenY: 0, lagX: 0, lagY: 0 }
+
+  private gradientTex: { radialSmall?: Texture; radialLarge?: Texture; streak?: Texture } = {}
+
+  // Hidden input to capture text without rendering DOM UI; visuals remain in Pixi
+  private hiddenInput: HTMLInputElement | null = null
+  private editing: { key: string; onCommit: (value: string) => void; type: 'text' | 'number' } | null = null
+
+  // Callbacks for state updates (Redux actions injected by host)
+  private actions: {
+    addTask?: (task: Task) => void
+    updateTask?: (payload: { id: string; updates: Partial<Task> }) => void
+    addDependency?: (dep: Dependency) => void
+    addStaff?: (staff: Staff) => void
+    updateStaff?: (payload: { id: string; updates: Partial<Staff> }) => void
+    deleteStaff?: (id: string) => void
+    reorderStaffs?: (payload: { staffId: string; newPosition: number }) => void
+    setSelection?: (ids: string[]) => void
+  } = {}
 
   private viewport = { x: 0, y: 0, zoom: 1 }
   private data: Data = { staffs: [], tasks: [], dependencies: [], selection: [] }
@@ -72,16 +127,25 @@ export class Renderer {
       const background = new Container()
       const tasks = new Container()
       const dependencies = new Container()
+      const hudPersistent = new Container()
+      const hud = new Container()
       viewport.addChild(background)
       viewport.addChild(dependencies)
       viewport.addChild(tasks)
       this.root.addChild(viewport)
-      this.layers = { viewport, background, tasks, dependencies }
+      // persistent HUD first (backgrounds, gradients), then dynamic HUD on top
+      this.root.addChild(hudPersistent)
+      this.root.addChild(hud)
+      this.layers = { viewport, background, tasks, dependencies, hud }
+      this.hudPersistent = hudPersistent
 
       this.ready = true
       // Draw once after init
       this.render()
-    } catch {
+      // Prepare hidden input for text capture
+      this.ensureHiddenInput()
+    } catch (err) {
+      if (import.meta?.env?.DEV) console.debug('[Renderer]initPixi failed', err)
       // If PIXI init fails, leave ready=false; methods will no-op
     }
   }
@@ -89,22 +153,124 @@ export class Renderer {
   // Resolve a CSS variable color to a numeric hex for Pixi fills
   private cssVarColorToHex(varName: string, fallback: number): number {
     try {
+      if (this.colorCache.has(varName)) return this.colorCache.get(varName) as number
       const v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
       if (!v) return fallback
       if (v.startsWith('#')) {
         const hex = v.slice(1)
         const n = parseInt(hex, 16)
-        if (!Number.isNaN(n)) return n
+        if (!Number.isNaN(n)) { this.colorCache.set(varName, n); return n }
       }
       const m = v.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
       if (m) {
         const r = Math.max(0, Math.min(255, parseInt(m[1]!, 10)))
         const g = Math.max(0, Math.min(255, parseInt(m[2]!, 10)))
         const b = Math.max(0, Math.min(255, parseInt(m[3]!, 10)))
-        return (r << 16) | (g << 8) | b
+        const n = (r << 16) | (g << 8) | b
+        this.colorCache.set(varName, n)
+        return n
       }
-    } catch { }
+    } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]cssVarColorToHex', err) }
     return fallback
+  }
+
+  private ensureHudPersistentNodes(screenW: number, screenH: number, sidebarW: number, headerH: number) {
+    if (!this.hudPersistent) return
+    const hp = this.hudPersistent
+
+    // Sidebar masked layer
+    if (!this.hudNodes.sbLayer) {
+      this.hudNodes.sbLayer = new Container()
+      hp.addChild(this.hudNodes.sbLayer)
+    }
+    if (!this.hudNodes.sbMask) {
+      this.hudNodes.sbMask = new Graphics()
+      this.hudNodes.sbLayer.mask = this.hudNodes.sbMask
+      hp.addChild(this.hudNodes.sbMask)
+    }
+    // Update mask geometry
+    const sbMask = this.hudNodes.sbMask
+    sbMask!.clear()
+    sbMask!.rect(0, 0, sidebarW, screenH)
+    sbMask!.fill({ color: 0xffffff, alpha: 1 })
+
+    // Sidebar background panel
+    if (!this.hudNodes.sbBg) {
+      this.hudNodes.sbBg = new Graphics()
+      this.hudNodes.sbLayer!.addChild(this.hudNodes.sbBg)
+    }
+    const sbBg = this.hudNodes.sbBg!
+    sbBg.clear()
+    sbBg.rect(0, 0, sidebarW, screenH)
+    sbBg.fill({ color: 0x0a0f17, alpha: 0.96 })
+    for (let i = 0; i < 5; i++) {
+      const inset = i * 3
+      sbBg.roundRect(inset, inset, Math.max(0, sidebarW - inset * 2), Math.max(0, screenH - inset * 2), 10)
+      sbBg.fill({ color: 0x0b1220, alpha: 0.05 - i * 0.008 })
+    }
+    sbBg.rect(sidebarW - 1, 0, 1, screenH)
+    sbBg.fill({ color: 0xffffff, alpha: 0.08 })
+
+    // Header background (full-width strip under ticks/labels)
+    if (!this.hudNodes.headerBg) {
+      this.hudNodes.headerBg = new Graphics()
+      // Header background goes above persistent sidebar bg, but below dynamic ticks/labels
+      hp.addChild(this.hudNodes.headerBg)
+    }
+    const headerBg = this.hudNodes.headerBg!
+    headerBg.clear()
+    headerBg.rect(0, 0, screenW, headerH)
+    headerBg.fill({ color: 0x0c0b0a, alpha: 0.92 })
+    headerBg.rect(0, headerH - 1, screenW, 1)
+    headerBg.fill({ color: 0xffffff, alpha: 0.08 })
+
+    // Gradient sprites: create once and update positions/sizes
+    this.ensureGradientTextures()
+    if (!this.hudNodes.bloomL) {
+      this.hudNodes.bloomL = new Sprite(this.gradientTex.radialLarge!)
+      this.hudNodes.bloomL.blendMode = 'screen'
+      this.hudNodes.bloomL.anchor.set(0.5)
+      this.hudNodes.sbLayer!.addChild(this.hudNodes.bloomL)
+    }
+    if (!this.hudNodes.bloomS) {
+      this.hudNodes.bloomS = new Sprite(this.gradientTex.radialSmall!)
+      this.hudNodes.bloomS.blendMode = 'screen'
+      this.hudNodes.bloomS.anchor.set(0.5)
+      this.hudNodes.sbLayer!.addChild(this.hudNodes.bloomS)
+    }
+    if (!this.hudNodes.streak) {
+      this.hudNodes.streak = new Sprite(this.gradientTex.streak!)
+      this.hudNodes.streak.blendMode = 'screen'
+      this.hudNodes.streak.anchor.set(0.5)
+      this.hudNodes.sbLayer!.addChild(this.hudNodes.streak)
+    }
+
+    // Update gradient sprite transforms based on current lag target
+    const lagX = Math.round(this.ui.lagX)
+    const lagY = Math.round(this.ui.lagY)
+    const bloomL = this.hudNodes.bloomL!
+    bloomL.x = Math.max(40, Math.min(sidebarW - 40, lagX - 20))
+    bloomL.y = Math.max(40, Math.min(screenH - 40, lagY + 30))
+    bloomL.alpha = 0.35
+    const bloomLSize = Math.min(420, Math.max(220, Math.floor(Math.min(sidebarW, screenH) * 0.8)))
+    bloomL.width = bloomLSize
+    bloomL.height = bloomLSize
+
+    const bloomS = this.hudNodes.bloomS!
+    bloomS.x = Math.max(24, Math.min(sidebarW - 24, lagX + 14))
+    bloomS.y = Math.max(24, Math.min(screenH - 24, lagY - 10))
+    bloomS.alpha = 0.6
+    const bloomSSize = Math.min(260, Math.max(140, Math.floor(Math.min(sidebarW, screenH) * 0.45)))
+    bloomS.width = bloomSSize
+    bloomS.height = bloomSSize
+
+    const streak = this.hudNodes.streak!
+    streak.x = Math.max(60, Math.min(sidebarW - 60, lagX))
+    streak.y = Math.max(36, Math.min(screenH - 36, lagY + 12))
+    streak.rotation = -0.25
+    streak.alpha = 0.4
+    streak.width = Math.min(sidebarW * 0.9, 380)
+    streak.height = 56
   }
 
   // Map time signature "N/D" to days-per-measure where the denominator D directly
@@ -114,7 +280,8 @@ export class Renderer {
       const parts = (sig || '4/4').split('/')
       const d = Math.max(1, Math.round(parseInt(parts[1] || '4', 10)))
       return Math.max(1, d)
-    } catch {
+    } catch (err) {
+      if (import.meta?.env?.DEV) console.debug('[Renderer]measureLengthDaysFromTimeSignature', err)
       return 4
     }
   }
@@ -133,7 +300,7 @@ export class Renderer {
 
   resize() {
     if (!this.app) return
-    try { this.app.renderer.resize(this.canvas.clientWidth || 1, this.canvas.clientHeight || 1) } catch { }
+    try { this.app.renderer.resize(this.canvas.clientWidth || 1, this.canvas.clientHeight || 1) } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]resize', err) }
   }
 
   private clearContainers() {
@@ -142,13 +309,15 @@ export class Renderer {
       try {
         const removed = c.removeChildren()
         for (const ch of removed) {
-          try { (ch as any).destroy?.({ children: true }) } catch { }
+          try { (ch as any).destroy?.({ children: true }) } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]destroy child', err) }
         }
-      } catch { }
+      } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]removeChildren', err) }
     }
     destroyAll(this.layers.background)
-    destroyAll(this.layers.tasks)
+    // Do not destroy task nodes; we maintain our own cache for reuse
+    try { this.layers.tasks.removeChildren() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]tasks.removeChildren', err) }
     destroyAll(this.layers.dependencies)
+    destroyAll(this.layers.hud)
     // Invalidate cached graphics that may have been destroyed by cleanup
     this.previewG = null
     this.depPreviewG = null
@@ -163,6 +332,8 @@ export class Renderer {
 
     // Throttle re-rendering to animation frames to avoid event storm freezes
     this.clearContainers()
+    // Reset UI hit-areas
+    this.ui.rects = {}
 
     const width = Math.max(1, this.app.screen.width)
     const height = Math.max(1, this.app.screen.height)
@@ -183,7 +354,8 @@ export class Renderer {
     bg.fill({ color: 0x000000, alpha: 0.06 })
     this.layers.background.addChild(bg)
 
-    // No internal left gutter: sidebar owns the left column; canvas starts at x=0
+    // No internal left gutter for world space: canvas grid starts at x=0.
+    // Sidebar is drawn as a HUD overlay on top (not part of world transforms).
 
     for (const g of drawGridBackground({ width, height, LEFT_MARGIN, pxPerDay, viewportXDays: vx, bgColor })) {
       this.layers.background.addChild(g)
@@ -232,7 +404,7 @@ export class Renderer {
           this.layers.background.addChild(drawMeasurePair(xThick, xThin, yTopStaff, yBottomStaff))
         }
       }
-    } catch { }
+    } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]measure markers', err) }
 
     // Today marker
     try {
@@ -244,9 +416,10 @@ export class Renderer {
       const dayIndex = dayIndexFromISO(isoToday, PROJECT_START_DATE)
       const xToday = LEFT_MARGIN + (dayIndex - vx) * pxPerDay
       this.layers.background.addChild(drawTodayMarker(xToday, Math.max(0, height)))
-    } catch { }
+    } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]today marker', err) }
 
-    // Draw tasks (note pill shape with status glyph)
+    // Draw tasks (note pill shape with status glyph) using cached nodes per task
+    const visibleTaskIds: string[] = []
     for (const task of this.data.tasks) {
       const staffBlock = this.metrics.staffBlocks.find(b => b.id === task.staffId)
       if (!staffBlock) continue
@@ -269,35 +442,85 @@ export class Renderer {
       const isHovering = this.hoverX != null && this.hoverY != null
         && (this.hoverX as number) >= xLeft && (this.hoverX as number) <= xLeft + w
         && (this.hoverY as number) >= yTop && (this.hoverY as number) <= yTop + h
-      this.layers.tasks.addChild(drawNoteHeadAndLine({
-        x: Math.round(xLeft),
-        yTop: Math.round(yTop),
-        width: Math.round(w),
-        height: Math.round(h),
+      visibleTaskIds.push(task.id)
+
+      let nodes = this.taskCache.get(task.id)
+      if (!nodes) {
+        nodes = {
+          head: new Graphics(),
+          labelBox: new Graphics(),
+          labelMast: new Graphics(),
+          labelText: new Text({ text: '', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 10, fill: color } }),
+        }
+        this.taskCache.set(task.id, nodes)
+      }
+
+      // Draw note using helper
+      const g = nodes.head
+      renderNoteHeadAndLine(g, {
+        x: xLeft,
+        yTop,
+        width: w,
+        height: h,
         color,
         selected,
         pxPerDay,
-        status,
-        hovered: !!isHovering
-      }))
+        status: String(status),
+        hovered: isHovering,
+      })
 
-      const label = drawLabelWithMast({ xLeft: xLeft, yTop, h, text: task.title || '', headColor: color, width, height, selected, hovered: !!isHovering })
-      for (const n of label.nodes) this.layers.tasks.addChild(n)
-
-      // status glyph inside left circle
-      const glyph = this.statusToAccidental((task as any).status || '')
-      if (glyph) {
-        const tGlyph = new Text({
-          text: glyph,
-          style: { fontFamily: 'serif', fontSize: Math.max(10, Math.round(h * 0.7)), fill: 0xffffff }
-        })
-        tGlyph.x = Math.round(xLeft + h / 2 - tGlyph.width / 2)
-        tGlyph.y = Math.round(yTop + h / 2 - tGlyph.height / 2)
-        this.layers.tasks.addChild(tGlyph)
+      // Status indicator glyph
+      const glyphChar = this.statusToAccidental(String(status))
+      if (glyphChar) {
+        if (!nodes.glyph) {
+          nodes.glyph = new Text({ text: glyphChar, style: { fontFamily: 'serif', fontSize: Math.max(10, Math.round(h * 0.7)), fill: 0xffffff } })
+        }
+        nodes.glyph.text = glyphChar
+          ; (nodes.glyph.style as any).fontSize = Math.max(10, Math.round(h * 0.7))
+        nodes.glyph.x = Math.round(xLeft + h / 2 - nodes.glyph.width / 2)
+        nodes.glyph.y = Math.round(yTop + h / 2 - nodes.glyph.height / 2)
+      } else if (nodes.glyph) {
+        // keep cached glyph but skip adding if empty
       }
+
+      // Label with mast
+      const labelText = nodes.labelText
+        ; (labelText.style as any).fill = (selected || isHovering) ? 0xffffff : color
+      renderLabelWithMast(nodes.labelBox, nodes.labelMast, labelText, {
+        xLeft,
+        yTop,
+        h,
+        text: task.title || '',
+        headColor: color,
+        width,
+        height,
+        selected,
+        hovered: isHovering,
+      })
+
+      // Reattach nodes in z-order
+      this.layers.tasks.addChild(g)
+      this.layers.tasks.addChild(nodes.labelBox)
+      this.layers.tasks.addChild(nodes.labelMast)
+      this.layers.tasks.addChild(labelText)
+      if (nodes.glyph) this.layers.tasks.addChild(nodes.glyph)
 
       this.layout.push({ id: task.id, x: xLeft, y: yTop, w, h })
     }
+
+    // Prune unused cached task nodes
+    try {
+      for (const [id, nodes] of this.taskCache) {
+        if (!visibleTaskIds.includes(id)) {
+          try { nodes.head.destroy() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]destroy head', err) }
+          try { nodes.labelBox.destroy() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]destroy labelBox', err) }
+          try { nodes.labelMast.destroy() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]destroy labelMast', err) }
+          try { (nodes.labelText as any).destroy?.() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]destroy labelText', err) }
+          if (nodes.glyph) { try { (nodes.glyph as any).destroy?.() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]destroy glyph', err) } }
+          this.taskCache.delete(id)
+        }
+      }
+    } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]prune cache', err) }
 
     // Draw dependencies (musical slur curves)
     for (const dep of this.data.dependencies) {
@@ -474,13 +697,16 @@ export class Renderer {
           }
         } else {
           // clear tooltip
-          if (this.tooltipBox) { try { this.layers!.tasks.removeChild(this.tooltipBox) } catch { }; try { this.tooltipBox.destroy() } catch { }; this.tooltipBox = null }
-          if (this.tooltipStem) { try { this.layers!.tasks.removeChild(this.tooltipStem) } catch { }; try { this.tooltipStem.destroy() } catch { }; this.tooltipStem = null }
-          if (this.tooltipTitle) { try { this.layers!.tasks.removeChild(this.tooltipTitle) } catch { }; try { (this.tooltipTitle as any).destroy?.() } catch { }; this.tooltipTitle = null }
-          if (this.tooltipInfo) { try { this.layers!.tasks.removeChild(this.tooltipInfo) } catch { }; try { (this.tooltipInfo as any).destroy?.() } catch { }; this.tooltipInfo = null }
+          if (this.tooltipBox) { try { this.layers!.tasks.removeChild(this.tooltipBox) } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]remove tooltipBox', err) }; try { this.tooltipBox.destroy() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]destroy tooltipBox', err) }; this.tooltipBox = null }
+          if (this.tooltipStem) { try { this.layers!.tasks.removeChild(this.tooltipStem) } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]remove tooltipStem', err) }; try { this.tooltipStem.destroy() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]destroy tooltipStem', err) }; this.tooltipStem = null }
+          if (this.tooltipTitle) { try { this.layers!.tasks.removeChild(this.tooltipTitle) } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]remove tooltipTitle', err) }; try { (this.tooltipTitle as any).destroy?.() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]destroy tooltipTitle', err) }; this.tooltipTitle = null }
+          if (this.tooltipInfo) { try { this.layers!.tasks.removeChild(this.tooltipInfo) } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]remove tooltipInfo', err) }; try { (this.tooltipInfo as any).destroy?.() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]destroy tooltipInfo', err) }; this.tooltipInfo = null }
         }
       }
-    } catch { }
+    } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]tooltip', err) }
+
+    // Finally draw HUD overlay (date header + sidebar + toolbar) in screen space
+    this.drawHud(width, height)
   }
 
   hitTest(px: number, py: number): string | null {
@@ -503,6 +729,574 @@ export class Renderer {
   setHover(x: number | null, y: number | null) {
     this.hoverX = x
     this.hoverY = y
+    // drive sheen target with pointer, clamped to sidebar bounds
+    try {
+      if (x != null && y != null) {
+        const sw = Math.max(180, Math.min(320, this.ui.sidebarWidth || 220))
+        const sx = Math.max(16, Math.min(sw - 16, x))
+        const sy = Math.max(16, Math.min((this.app?.screen.height || 0) - 16, y))
+        this.ui.sheenX = sx
+        this.ui.sheenY = sy
+      }
+    } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]setHover', err) }
+  }
+
+  private ensureGradientTextures() {
+    const mkRadial = (size: number, inner: string, outer: string) => {
+      const c = document.createElement('canvas')
+      c.width = c.height = Math.max(16, size)
+      const ctx = c.getContext('2d')!
+      const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+      g.addColorStop(0, inner)
+      g.addColorStop(1, outer)
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, size, size)
+      return Texture.from(c)
+    }
+    const mkStreak = (w: number, h: number, from: string, to: string) => {
+      const c = document.createElement('canvas')
+      c.width = Math.max(16, w)
+      c.height = Math.max(16, h)
+      const ctx = c.getContext('2d')!
+      const g = ctx.createLinearGradient(0, 0, w, 0)
+      g.addColorStop(0.0, 'rgba(255,255,255,0)')
+      g.addColorStop(0.15, from)
+      g.addColorStop(0.5, to)
+      g.addColorStop(0.85, from)
+      g.addColorStop(1.0, 'rgba(255,255,255,0)')
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, w, h)
+      return Texture.from(c)
+    }
+    if (!this.gradientTex.radialSmall) this.gradientTex.radialSmall = mkRadial(256, 'rgba(190,210,255,0.22)', 'rgba(190,210,255,0)')
+    if (!this.gradientTex.radialLarge) this.gradientTex.radialLarge = mkRadial(512, 'rgba(160,190,255,0.16)', 'rgba(160,190,255,0)')
+    if (!this.gradientTex.streak) this.gradientTex.streak = mkStreak(512, 64, 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)')
+  }
+
+  setActions(actions: Partial<typeof this.actions>) {
+    this.actions = { ...this.actions, ...actions }
+  }
+
+  openStaffManager() {
+    this.ui.modal = 'staffManager'
+  }
+
+  closeModal() {
+    this.ui.modal = null
+    this.stopEditing()
+  }
+
+  handleUIAction(key: string) {
+    try {
+      if (key === 'sm:close') { this.closeModal(); return }
+      if (key === 'sm:new:add') {
+        const now = new Date().toISOString()
+        const name = this.ui.tmpStaffName.trim() || `Staff ${Math.floor(Math.random() * 1000)}`
+        const lines = Math.max(1, Math.min(10, Math.round(this.ui.tmpStaffLines)))
+        const position = (this.data.staffs?.length || 0)
+        this.actions.addStaff?.({ id: `staff-${Date.now()}`, name, numberOfLines: lines, lineSpacing: 12, position, projectId: 'demo', createdAt: now, updatedAt: now })
+        this.ui.tmpStaffName = ''
+        this.ui.tmpStaffLines = 5
+        return
+      }
+      if (key.startsWith('sm:new:name')) {
+        const bounds = this.ui.rects['sm:new:name']
+        this.startEditing('sm:new:name', bounds, this.ui.tmpStaffName, 'text', (v) => { this.ui.tmpStaffName = v; this.render() })
+        return
+      }
+      if (key === 'sm:new:lines:inc') { this.ui.tmpStaffLines = Math.min(10, this.ui.tmpStaffLines + 1); return }
+      if (key === 'sm:new:lines:dec') { this.ui.tmpStaffLines = Math.max(1, this.ui.tmpStaffLines - 1); return }
+
+      if (key.startsWith('sm:item:')) {
+        const parts = key.split(':')
+        const id = parts[2]
+        const action = parts[3]
+        const staff = (this.data.staffs || []).find(s => s.id === id)
+        if (!staff) return
+        if (action === 'del') { this.actions.deleteStaff?.(id); return }
+        if (action === 'up' || action === 'down') {
+          const idx = (this.data.staffs || []).findIndex(s => s.id === id)
+          const newPos = action === 'up' ? Math.max(0, idx - 1) : Math.min((this.data.staffs || []).length - 1, idx + 1)
+          this.actions.reorderStaffs?.({ staffId: id, newPosition: newPos }); return
+        }
+        if (action === 'name') {
+          const bounds = this.ui.rects[`sm:item:${id}:name`]
+          this.startEditing(`sm:item:${id}:name`, bounds, staff.name || '', 'text', (v) => this.actions.updateStaff?.({ id, updates: { name: v } }))
+          return
+        }
+        if (action === 'lines:inc') { this.actions.updateStaff?.({ id, updates: { numberOfLines: Math.min(10, (staff.numberOfLines || 5) + 1) } }); return }
+        if (action === 'lines:dec') { this.actions.updateStaff?.({ id, updates: { numberOfLines: Math.max(1, (staff.numberOfLines || 5) - 1) } }); return }
+        if (action === 'ts') {
+          const bounds = this.ui.rects[`sm:item:${id}:ts`]
+          this.startEditing(`sm:item:${id}:ts`, bounds, staff.timeSignature || '4/4', 'text', (v) => this.actions.updateStaff?.({ id, updates: { timeSignature: v } }))
+          return
+        }
+      }
+    } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]handleUIAction', err) }
+  }
+
+  private ensureHiddenInput() {
+    try {
+      if (this.hiddenInput) return
+      const input = document.createElement('input')
+      input.type = 'text'
+      Object.assign(input.style, { position: 'absolute', opacity: '0', pointerEvents: 'none', zIndex: '0', left: '0px', top: '0px', width: '1px', height: '1px' })
+      document.body.appendChild(input)
+      input.addEventListener('blur', () => {
+        if (this.editing) {
+          try { this.editing.onCommit(input.value) } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]commit edit', err) }
+          this.editing = null
+        }
+      })
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { try { (e.target as HTMLInputElement).blur() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]enter blur', err) } }
+        if (e.key === 'Escape') { this.editing = null; try { (e.target as HTMLInputElement).blur() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]escape blur', err) } }
+      })
+      this.hiddenInput = input
+    } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]ensureHiddenInput', err) }
+  }
+
+  private startEditing(key: string, bounds: { x: number; y: number; w: number; h: number } | undefined, initial: string, type: 'text' | 'number', onCommit: (value: string) => void) {
+    this.ensureHiddenInput()
+    const input = this.hiddenInput
+    if (!input || !bounds) return
+    this.editing = { key, onCommit, type }
+    input.type = type === 'number' ? 'number' : 'text'
+    input.value = String(initial ?? '')
+    input.style.left = `${Math.round(bounds.x)}px`
+    input.style.top = `${Math.round(bounds.y)}px`
+    try { input.focus(); input.select() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]startEditing focus', err) }
+  }
+
+  private stopEditing() {
+    try { this.hiddenInput?.blur() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]stopEditing', err) }
+    this.editing = null
+  }
+
+  // --- HUD (header + sidebar) ---
+
+  private drawHud(screenW: number, screenH: number) {
+    if (!this.layers) return
+    const hud = this.layers.hud
+
+    // Update header height from zoom
+    const headerH = computeDateHeaderHeight(this.viewport.zoom || 1)
+    this.ui.headerHeight = headerH
+
+    // Sidebar width from localStorage once
+    if (!Number.isFinite(this.ui.sidebarWidth) || this.ui.sidebarWidth <= 0) {
+      this.ui.sidebarWidth = this.readSidebarWidth()
+    }
+    const sidebarW = Math.max(180, Math.min(320, Math.round(this.ui.sidebarWidth)))
+    this.ui.sidebarWidth = sidebarW
+
+    // Ensure persistent HUD (header bg, sidebar bg, gradient sprites)
+    if (!Number.isFinite(this.ui.sheenX) || !Number.isFinite(this.ui.sheenY)) {
+      this.ui.sheenX = Math.round(sidebarW * 0.6)
+      this.ui.sheenY = Math.round(screenH * 0.3)
+      this.ui.lagX = this.ui.sheenX
+      this.ui.lagY = this.ui.sheenY
+    }
+    // Ease lag towards target
+    this.ui.lagX += (this.ui.sheenX - this.ui.lagX) * 0.08
+    this.ui.lagY += (this.ui.sheenY - this.ui.lagY) * 0.08
+    this.ensureHudPersistentNodes(screenW, screenH, sidebarW, headerH)
+
+    // Date header ticks/labels (fixed to screen space)
+    try {
+      const vm = computeDateHeaderViewModel({
+        viewport: this.viewport,
+        projectStart: PROJECT_START_DATE,
+        leftMargin: TIMELINE.LEFT_MARGIN,
+        dayWidth: TIMELINE.DAY_WIDTH,
+        width: screenW,
+      })
+      // Month ticks
+      if (!this.hudNodes.monthTicks) { this.hudNodes.monthTicks = new Graphics() }
+      const monthTicks = this.hudNodes.monthTicks
+      monthTicks!.clear()
+      for (const x of vm.monthTickXs) {
+        monthTicks!.moveTo(Math.round(x) + 0.5, 2)
+        monthTicks!.lineTo(Math.round(x) + 0.5, headerH - 2)
+        monthTicks!.stroke({ width: 2, color: 0x7c3aed, alpha: 0.45 })
+      }
+      hud.addChild(monthTicks!)
+
+      // Day ticks
+      if (!this.hudNodes.dayTicks) { this.hudNodes.dayTicks = new Graphics() }
+      const dayTicks = this.hudNodes.dayTicks
+      dayTicks!.clear()
+      for (const x of vm.dayTickXs) {
+        dayTicks!.moveTo(Math.round(x) + 0.5, 2)
+        dayTicks!.lineTo(Math.round(x) + 0.5, headerH - 2)
+        dayTicks!.stroke({ width: 1, color: 0xffffff, alpha: 0.22 })
+      }
+      hud.addChild(dayTicks!)
+
+      // Layout bands similar to CSS component
+      const bandH = 24
+      const daysProgress = Math.max(0, Math.min(1, (this.viewport.zoom - 0.75) / 0.25))
+      const hoursProgress = Math.max(0, Math.min(1, (this.viewport.zoom - 2) / 0.5))
+      const monthTop = 6
+      const dayTop = Math.round(bandH * daysProgress)
+      const hourTop = Math.round(bandH + bandH * hoursProgress)
+
+      // Prepare label pools
+      const ensurePool = (key: 'labelsMonth' | 'labelsDay' | 'labelsHour') => {
+        if (!this.hudNodes[key]) this.hudNodes[key] = []
+      }
+      ensurePool('labelsMonth'); ensurePool('labelsDay'); ensurePool('labelsHour')
+
+      const reuseLabels = (pool: Text[], data: { text: string; x: number }[], y: number, size: number, alpha: number, bold?: boolean) => {
+        const count = data.length
+        // create or trim pool to size
+        while (pool.length < count) {
+          const t = new Text({ text: '', style: { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', fontSize: size, fontWeight: bold ? 'bold' : 'normal', fill: 0xffffff } })
+          pool.push(t)
+        }
+        while (pool.length > count) {
+          const t = pool.pop()!
+          try { t.destroy() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]destroy pooled label', err) }
+        }
+        // update and attach
+        for (let i = 0; i < count; i++) {
+          const d = data[i]
+          const t = pool[i]
+          t.text = d.text
+            ; (t.style as any).fontSize = size
+            ; (t.style as any).fontWeight = bold ? 'bold' : 'normal'
+            ; (t.style as any).fill = 0xffffff
+          t.alpha = alpha
+          t.x = Math.round(d.x)
+          t.y = Math.round(y)
+          hud.addChild(t)
+        }
+      }
+
+      reuseLabels(this.hudNodes.labelsMonth!, vm.monthLabels.map(d => ({ text: d.text, x: d.x + 6 })), monthTop, 12, 0.95, true)
+      reuseLabels(this.hudNodes.labelsDay!, vm.dayLabels.map(d => ({ text: d.text, x: d.x + 5 })), dayTop + 4, 11, 0.85)
+      reuseLabels(this.hudNodes.labelsHour!, vm.hourLabels.map(d => ({ text: d.text, x: d.x })), hourTop + 4, 10, 0.75)
+    } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]drawHud header', err) }
+
+    // Right rim highlight stays above mask (crisp boundary)
+    const rim = new Graphics()
+    rim.rect(sidebarW - 2, 0, 2, screenH)
+    rim.fill({ color: 0xffffff, alpha: 0.08 })
+    hud.addChild(rim)
+
+    // Sidebar header controls
+    const pad = 10
+    const hdrY = Math.max(8, Math.round(this.ui.headerHeight + 8))
+
+    // "Staves" label
+    const staves = new Text({ text: 'Staves', style: { fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', fontSize: 12, fontWeight: 'bold', fill: 0xbcc3d6 } })
+    staves.x = pad
+    staves.y = hdrY
+    hud.addChild(staves)
+
+    // Buttons: Add Note, Manage (in sidebar header)
+    const btnY = hdrY
+    const btnH = 22
+    const makeButton = (key: string, label: string, x: number) => {
+      const t = new Text({ text: label, style: { fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', fontSize: 11, fill: 0xffffff } })
+      const w = Math.round(t.width + 16)
+      const bg = new Graphics()
+      bg.roundRect(x, btnY - 2, w, btnH, 6)
+      bg.fill({ color: 0x7c3aed, alpha: 0.9 })
+      bg.stroke({ width: 1, color: 0xffffff, alpha: 0.2 })
+      hud.addChild(bg)
+      t.x = Math.round(x + 8)
+      t.y = Math.round(btnY + 2)
+      hud.addChild(t)
+      this.ui.rects[key] = { x, y: btnY - 2, w, h: btnH }
+      return x + w + 8
+    }
+    let nextX = pad + Math.round(staves.width) + 10
+    nextX = makeButton('btn:addNote', '+ Add Note', nextX)
+    nextX = makeButton('btn:manage', 'Manage', nextX)
+
+    // Toolbar button on header (top-right): Link Selected
+    const canLink = (this.data.selection || []).length === 2
+    const linkLabel = 'Link Selected'
+    const linkText = new Text({ text: linkLabel, style: { fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', fontSize: 12, fill: 0xffffff } })
+    const linkW = Math.round(linkText.width + 18)
+    const linkX = Math.max(8, screenW - linkW - 12)
+    const linkY = 8
+    const linkBg = new Graphics()
+    linkBg.roundRect(linkX, linkY, linkW, 26, 6)
+    linkBg.fill({ color: canLink ? 0x2563eb : 0x374151, alpha: 0.95 })
+    linkBg.stroke({ width: 1, color: 0xffffff, alpha: 0.18 })
+    hud.addChild(linkBg)
+    linkText.x = Math.round(linkX + 9)
+    linkText.y = Math.round(linkY + 6)
+    hud.addChild(linkText)
+    this.ui.rects['btn:link'] = { x: linkX, y: linkY, w: linkW, h: 26 }
+
+    // Staff labels aligned to staff centers (right-aligned text inside sidebar)
+    try {
+      for (const sb of this.metrics.staffBlocks) {
+        const staff = (this.data.staffs || []).find(s => s.id === sb.id)
+        if (!staff) continue
+        const centerY = Math.round((sb.yTop + sb.yBottom) / 2)
+        const name = new Text({ text: staff.name, style: { fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', fontSize: 12, fontWeight: 'bold', fill: 0xbcc3d6 } })
+        name.x = Math.max(6, sidebarW - 12 - Math.round(name.width))
+        name.y = Math.max(0, centerY - Math.round(name.height / 2))
+        hud.addChild(name)
+
+        const ts = String(staff.timeSignature || '4/4')
+        const tsText = new Text({ text: ts, style: { fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', fontSize: 11, fill: 0x94a3b8 } })
+        const tsW = Math.round(tsText.width + 12)
+        const tsH = 18
+        const tsX = Math.max(6, sidebarW - 12 - tsW)
+        const tsY = Math.round(centerY + Math.max(10, name.height))
+        const tsBg = new Graphics()
+        tsBg.roundRect(tsX, tsY, tsW, tsH, 4)
+        tsBg.fill({ color: 0x111827, alpha: 0.8 })
+        tsBg.stroke({ width: 1, color: 0xffffff, alpha: 0.12 })
+        hud.addChild(tsBg)
+        tsText.x = Math.round(tsX + 6)
+        tsText.y = Math.round(tsY + 2)
+        hud.addChild(tsText)
+        this.ui.rects[`ts:${staff.id}`] = { x: tsX, y: tsY, w: tsW, h: tsH }
+      }
+    } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]staff labels', err) }
+
+    // Modal overlays
+    if (this.ui.modal === 'staffManager') {
+      this.drawStaffManager(screenW, screenH)
+    }
+
+    // Task details popover if a single selection is present
+    if ((this.data.selection || []).length > 0) {
+      this.drawTaskDetails(screenW, screenH)
+    }
+  }
+
+  private readSidebarWidth(): number {
+    try {
+      const v = localStorage.getItem('cadence.sidebar.width')
+      const n = v ? parseInt(v, 10) : 220
+      if (Number.isFinite(n)) return Math.max(180, Math.min(320, n))
+    } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]readSidebarWidth', err) }
+    return 220
+  }
+
+  setSidebarWidth(w: number) {
+    const clamped = Math.max(180, Math.min(320, Math.round(w)))
+    this.ui.sidebarWidth = clamped
+    try { localStorage.setItem('cadence.sidebar.width', String(clamped)) } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]setSidebarWidth', err) }
+  }
+
+  getSidebarWidth(): number {
+    return this.ui.sidebarWidth
+  }
+
+  getHeaderHeight(): number {
+    return this.ui.headerHeight
+  }
+
+  hitTestUI(px: number, py: number): string | null {
+    for (const [key, r] of Object.entries(this.ui.rects)) {
+      if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return key
+    }
+    return null
+  }
+
+  private drawStaffManager(screenW: number, screenH: number) {
+    if (!this.layers) return
+    const hud = this.layers.hud
+    const W = Math.min(560, Math.max(360, Math.round(screenW * 0.6)))
+    const H = Math.min(520, Math.max(320, Math.round(screenH * 0.6)))
+    const X = Math.round((screenW - W) / 2)
+    const Y = Math.round((screenH - H) / 2)
+
+    // Backdrop
+    const backdrop = new Graphics()
+    backdrop.rect(0, 0, screenW, screenH)
+    backdrop.fill({ color: 0x000000, alpha: 0.45 })
+    hud.addChild(backdrop)
+    this.ui.rects['sm:close'] = { x: 0, y: 0, w: screenW, h: screenH }
+
+    // Panel
+    const panel = new Graphics()
+    panel.roundRect(X, Y, W, H, 12)
+    panel.fill({ color: 0x0f172a, alpha: 0.98 })
+    panel.stroke({ width: 1, color: 0xffffff, alpha: 0.08 })
+    hud.addChild(panel)
+
+    // Header
+    const title = new Text({ text: 'Staff Manager', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 14, fontWeight: 'bold', fill: 0xffffff } })
+    title.x = X + 16
+    title.y = Y + 12
+    hud.addChild(title)
+
+    // New staff row
+    const rowY = Y + 44
+    const nameLabel = new Text({ text: 'Name', style: { fontFamily: 'system-ui,-apple system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0x94a3b8 } })
+    nameLabel.x = X + 16
+    nameLabel.y = rowY
+    hud.addChild(nameLabel)
+
+    const nameBoxW = Math.round(W * 0.5)
+    const nameBoxX = X + 16
+    const nameBoxY = rowY + 18
+    const nameBox = new Graphics()
+    nameBox.roundRect(nameBoxX, nameBoxY, nameBoxW, 24, 6)
+    nameBox.fill({ color: 0x111827, alpha: 0.95 })
+    nameBox.stroke({ width: 1, color: 0xffffff, alpha: 0.12 })
+    hud.addChild(nameBox)
+    const nameVal = new Text({ text: this.ui.tmpStaffName || ' ', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } })
+    nameVal.x = nameBoxX + 8
+    nameVal.y = nameBoxY + 4
+    hud.addChild(nameVal)
+    this.ui.rects['sm:new:name'] = { x: nameBoxX, y: nameBoxY, w: nameBoxW, h: 24 }
+
+    const linesLabel = new Text({ text: 'Lines', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0x94a3b8 } })
+    linesLabel.x = nameBoxX + nameBoxW + 16
+    linesLabel.y = rowY
+    hud.addChild(linesLabel)
+
+    const linesY = nameBoxY
+    const dec = new Graphics(); dec.roundRect(linesLabel.x, linesY, 24, 24, 6); dec.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(dec)
+    const decT = new Text({ text: '-', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 16, fill: 0xffffff } }); decT.x = linesLabel.x + 8; decT.y = linesY + 2; hud.addChild(decT)
+    this.ui.rects['sm:new:lines:dec'] = { x: linesLabel.x, y: linesY, w: 24, h: 24 }
+    const valBoxX = linesLabel.x + 28
+    const valBox = new Graphics(); valBox.roundRect(valBoxX, linesY, 36, 24, 6); valBox.fill({ color: 0x111827, alpha: 0.95 }); valBox.stroke({ width: 1, color: 0xffffff, alpha: 0.12 }); hud.addChild(valBox)
+    const valT = new Text({ text: String(this.ui.tmpStaffLines), style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); valT.x = valBoxX + 12; valT.y = linesY + 4; hud.addChild(valT)
+    const incX = valBoxX + 40
+    const inc = new Graphics(); inc.roundRect(incX, linesY, 24, 24, 6); inc.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(inc)
+    const incT = new Text({ text: '+', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 16, fill: 0xffffff } }); incT.x = incX + 6; incT.y = linesY + 2; hud.addChild(incT)
+    this.ui.rects['sm:new:lines:inc'] = { x: incX, y: linesY, w: 24, h: 24 }
+
+    // Add button
+    const addLabel = new Text({ text: 'Add', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } })
+    const addW = Math.round(addLabel.width + 20)
+    const addX = X + W - addW - 16
+    const addY = linesY
+    const addBtn = new Graphics(); addBtn.roundRect(addX, addY, addW, 24, 6); addBtn.fill({ color: 0x2563eb, alpha: 0.95 }); addBtn.stroke({ width: 1, color: 0xffffff, alpha: 0.12 }); hud.addChild(addBtn)
+    addLabel.x = addX + 10; addLabel.y = addY + 4; hud.addChild(addLabel)
+    this.ui.rects['sm:new:add'] = { x: addX, y: addY, w: addW, h: 24 }
+
+    // Existing staffs list header
+    const listTop = linesY + 40
+    const head = new Text({ text: 'Existing', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0x94a3b8 } }); head.x = X + 16; head.y = listTop; hud.addChild(head)
+
+    // Rows
+    let rowTop = listTop + 18
+    for (const s of (this.data.staffs || [])) {
+      const rowBg = new Graphics(); rowBg.roundRect(X + 12, rowTop, W - 24, 28, 6); rowBg.fill({ color: 0x0b1220, alpha: 0.9 }); rowBg.stroke({ width: 1, color: 0xffffff, alpha: 0.06 }); hud.addChild(rowBg)
+      const nameX = X + 18
+      const nameW = Math.round((W - 36) * 0.45)
+      const nameT = new Text({ text: s.name, style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); nameT.x = nameX + 8; nameT.y = rowTop + 6; hud.addChild(nameT)
+      this.ui.rects[`sm:item:${s.id}:name`] = { x: nameX, y: rowTop + 2, w: nameW, h: 24 }
+      const tsX = nameX + nameW + 8
+      const tsW = 70
+      const tsBg = new Graphics(); tsBg.roundRect(tsX, rowTop + 2, tsW, 24, 6); tsBg.fill({ color: 0x111827, alpha: 0.95 }); tsBg.stroke({ width: 1, color: 0xffffff, alpha: 0.12 }); hud.addChild(tsBg)
+      const tsT = new Text({ text: s.timeSignature || '4/4', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); tsT.x = tsX + 8; tsT.y = rowTop + 6; hud.addChild(tsT)
+      this.ui.rects[`sm:item:${s.id}:ts`] = { x: tsX, y: rowTop + 2, w: tsW, h: 24 }
+
+      // Lines +/-
+      const lnX = tsX + tsW + 8
+      const decLn = new Graphics(); decLn.roundRect(lnX, rowTop + 2, 24, 24, 6); decLn.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(decLn)
+      const decLnT = new Text({ text: '-', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 16, fill: 0xffffff } }); decLnT.x = lnX + 8; decLnT.y = rowTop + 4; hud.addChild(decLnT)
+      this.ui.rects[`sm:item:${s.id}:lines:dec`] = { x: lnX, y: rowTop + 2, w: 24, h: 24 }
+      const lnValX = lnX + 28
+      const lnValBox = new Graphics(); lnValBox.roundRect(lnValX, rowTop + 2, 36, 24, 6); lnValBox.fill({ color: 0x111827, alpha: 0.95 }); lnValBox.stroke({ width: 1, color: 0xffffff, alpha: 0.12 }); hud.addChild(lnValBox)
+      const lnValT = new Text({ text: String(s.numberOfLines), style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); lnValT.x = lnValX + 12; lnValT.y = rowTop + 6; hud.addChild(lnValT)
+      const lnIncX = lnValX + 40
+      const incLn = new Graphics(); incLn.roundRect(lnIncX, rowTop + 2, 24, 24, 6); incLn.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(incLn)
+      const incLnT = new Text({ text: '+', style: { fontFamily: 'system-ui,-apple system,Segoe UI,Roboto,sans-serif', fontSize: 16, fill: 0xffffff } }); incLnT.x = lnIncX + 6; incLnT.y = rowTop + 4; hud.addChild(incLnT)
+      this.ui.rects[`sm:item:${s.id}:lines:inc`] = { x: lnIncX, y: rowTop + 2, w: 24, h: 24 }
+
+      // Reorder and delete
+      const upX = X + W - 96
+      const upBtn = new Graphics(); upBtn.roundRect(upX, rowTop + 2, 28, 24, 6); upBtn.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(upBtn)
+      const upT = new Text({ text: 'Up', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); upT.x = upX + 6; upT.y = rowTop + 6; hud.addChild(upT)
+      this.ui.rects[`sm:item:${s.id}:up`] = { x: upX, y: rowTop + 2, w: 28, h: 24 }
+      const dnX = upX + 32
+      const dnBtn = new Graphics(); dnBtn.roundRect(dnX, rowTop + 2, 36, 24, 6); dnBtn.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(dnBtn)
+      const dnT = new Text({ text: 'Down', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); dnT.x = dnX + 6; dnT.y = rowTop + 6; hud.addChild(dnT)
+      this.ui.rects[`sm:item:${s.id}:down`] = { x: dnX, y: rowTop + 2, w: 36, h: 24 }
+      const delX = dnX + 40
+      const delBtn = new Graphics(); delBtn.roundRect(delX, rowTop + 2, 48, 24, 6); delBtn.fill({ color: 0x7f1d1d, alpha: 0.95 }); hud.addChild(delBtn)
+      const delT = new Text({ text: 'Delete', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); delT.x = delX + 6; delT.y = rowTop + 6; hud.addChild(delT)
+      this.ui.rects[`sm:item:${s.id}:del`] = { x: delX, y: rowTop + 2, w: 48, h: 24 }
+
+      rowTop += 32
+    }
+  }
+
+  private drawTaskDetails(screenW: number, screenH: number) {
+    if (!this.layers) return
+    const hud = this.layers.hud
+    const taskId = (this.data.selection || [])[0]
+    const task = (this.data.tasks || []).find(t => t.id === taskId)
+    const rect = this.layout.find(l => l.id === taskId)
+    if (!task || !rect) return
+    const panelW = 260
+    const panelH = 180
+    const px = Math.round(Math.max(10, Math.min(screenW - panelW - 10, rect.x + rect.w + 12)))
+    const py = Math.round(Math.max(10, Math.min(screenH - panelH - 10, rect.y)))
+
+    const panel = new Graphics(); panel.roundRect(px, py, panelW, panelH, 8); panel.fill({ color: 0x111827, alpha: 0.98 }); panel.stroke({ width: 1, color: 0xffffff, alpha: 0.1 }); hud.addChild(panel)
+    const title = new Text({ text: 'Task', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 13, fontWeight: 'bold', fill: 0xffffff } }); title.x = px + 10; title.y = py + 8; hud.addChild(title)
+    const close = new Graphics(); close.roundRect(px + panelW - 54, py + 8, 44, 20, 6); close.fill({ color: 0x374151, alpha: 0.95 }); hud.addChild(close)
+    const closeT = new Text({ text: 'Close', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); closeT.x = px + panelW - 54 + 8; closeT.y = py + 10; hud.addChild(closeT)
+    this.ui.rects['td:close'] = { x: px + panelW - 54, y: py + 8, w: 44, h: 20 }
+
+    // Title field
+    const y1 = py + 36
+    const nameLbl = new Text({ text: 'Title', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 11, fill: 0x94a3b8 } }); nameLbl.x = px + 10; nameLbl.y = y1 - 14; hud.addChild(nameLbl)
+    const nameBox = new Graphics(); nameBox.roundRect(px + 10, y1, panelW - 20, 22, 6); nameBox.fill({ color: 0x0b1220, alpha: 0.95 }); nameBox.stroke({ width: 1, color: 0xffffff, alpha: 0.1 }); hud.addChild(nameBox)
+    const nameText = new Text({ text: task.title || ' ', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); nameText.x = px + 16; nameText.y = y1 + 4; hud.addChild(nameText)
+    this.ui.rects['td:title'] = { x: px + 10, y: y1, w: panelW - 20, h: 22 }
+
+    // Status chip as button cycles
+    const y2 = y1 + 32
+    const statusLbl = new Text({ text: 'Status', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 11, fill: 0x94a3b8 } }); statusLbl.x = px + 10; statusLbl.y = y2 - 14; hud.addChild(statusLbl)
+    const stBtn = new Graphics(); stBtn.roundRect(px + 10, y2, 100, 22, 6); stBtn.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(stBtn)
+    const stText = new Text({ text: (task as any).status || 'not_started', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 11, fill: 0xffffff } }); stText.x = px + 16; stText.y = y2 + 4; hud.addChild(stText)
+    this.ui.rects['td:status:next'] = { x: px + 10, y: y2, w: 100, h: 22 }
+
+    // Start, Duration controls
+    const y3 = y2 + 32
+    const startLbl = new Text({ text: 'Start', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 11, fill: 0x94a3b8 } }); startLbl.x = px + 10; startLbl.y = y3 - 14; hud.addChild(startLbl)
+    const startDec = new Graphics(); startDec.roundRect(px + 10, y3, 24, 22, 6); startDec.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(startDec)
+    const startDecT = new Text({ text: '-', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 14, fill: 0xffffff } }); startDecT.x = px + 18; startDecT.y = y3 + 2; hud.addChild(startDecT)
+    this.ui.rects['td:start:dec'] = { x: px + 10, y: y3, w: 24, h: 22 }
+    const startVal = new Text({ text: task.startDate, style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); startVal.x = px + 40; startVal.y = y3 + 3; hud.addChild(startVal)
+    const startInc = new Graphics(); startInc.roundRect(px + 10 + 24 + 140, y3, 24, 22, 6); startInc.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(startInc)
+    const startIncT = new Text({ text: '+', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 14, fill: 0xffffff } }); startIncT.x = px + 10 + 24 + 140 + 8; startIncT.y = y3 + 2; hud.addChild(startIncT)
+    this.ui.rects['td:start:inc'] = { x: px + 10 + 24 + 140, y: y3, w: 24, h: 22 }
+
+    const durLbl = new Text({ text: 'Dur', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 11, fill: 0x94a3b8 } }); durLbl.x = px + 200; durLbl.y = y3 - 14; hud.addChild(durLbl)
+    const durDec = new Graphics(); durDec.roundRect(px + 200, y3, 24, 22, 6); durDec.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(durDec)
+    const durDecT = new Text({ text: '-', style: { fontFamily: 'system-ui,-apple system,Segoe UI,Roboto,sans-serif', fontSize: 14, fill: 0xffffff } }); durDecT.x = px + 208; durDecT.y = y3 + 2; hud.addChild(durDecT)
+    this.ui.rects['td:dur:dec'] = { x: px + 200, y: y3, w: 24, h: 22 }
+    const durVal = new Text({ text: String(task.durationDays), style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); durVal.x = px + 230; durVal.y = y3 + 3; hud.addChild(durVal)
+    const durInc = new Graphics(); durInc.roundRect(px + 200 + 36, y3, 24, 22, 6); durInc.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(durInc)
+    const durIncT = new Text({ text: '+', style: { fontFamily: 'system-ui,-apple system,Segoe UI,Roboto,sans-serif', fontSize: 14, fill: 0xffffff } }); durIncT.x = px + 200 + 36 + 6; durIncT.y = y3 + 2; hud.addChild(durIncT)
+    this.ui.rects['td:dur:inc'] = { x: px + 200 + 36, y: y3, w: 24, h: 22 }
+
+    // Staff & Line
+    const y4 = y3 + 32
+    const staffLbl = new Text({ text: 'Staff', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 11, fill: 0x94a3b8 } }); staffLbl.x = px + 10; staffLbl.y = y4 - 14; hud.addChild(staffLbl)
+    const stfDec = new Graphics(); stfDec.roundRect(px + 10, y4, 24, 22, 6); stfDec.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(stfDec)
+    const stfDecT = new Text({ text: '<', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); stfDecT.x = px + 18; stfDecT.y = y4 + 4; hud.addChild(stfDecT)
+    this.ui.rects['td:staff:prev'] = { x: px + 10, y: y4, w: 24, h: 22 }
+    const staffName = new Text({ text: (this.data.staffs || []).find(s => s.id === task.staffId)?.name || task.staffId, style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); staffName.x = px + 40; staffName.y = y4 + 3; hud.addChild(staffName)
+    const stfInc = new Graphics(); stfInc.roundRect(px + 10 + 24 + 140, y4, 24, 22, 6); stfInc.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(stfInc)
+    const stfIncT = new Text({ text: '>', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); stfIncT.x = px + 10 + 24 + 140 + 8; stfIncT.y = y4 + 4; hud.addChild(stfIncT)
+    this.ui.rects['td:staff:next'] = { x: px + 10 + 24 + 140, y: y4, w: 24, h: 22 }
+
+    const lineLbl = new Text({ text: 'Line', style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 11, fill: 0x94a3b8 } }); lineLbl.x = px + 200; lineLbl.y = y4 - 14; hud.addChild(lineLbl)
+    const lnDec = new Graphics(); lnDec.roundRect(px + 200, y4, 24, 22, 6); lnDec.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(lnDec)
+    const lnDecT = new Text({ text: '-', style: { fontFamily: 'system-ui,-apple system,Segoe UI,Roboto,sans-serif', fontSize: 14, fill: 0xffffff } }); lnDecT.x = px + 208; lnDecT.y = y4 + 2; hud.addChild(lnDecT)
+    this.ui.rects['td:line:dec'] = { x: px + 200, y: y4, w: 24, h: 22 }
+    const lnVal = new Text({ text: String(task.staffLine), style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif', fontSize: 12, fill: 0xffffff } }); lnVal.x = px + 230; lnVal.y = y4 + 3; hud.addChild(lnVal)
+    const lnInc = new Graphics(); lnInc.roundRect(px + 200 + 36, y4, 24, 22, 6); lnInc.fill({ color: 0x1f2937, alpha: 0.95 }); hud.addChild(lnInc)
+    const lnIncT = new Text({ text: '+', style: { fontFamily: 'system-ui,-apple system,Segoe UI,Roboto,sans-serif', fontSize: 14, fill: 0xffffff } }); lnIncT.x = px + 200 + 36 + 6; lnIncT.y = y4 + 2; hud.addChild(lnIncT)
+    this.ui.rects['td:line:inc'] = { x: px + 200 + 36, y: y4, w: 24, h: 22 }
   }
 
   drawDragPreview(x: number, y: number, w: number, h: number) {
@@ -562,7 +1356,7 @@ export class Renderer {
   clearPreview() {
     // Intentionally keep the preview graphic so the ghost remains visible until next draw
     // We just clear its contents to avoid flicker when pointer stops briefly.
-    try { this.previewG?.clear() } catch { }
+    try { this.previewG?.clear() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]clearPreview', err) }
   }
 
   drawDependencyPreview(src: { x: number; y: number; w: number; h: number }, dstPoint: { x: number; y: number }) {
@@ -579,7 +1373,7 @@ export class Renderer {
 
     // Animated flow effect
     const time = Date.now() / 500
-    const dashOffset = (time % 10) * 5
+    // const dashOffset = (time % 10) * 5 // reserved for future dashed effect
 
     // Draw multiple curves for a flowing effect
     for (let i = 0; i < 3; i++) {
@@ -636,13 +1430,13 @@ export class Renderer {
 
   clearDependencyPreview() {
     if (this.depPreviewG && this.depPreviewG.parent) {
-      try { this.depPreviewG.parent.removeChild(this.depPreviewG) } catch { }
-      try { this.depPreviewG.destroy() } catch { }
+      try { this.depPreviewG.parent.removeChild(this.depPreviewG) } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]clearDependencyPreview remove', err) }
+      try { this.depPreviewG.destroy() } catch (err) { if (import.meta?.env?.DEV) console.debug('[Renderer]clearDependencyPreview destroy', err) }
     }
     this.depPreviewG = null
   }
 
-  // statusToAccidental remains for glyph selection; colors come from draw/notes.ts
+  // statusToAccidental remains for glyph selection; colors come from draw/tasks.ts
 
   private statusToAccidental(status: string): string {
     switch (status) {

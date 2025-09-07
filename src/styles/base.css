@@ -1,0 +1,31 @@
+/* Smooth animations for all UI elements */
+* {
+  transition: background-color var(--ui-transition-fast), border-color var(--ui-transition-fast),
+    opacity var(--ui-transition-fast);
+}
+
+/* Header + App base */
+body {
+  background: var(--ui-color-bg);
+  color: var(--ui-color-text);
+  font-feature-settings: 'liga' 1, 'kern' 1, 'calt' 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Musical paper background effect */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--ui-music-paper-bg);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Header visuals moved to Pixi HUD; legacy header styles removed */

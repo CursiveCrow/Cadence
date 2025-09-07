@@ -26,7 +26,7 @@ export function drawGridBackground(params: {
     for (let day = startDay; day <= endDay; day++) {
         const gx = LEFT_MARGIN + (day - vx) * pxPerDay
         const xInt = Math.round(gx)
-        const wBand = Math.max(0.5, pxPerDay)
+        // const wBand = Math.max(0.5, pxPerDay) // reserved if band fills return
         if (xInt <= LEFT_MARGIN + 1) continue
 
         // Removed alternating/day band fills for a cleaner, ink-on-paper background
