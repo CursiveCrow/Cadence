@@ -1,8 +1,8 @@
-export { TIMELINE_CONFIG } from './timelineConfig'
-export { DAY_THRESHOLD, HOUR_THRESHOLD } from './timeScale'
-export type { TimeScale } from './timeScale'
+export { TIMELINE_CONFIG } from '../timelineConfig'
+export { DAY_THRESHOLD, HOUR_THRESHOLD } from '../timeScale'
+export type { TimeScale } from '../timeScale'
 export { computeDateHeaderHeight, computeDateHeaderViewModel }
-    from './dateHeader'
+    from '../dateHeader'
 export {
     TIMELINE,
     clampZoom,
@@ -14,5 +14,6 @@ export {
     isoFromDayIndex,
     computeScaledTimeline,
     staffCenterY,
-} from './timelineMath'
-
+    EPS,
+    nearlyZero,
+} from '../timelineMath'

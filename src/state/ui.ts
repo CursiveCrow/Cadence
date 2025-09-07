@@ -37,6 +37,6 @@ const uiSlice = createSlice({
     },
 })
 
-export const { setActiveProject, setSelection, setSelectionWithAnchor, setViewport, updateViewport, setVerticalScale } = uiSlice.actions
+export const { setSelection, setSelectionWithAnchor, setViewport, setVerticalScale } = uiSlice.actions
 export default uiSlice.reducer
 

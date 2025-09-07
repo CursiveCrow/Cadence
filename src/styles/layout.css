@@ -1,18 +1,55 @@
-/* Minimal layout primitives for shell structure used by bootstrap */
-.content {
-  position: fixed;
-  inset: 0;
+/* Base layout for full-height application */
+html,
+body,
+#app-container {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  overflow: hidden;
+  background: var(--ui-color-bg);
+  color: var(--ui-color-text);
+}
+
+/* Application layout structure */
+.app-root {
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  height: calc(100% - 0px);
+}
+
+/* Sidebar width is controlled by app state; do not hardcode here */
+.sidebar {
+  padding: 0 12px 12px;
+}
+
 .main {
+  flex: 1;
   position: relative;
-  flex: 1 1 auto;
+  min-width: 0;
 }
+
 .canvas {
   position: absolute;
   inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
-  display: block;
 }

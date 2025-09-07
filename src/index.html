@@ -4,27 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cadence</title>
-    <link rel="stylesheet" href="/styles/ui.css" />
-    <style>
-      html, body, #root { height: 100%; margin: 0; }
-      body {
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        overflow: hidden;
-        background: var(--ui-color-bg);
-        color: var(--ui-color-text);
-      }
-      .app-root { display: flex; flex-direction: column; height: 100%; }
-      .header { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
-      .content { flex: 1; display: flex; min-height: 0; min-width: 0; height: calc(100% - 0px); }
-      /* Sidebar width is controlled by app state; do not hardcode here */
-      .sidebar { padding: 0 12px 12px; }
-      .main { flex: 1; position: relative; min-width: 0; }
-      .canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-      /* Keep minimal; detailed styles live in ui.css */
-    </style>
+    <link rel="stylesheet" href="./styles/ui.css" />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/main.ts"></script>
+    <div id="app-container"></div>
+    <script type="module" src="/app/bootstrap.ts"></script>
   </body>
   </html>

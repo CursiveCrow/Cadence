@@ -15,5 +15,5 @@ const dependenciesSlice = createSlice({
     },
 })
 
-export const { setDependencies, addDependency, deleteDependency } = dependenciesSlice.actions
+export const { addDependency } = dependenciesSlice.actions
 export default dependenciesSlice.reducer

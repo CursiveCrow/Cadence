@@ -1,19 +1,26 @@
 {
-  "$schema": "https://unpkg.com/knip@latest/schema.json",
   "entry": [
-    "index.html",
-    "source/surface/containers/main.tsx",
-    "source/renderer/index.ts",
-    "source/infrastructure/platform/electron/main.ts",
-    "source/infrastructure/platform/electron/preload.ts"
+    "src/app/bootstrap.ts",
+    "src/main/index.ts",
+    "src/preload/index.ts"
   ],
   "project": [
-    "source/**/*.{ts,tsx}",
-    "vite.config.ts",
-    "index.html"
+    "src/**/*.{ts,tsx}",
+    "!src/**/*.test.{ts,tsx}",
+    "!src/**/*.spec.{ts,tsx}"
   ],
   "ignore": [
-    "source/**/__tests__/**",
-    "source/**/__mocks__/**"
+    "src/renderer/utils/index.ts"
+  ],
+  "ignoreBinaries": [
+    "electron",
+    "vite"
+  ],
+  "ignoreDependencies": [
+    "@reduxjs/toolkit",
+    "pixi.js",
+    "electron",
+    "vite",
+    "typescript"
   ]
 }

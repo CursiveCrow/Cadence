@@ -13,20 +13,8 @@ export interface Task {
   startDate: string
   durationDays: number
   status: TaskStatus
-  assignee?: string
-  description?: string
   staffId: string
   staffLine: number
-  laneIndex?: number
-  projectId: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface Milestone {
-  id: string
-  title: string
-  date: string
   projectId: string
   createdAt: string
   updatedAt: string
@@ -68,4 +56,7 @@ export interface Staff {
   updatedAt: string
   timeSignature?: string
 }
+
+// Re-export renderer types
+export * from './renderer'
 
