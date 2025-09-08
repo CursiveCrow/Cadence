@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Cadence — Detailed Architecture & Code Map
 ==========================================
 
@@ -223,3 +224,5 @@ Contributing
 
 License
 MIT
+=======
+>>>>>>> main
