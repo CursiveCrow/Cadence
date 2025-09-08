@@ -162,7 +162,8 @@ export class Renderer implements IRenderer {
 
         // 1. Render background and grid with error boundaries
         safePixiOperation('Renderer', 'renderBackground', () => {
-            const bgColor = this.cssVarColorToHex('--ui-color-bg', 0x292524)
+            // Use timeline-specific background token so header/sidebar can differ
+            const bgColor = this.cssVarColorToHex('--ui-color-bg-timeline', 0x262422)
             this.gridRenderer.renderBackground(layers.background, screenDimensions, viewport, this.leftMargin, pxPerDay, bgColor)
         })
 
@@ -220,7 +221,14 @@ export class Renderer implements IRenderer {
             this.headerRenderer?.render(layers.ui, width, viewport, this.leftMargin)
         })
         safePixiOperation('Renderer', 'renderSidebar', () => {
-            this.sidebarRenderer?.render(layers.ui, height, this.leftMargin, this.data.staffs, staffBlocks)
+            this.sidebarRenderer?.render(
+                layers.ui,
+                height,
+                this.leftMargin,
+                this.data.staffs,
+                staffBlocks,
+                { x: this.hoverX, y: this.hoverY }
+            )
         })
         safePixiOperation('Renderer', 'renderToolbar', () => {
             this.toolbarRenderer?.render(layers.ui, width, this.data.selection)

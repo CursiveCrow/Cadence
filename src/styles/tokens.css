@@ -2,7 +2,9 @@
 :root {
   /* Base Colors - Sheet Music Inspired Dark Theme */
   /* Ink theme: charcoal canvas with soft paper lines and minimal color */
-  --ui-color-bg: #0b0b0f; /* deep charcoal */
+  --ui-color-bg: #0b0b0f;
+  /* Timeline content background: neutral, slightly warm grey */
+  --ui-color-bg-timeline: #262422;
   --ui-color-text: #e6e7ea;
   --ui-color-text-soft: #c9cdd3;
   --ui-color-muted: #9aa1aa;
@@ -90,6 +92,7 @@
 /* Light Theme */
 :root[data-theme='light'] {
   --ui-color-bg: #ffffff;
+  --ui-color-bg-timeline: #f7f6f4;
   --ui-color-text: #111827;
   --ui-color-muted: #6b7280;
   --ui-color-border: rgba(0, 0, 0, 0.12);

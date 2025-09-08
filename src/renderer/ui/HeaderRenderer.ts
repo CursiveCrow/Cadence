@@ -1,13 +1,11 @@
 ﻿import { Container, Graphics, Text } from 'pixi.js'
 import { PROJECT_START_DATE } from '@config'
 import { getCssVarColor } from '@shared/colors'
-import { computeDateHeaderHeight, computeDateHeaderViewModel, DAY_THRESHOLD, dayIndexFromISO, worldDaysToScreenX, TIMELINE } from '@renderer/timeline'
+import { computeDateHeaderHeight, computeDateHeaderViewModel, DAY_THRESHOLD, HOUR_THRESHOLD, dayIndexFromISO, worldDaysToScreenX, TIMELINE } from '@renderer/timeline'
 import { HEADER, SPACING } from '@config/ui'
 
 export class HeaderRenderer {
   private bg?: Graphics
-  private monthTicks?: Graphics
-  private dayTicks?: Graphics
   private todayTick?: Graphics
   private labelsMonth: Text[] = []
   private labelsDay: Text[] = []
@@ -26,46 +24,48 @@ export class HeaderRenderer {
       width: screenW,
     })
 
-    // Header background with two-tier bands (months/days), clipped to sidebar
+    // Zoom progress used for shelf reveals
+    const dayProg = Math.max(0, Math.min(1, ((viewport.zoom || 1) - DAY_THRESHOLD) / 0.25))
+    const hoursProg = Math.max(0, Math.min(1, ((viewport.zoom || 1) - HOUR_THRESHOLD) / 0.5))
+
+    // Header background with shelves that slide out from the previous tier
     if (!this.bg) this.bg = new Graphics()
     this.bg.clear()
     const hdrBg = getCssVarColor('--ui-color-bg', 0x0b0b0f)
+    // Opaque underlay to ensure nothing from the timeline shows through
+    this.bg.rect(0, 0, Math.max(0, screenW), Math.max(0, this.headerHeight))
+    this.bg.fill({ color: hdrBg, alpha: 1.0 })
     const monthBandH = Math.min(SPACING.EXTRA_LARGE + 6, Math.max(SPACING.EXTRA_LARGE, Math.round(this.headerHeight * 0.5)))
     const dayBandH = Math.max(0, this.headerHeight - monthBandH)
     const x0 = Math.round(leftMargin)
     const w = Math.max(0, screenW - leftMargin)
-    // Month band (darker)
+    // Partition the lower band into a day shelf and an hour shelf
+    const hourShelfH = Math.min(dayBandH, Math.round(24 * hoursProg))
+    const dayShelfH = Math.max(0, dayBandH - hourShelfH)
+    const dayReveal = Math.round((1 - dayProg) * 10)
+    const hourReveal = Math.round((1 - hoursProg) * 8)
+
+    // 1) Hour shelf first (appears under the day shelf)
+    if (hourShelfH > 0) {
+      const yHour = monthBandH + dayShelfH - hourReveal
+      this.bg.rect(x0, yHour, w, hourShelfH + hourReveal)
+      this.bg.fill({ color: hdrBg, alpha: 1.0 })
+    }
+
+    // 2) Day shelf next (slides from beneath month shelf)
+    if (dayShelfH > 0) {
+      const yDay = monthBandH - dayReveal
+      this.bg.rect(x0, yDay, w, dayShelfH + dayReveal)
+      this.bg.fill({ color: hdrBg, alpha: 1.0 })
+    }
+
+    // 3) Month band last, so it visually sits above the revealing day shelf
     this.bg.rect(x0, 0, w, monthBandH)
     this.bg.fill({ color: hdrBg, alpha: 1.0 })
-    this.bg.rect(x0, monthBandH - 1, w, 1)
-    this.bg.fill({ color: 0xffffff, alpha: 0.05 })
-    // Day band (slightly lighter)
-    this.bg.rect(x0, monthBandH, w, dayBandH)
-    this.bg.fill({ color: hdrBg, alpha: 1.0 })
-    // Bottom divider
-    this.bg.rect(x0, this.headerHeight - 1, w, 1)
-    this.bg.fill({ color: 0xffffff, alpha: 0.06 })
     ui.addChild(this.bg)
 
-    // ticks
-    if (!this.monthTicks) this.monthTicks = new Graphics()
-    if (!this.dayTicks) this.dayTicks = new Graphics()
-    this.monthTicks.clear()
-    for (const x of vm.monthTickXs) {
-      this.monthTicks.moveTo(Math.round(x) + 0.5, Math.max(2, Math.floor(HEADER.PADDING / 4)))
-      this.monthTicks.lineTo(Math.round(x) + 0.5, Math.max(2, monthBandH - Math.floor(SPACING.SMALL / 2)))
-      const primary = getCssVarColor('--ui-color-primary', 0x7c3aed)
-      this.monthTicks.stroke({ width: 2, color: primary, alpha: 0.45 })
-    }
-    ui.addChild(this.monthTicks)
-
-    this.dayTicks.clear()
-    for (const x of vm.dayTickXs) {
-      this.dayTicks.moveTo(Math.round(x) + 0.5, monthBandH + Math.max(2, Math.floor(HEADER.PADDING / 4)))
-      this.dayTicks.lineTo(Math.round(x) + 0.5, this.headerHeight - Math.max(2, Math.floor(HEADER.PADDING / 4)))
-      this.dayTicks.stroke({ width: 1, color: 0xffffff, alpha: 0.12 })
-    }
-    ui.addChild(this.dayTicks)
+    // Remove vertical grid-aligned ticks in the header to keep it clean/opaque.
+    // (We still keep the today indicator and labels below.)
 
     // labels (simple, no pooling beyond array reuse)
     const ensureText = (arr: Text[], idx: number, text: string, color: number, y: number) => {
@@ -81,26 +81,30 @@ export class HeaderRenderer {
       const text = (vm.monthLabels[i]!.text || '').toUpperCase()
       const lbl = ensureText(this.labelsMonth, i, text, monthColor, Math.max(2, Math.round((monthBandH - 11) / 2)))
       ;(lbl.style as any).fontSize = 11
+      ;(lbl.style as any).fill = monthColor
       lbl.x = vm.monthLabels[i]!.x
       ui.addChild(lbl)
     }
     // Day labels: numeric-only and slide-in as zoom crosses DAY_THRESHOLD
-    const dayProgress = Math.max(0, Math.min(1, ((viewport.zoom || 1) - DAY_THRESHOLD) / 0.25))
-    const slidePx = Math.round((1 - dayProgress) * 12)
-    const dayAlpha = Math.max(0, Math.min(1, dayProgress))
+    const slidePx = Math.round((1 - dayProg) * 12)
+    const dayAlpha = Math.max(0, Math.min(1, dayProg))
     for (let i = 0; i < vm.dayLabels.length; i++) {
       const lbl = ensureText(this.labelsDay, i, vm.dayLabels[i]!.text, 0xffffff, monthBandH + 4 + slidePx)
       ;(lbl.style as any).fontSize = 11
+      ;(lbl.style as any).fill = 0xffffff
       lbl.x = vm.dayLabels[i]!.x
       lbl.alpha = dayAlpha
       ui.addChild(lbl)
     }
     // Hour labels
     for (let i = 0; i < vm.hourLabels.length; i++) {
-      const y = Math.max(monthBandH + 20, this.headerHeight - 14)
-      const lbl = ensureText(this.labelsHour, i, vm.hourLabels[i]!.text, 0xdddddd, y)
+      const baseY = Math.max(monthBandH + 20, this.headerHeight - 14)
+      const slideH = Math.round((1 - hoursProg) * 8)
+      const lbl = ensureText(this.labelsHour, i, vm.hourLabels[i]!.text, 0xdddddd, baseY + slideH)
       ;(lbl.style as any).fontSize = 10
+      ;(lbl.style as any).fill = 0xdddddd
       lbl.x = vm.hourLabels[i]!.x
+      lbl.alpha = hoursProg
       ui.addChild(lbl)
     }
 

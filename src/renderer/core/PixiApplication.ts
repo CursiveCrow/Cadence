@@ -1,4 +1,6 @@
 import { Application, Container } from 'pixi.js'
+// Ensure the Filter system is registered (per Pixi v8 docs)
+import 'pixi.js/filters'
 
 // PixiJS application lifecycle management
 export class PixiApplication {
