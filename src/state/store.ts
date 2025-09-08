@@ -1,19 +1,27 @@
 import { configureStore, combineReducers } from '@reduxjs/toolkit'
-import ui from './ui'
-import staffs from './staffs'
-import tasks from './tasks'
-import dependencies from './dependencies'
+import { storage } from '../domain/services/storage'
+import ui from './slices/uiSlice'
+import staffs from './slices/staffsSlice'
+import tasks from './slices/tasksSlice'
+import dependencies from './slices/dependenciesSlice'
 
 const PERSIST_KEY = 'cadence_state'
-const PERSIST_VERSION = 2
+const PERSIST_VERSION = 3
 
 function loadState() {
     try {
-        const json = localStorage.getItem(PERSIST_KEY)
+        const json = storage.getItem(PERSIST_KEY)
         if (!json) return undefined
         const parsed = JSON.parse(json)
         if (!parsed || parsed.__v !== PERSIST_VERSION) return undefined
         const { __v, ...state } = parsed
+        // Normalize UI shape when older states are loaded in the future
+        if ((state as any).ui) {
+            const ui: any = (state as any).ui
+            if (!Number.isFinite(ui.sidebarWidth)) ui.sidebarWidth = 220
+            if (!ui.viewport) ui.viewport = { x: 0, y: 0, zoom: 1 }
+            if (!Number.isFinite(ui.verticalScale)) ui.verticalScale = 1
+        }
         return state
     } catch {
         return undefined
@@ -23,7 +31,7 @@ function loadState() {
 function saveState(state: unknown) {
     try {
         const wrapped = { ...(state as object), __v: PERSIST_VERSION }
-        localStorage.setItem(PERSIST_KEY, JSON.stringify(wrapped))
+        storage.setItem(PERSIST_KEY, JSON.stringify(wrapped))
     } catch {
         // ignore
     }

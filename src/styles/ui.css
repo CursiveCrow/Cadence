@@ -1,4 +1,4 @@
 @import './tokens.css';
 @import './base.css';
 @import './layout.css';
-/* React-specific modals/styles removed; Pixi HUD handles visuals */
+/* React-specific modals/styles removed; Pixi UI handles visuals */

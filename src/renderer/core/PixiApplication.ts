@@ -10,9 +10,9 @@ export class PixiApplication {
         background: Container
         tasks: Container
         dependencies: Container
-        hud: Container
+        ui: Container
     } | null = null
-    private hudPersistent: Container | null = null
+    private uiPersistent: Container | null = null
     private ready = false
 
     constructor(canvas: HTMLCanvasElement) {
@@ -45,6 +45,13 @@ export class PixiApplication {
             this.app = app
             this.root = app.stage
 
+            // Enforce WebGPU availability
+            const hasWebGPU = typeof (navigator as any).gpu !== 'undefined'
+            if (!hasWebGPU) {
+                this.showUnsupportedOverlay()
+                return false
+            }
+
             // Create layer hierarchy
             this.setupLayers()
 
@@ -56,6 +63,21 @@ export class PixiApplication {
         }
     }
 
+    private showUnsupportedOverlay() {
+        try {
+            const overlay = document.createElement('div')
+            Object.assign(overlay.style, {
+                position: 'fixed', inset: '0', background: '#0b0b0f', color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'system-ui, sans-serif', fontSize: '14px', zIndex: '9999'
+            } as CSSStyleDeclaration)
+            overlay.textContent = 'WebGPU is required to run Cadence. Please enable it or use a compatible browser.'
+            document.body.appendChild(overlay)
+        } catch (err) {
+            if (import.meta?.env?.DEV) console.debug('[PixiApplication]overlay', err)
+        }
+    }
+
     private setupLayers() {
         if (!this.root) return
 
@@ -63,8 +85,8 @@ export class PixiApplication {
         const background = new Container()
         const tasks = new Container()
         const dependencies = new Container()
-        const hudPersistent = new Container()
-        const hud = new Container()
+        const uiPersistent = new Container()
+        const ui = new Container()
 
         // Build layer hierarchy
         viewport.addChild(background)
@@ -72,12 +94,12 @@ export class PixiApplication {
         viewport.addChild(tasks)
         this.root.addChild(viewport)
 
-        // persistent HUD first (backgrounds, gradients), then dynamic HUD on top
-        this.root.addChild(hudPersistent)
-        this.root.addChild(hud)
+        // Persistent UI first (backgrounds, gradients), then dynamic UI on top
+        this.root.addChild(uiPersistent)
+        this.root.addChild(ui)
 
-        this.layers = { viewport, background, tasks, dependencies, hud }
-        this.hudPersistent = hudPersistent
+        this.layers = { viewport, background, tasks, dependencies, ui }
+        this.uiPersistent = uiPersistent
     }
 
     // Resize the application
@@ -111,9 +133,9 @@ export class PixiApplication {
         return this.layers
     }
 
-    // Get persistent HUD container
-    getHudPersistent() {
-        return this.hudPersistent
+    // Get persistent UI container
+    getUiPersistent() {
+        return this.uiPersistent
     }
 
     // Get root container
@@ -135,24 +157,22 @@ export class PixiApplication {
     clearContainers() {
         if (!this.layers) return
 
-        const destroyAll = (c: Container) => {
+        const justClear = (c: Container) => {
             try {
-                const removed = c.removeChildren()
-                for (const ch of removed) {
-                    try {
-                        (ch as any).destroy?.({ children: true })
-                    } catch (err) {
-                        if (import.meta?.env?.DEV) console.debug('[PixiApplication]destroy child', err)
-                    }
-                }
+                c.removeChildren()
             } catch (err) {
                 if (import.meta?.env?.DEV) console.debug('[PixiApplication]removeChildren', err)
             }
         }
 
-        destroyAll(this.layers.background)
-        destroyAll(this.layers.dependencies)
-        destroyAll(this.layers.hud)
+        justClear(this.layers.background)
+        justClear(this.layers.dependencies)
+        // Do not destroy UI children; UI renderers reuse Text/Graphics across frames
+        try {
+            this.layers.ui.removeChildren()
+        } catch (err) {
+            if (import.meta?.env?.DEV) console.debug('[PixiApplication]ui.removeChildren', err)
+        }
 
         // Special handling for tasks container (may have cached graphics)
         try {
@@ -181,7 +201,7 @@ export class PixiApplication {
         this.app = null
         this.root = null
         this.layers = null
-        this.hudPersistent = null
+        this.uiPersistent = null
     }
 
     // Performance monitoring

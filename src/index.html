@@ -1,13 +1,15 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval'; connect-src 'self' ws:;" />
     <title>Cadence</title>
     <link rel="stylesheet" href="./styles/ui.css" />
   </head>
   <body>
     <div id="app-container"></div>
-    <script type="module" src="/app/bootstrap.ts"></script>
+    <script type="module" src="/runtime/bootstrap.ts"></script>
   </body>
   </html>
+

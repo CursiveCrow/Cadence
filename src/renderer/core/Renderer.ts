@@ -1,15 +1,22 @@
 import { Graphics } from 'pixi.js'
 import { PixiApplication } from './PixiApplication'
 import { ViewportManager } from './ViewportManager'
-import { HudRenderer } from '../ui/HudRenderer'
+import { HeaderRenderer } from '../ui/HeaderRenderer'
+import { SidebarRenderer } from '../ui/SidebarRenderer'
+import { ToolbarRenderer } from '../ui/ToolbarRenderer'
 import { ModalRenderer } from '../ui/ModalRenderer'
 import { TooltipRenderer } from '../ui/TooltipRenderer'
-import { TaskRenderer, TaskLayout } from '../graphics/TaskRenderer'
-import { GridRenderer } from '../graphics/GridRenderer'
-import { EffectsRenderer } from '../graphics/EffectsRenderer'
+import { TaskPass, TaskLayout } from '../passes/TaskPass'
+import { GridPass } from '../passes/GridPass'
+import { EffectsPass } from '../passes/EffectsPass'
 import { safePixiOperation, errorLogger, ErrorSeverity, HealthCheck } from './ErrorBoundary'
-import { TIMELINE, computeScaledTimeline } from '../utils'
+import { computeScaledTimeline } from '@renderer/timeline'
+import type { IRenderer } from '../../types'
+import { getCssVarColor } from '../../shared/colors'
 import type { Staff, Task, Dependency } from '../../types'
+import { TaskStatus } from '../../types'
+import { TextInputManager } from '../ui/TextInputManager'
+import { DebugOverlay } from '../ui/DebugOverlay'
 
 // Data interface for renderer
 interface RendererData {
@@ -31,17 +38,21 @@ interface RendererMetrics {
 }
 
 // Main orchestrating Renderer class
-export class NewRenderer {
+export class Renderer implements IRenderer {
     private pixiApp: PixiApplication
     private viewportManager: ViewportManager
 
     // Sub-renderers
-    private hudRenderer: HudRenderer | null = null
+    private headerRenderer: HeaderRenderer | null = null
+    private sidebarRenderer: SidebarRenderer | null = null
+    private toolbarRenderer: ToolbarRenderer | null = null
     private modalRenderer: ModalRenderer
     private tooltipRenderer: TooltipRenderer
-    private taskRenderer: TaskRenderer
-    private gridRenderer: GridRenderer
-    private effectsRenderer: EffectsRenderer
+    private taskRenderer: TaskPass
+    private gridRenderer: GridPass
+    private effectsRenderer: EffectsPass
+    private textInput: TextInputManager
+    private debugOverlay: DebugOverlay = new DebugOverlay()
 
     // State
     private data: RendererData = { staffs: [], tasks: [], dependencies: [], selection: [] }
@@ -50,6 +61,8 @@ export class NewRenderer {
     private hoverX: number | null = null
     private hoverY: number | null = null
     private verticalScale: number = 1
+    private leftMargin: number = 0
+    private currentModal: null | 'staffManager' = null
 
     // Preview graphics state
     private previewG: Graphics | null = null
@@ -67,10 +80,6 @@ export class NewRenderer {
         setSelection?: (ids: string[]) => void
     } = {}
 
-    // Hidden input for text editing
-    private hiddenInput: HTMLInputElement | null = null
-    private editing: { key: string; onCommit: (value: string) => void; type: 'text' | 'number' } | null = null
-
     // CSS color cache for performance
     private colorCache: Map<string, number> = new Map()
 
@@ -78,12 +87,13 @@ export class NewRenderer {
         this.pixiApp = new PixiApplication(canvas)
         this.viewportManager = new ViewportManager()
 
-        // Initialize sub-renderers (HudRenderer will be created after PixiJS init)
+        // Initialize sub-renderers
         this.modalRenderer = new ModalRenderer()
         this.tooltipRenderer = new TooltipRenderer()
-        this.taskRenderer = new TaskRenderer()
-        this.gridRenderer = new GridRenderer()
-        this.effectsRenderer = new EffectsRenderer()
+        this.taskRenderer = new TaskPass()
+        this.gridRenderer = new GridPass()
+        this.effectsRenderer = new EffectsPass()
+        this.textInput = new TextInputManager()
 
         this.initializeAsync()
     }
@@ -92,22 +102,22 @@ export class NewRenderer {
         try {
             const success = await this.pixiApp.initialize()
             if (success) {
-                // Now that PixiJS is initialized, create the HudRenderer with the actual persistent container
-                const hudPersistent = this.pixiApp.getHudPersistent()
-                if (hudPersistent) {
-                    this.hudRenderer = new HudRenderer(hudPersistent)
+                const uiPersistent = this.pixiApp.getUiPersistent()
+                if (!uiPersistent) {
+                    errorLogger.log('Renderer', 'initialize', ErrorSeverity.ERROR, 'UI persistent container not available')
                 } else {
-                    errorLogger.log('NewRenderer', 'initialize', ErrorSeverity.ERROR, 'HUD persistent container not available')
+                    this.headerRenderer = new HeaderRenderer()
+                    this.sidebarRenderer = new SidebarRenderer()
+                    this.toolbarRenderer = new ToolbarRenderer()
                 }
 
-                this.ensureHiddenInput()
                 this.render() // Initial render
             } else {
-                errorLogger.log('NewRenderer', 'initialize', ErrorSeverity.CRITICAL, 'PixiJS initialization failed')
+                errorLogger.log('Renderer', 'initialize', ErrorSeverity.CRITICAL, 'PixiJS initialization failed')
             }
         } catch (error) {
             errorLogger.log(
-                'NewRenderer',
+                'Renderer',
                 'initialize',
                 ErrorSeverity.CRITICAL,
                 'Renderer initialization failed',
@@ -119,25 +129,25 @@ export class NewRenderer {
     // Main render method - orchestrates all sub-renderers with error boundaries
     render() {
         if (!this.pixiApp.isReady()) {
-            errorLogger.log('NewRenderer', 'render', ErrorSeverity.WARNING, 'PixiJS not ready, skipping render')
+            errorLogger.log('Renderer', 'render', ErrorSeverity.WARNING, 'PixiJS not ready, skipping render')
             return
         }
 
         const layers = this.pixiApp.getLayers()
-        const hudPersistent = this.pixiApp.getHudPersistent()
-        if (!layers || !hudPersistent) {
-            errorLogger.log('NewRenderer', 'render', ErrorSeverity.ERROR, 'Required containers not available')
+        const uiPersistent = this.pixiApp.getUiPersistent()
+        if (!layers || !uiPersistent) {
+            errorLogger.log('Renderer', 'render', ErrorSeverity.ERROR, 'Required containers not available')
             return
         }
 
         // Health check
         if (!HealthCheck.checkPixiHealth(this.pixiApp.getApp())) {
-            errorLogger.log('NewRenderer', 'render', ErrorSeverity.CRITICAL, 'PixiJS application unhealthy')
+            errorLogger.log('Renderer', 'render', ErrorSeverity.CRITICAL, 'PixiJS application unhealthy')
             return
         }
 
         // Clear containers for fresh render with error handling
-        safePixiOperation('NewRenderer', 'clearContainers', () => this.pixiApp.clearContainers())
+        safePixiOperation('Renderer', 'clearContainers', () => this.pixiApp.clearContainers())
 
         const screenDimensions = this.pixiApp.getScreenDimensions()
         const { width, height } = screenDimensions
@@ -147,95 +157,103 @@ export class NewRenderer {
         // Update viewport manager screen dimensions
         this.viewportManager.setScreenDimensions(width, height)
 
+        // Ensure viewport uses dynamic left margin
+        this.viewportManager.setLeftMargin(this.leftMargin)
+
         // 1. Render background and grid with error boundaries
-        safePixiOperation('NewRenderer', 'renderBackground', () => {
+        safePixiOperation('Renderer', 'renderBackground', () => {
             const bgColor = this.cssVarColorToHex('--ui-color-bg', 0x292524)
-            this.gridRenderer.renderBackground(layers.background, screenDimensions, viewport, TIMELINE.LEFT_MARGIN, pxPerDay, bgColor)
+            this.gridRenderer.renderBackground(layers.background, screenDimensions, viewport, this.leftMargin, pxPerDay, bgColor)
         })
 
         // 2. Render staff lines and get metrics with error boundaries
-        const staffBlocks = safePixiOperation('NewRenderer', 'renderStaffLines', () => {
+        const staffBlocks = safePixiOperation('Renderer', 'renderStaffLines', () => {
             const scaledTimeline = computeScaledTimeline(this.verticalScale)
             return this.gridRenderer.renderStaffLines(
-                layers.background, this.data.staffs, scaledTimeline, viewport, width, TIMELINE.LEFT_MARGIN
+                layers.background, this.data.staffs, scaledTimeline, viewport, width, this.leftMargin
             )
         }) || []
         this.metrics = { pxPerDay, staffBlocks }
 
         // 3. Render measure markers and today marker with error boundaries
-        safePixiOperation('NewRenderer', 'renderMeasureMarkers', () => {
+        safePixiOperation('Renderer', 'renderMeasureMarkers', () => {
             this.gridRenderer.renderMeasureMarkers(
-                layers.background, staffBlocks, this.data.staffs, viewport, width, TIMELINE.LEFT_MARGIN, pxPerDay
+                layers.background, staffBlocks, this.data.staffs, viewport, width, this.leftMargin, pxPerDay
             )
         })
-        safePixiOperation('NewRenderer', 'renderTodayMarker', () => {
+        safePixiOperation('Renderer', 'renderTodayMarker', () => {
             this.gridRenderer.renderTodayMarker(
-                layers.background, viewport, TIMELINE.LEFT_MARGIN, pxPerDay, height
+                layers.background, viewport, this.leftMargin, pxPerDay, height
             )
         })
 
         // 4. Render hover effects with error boundaries
-        safePixiOperation('NewRenderer', 'renderHoverEffects', () => {
+        safePixiOperation('Renderer', 'renderHoverEffects', () => {
             this.gridRenderer.renderHoverEffects(layers.background, this.hoverX, this.hoverY, staffBlocks, height)
         })
 
         // 5. Render tasks with error boundaries
-        const taskResult = safePixiOperation('NewRenderer', 'renderTasks', () => {
+        const taskResult = safePixiOperation('Renderer', 'renderTasks', () => {
             return this.taskRenderer.render(
                 layers.tasks, this.data.tasks, staffBlocks, this.data.selection,
                 viewport, { x: this.hoverX, y: this.hoverY }, screenDimensions,
-                TIMELINE.LEFT_MARGIN, pxPerDay
+                this.leftMargin, pxPerDay
             )
         })
         this.layout = taskResult?.layout || []
 
         // 6. Render dependencies with error boundaries
-        safePixiOperation('NewRenderer', 'renderDependencies', () => {
+        safePixiOperation('Renderer', 'renderDependencies', () => {
             this.gridRenderer.renderDependencies(layers.dependencies, this.data.dependencies, this.layout)
         })
 
         // 7. Render tooltip with error boundaries
-        safePixiOperation('NewRenderer', 'renderTooltip', () => {
+        safePixiOperation('Renderer', 'renderTooltip', () => {
             this.tooltipRenderer.render(
                 layers.tasks, this.hoverX, this.hoverY, this.hitTest.bind(this),
-                this.data.tasks, this.layout, screenDimensions
+                this.data.tasks, this.layout, screenDimensions, this.leftMargin
             )
         })
 
-        // 8. Render HUD (header + sidebar) with error boundaries
-        safePixiOperation('NewRenderer', 'renderHUD', () => {
-            if (this.hudRenderer) {
-                this.hudRenderer.render(
-                    layers.hud, width, height, viewport, this.data, this.metrics
-                )
-            }
+        // 8. Render header, sidebar, toolbar
+        safePixiOperation('Renderer', 'renderHeader', () => {
+            this.headerRenderer?.render(layers.ui, width, viewport, this.leftMargin)
+        })
+        safePixiOperation('Renderer', 'renderSidebar', () => {
+            this.sidebarRenderer?.render(layers.ui, height, this.leftMargin, this.data.staffs, staffBlocks)
+        })
+        safePixiOperation('Renderer', 'renderToolbar', () => {
+            this.toolbarRenderer?.render(layers.ui, width, this.data.selection)
         })
 
         // 9. Render modals if active with error boundaries
-        safePixiOperation('NewRenderer', 'renderModals', () => {
-            if (this.hudRenderer) {
-                const currentModal = this.hudRenderer.getModal()
-                if (currentModal === 'staffManager') {
-                    this.modalRenderer.renderStaffManager(layers.hud, width, height, this.data.staffs)
-                }
+        safePixiOperation('Renderer', 'renderModals', () => {
+            if (this.currentModal === 'staffManager') {
+                this.modalRenderer.renderStaffManager(layers.ui, width, height, this.data.staffs)
             }
         })
 
         // 10. Render task details if selection exists with error boundaries
-        safePixiOperation('NewRenderer', 'renderTaskDetails', () => {
+        safePixiOperation('Renderer', 'renderTaskDetails', () => {
             if (this.data.selection.length === 1) {
                 const taskId = this.data.selection[0]
                 const task = this.data.tasks.find(t => t.id === taskId)
                 const taskLayout = this.layout.find(l => l.id === taskId)
                 if (task && taskLayout) {
-                    this.modalRenderer.renderTaskDetails(layers.hud, width, height, task, taskLayout, this.data.staffs)
+                    this.modalRenderer.renderTaskDetails(layers.ui, width, height, task, taskLayout, this.data.staffs)
                 }
             }
         })
 
         // 11. Render effects with error boundaries
-        safePixiOperation('NewRenderer', 'renderEffects', () => {
-            this.effectsRenderer.render(layers.hud)
+        safePixiOperation('Renderer', 'renderEffects', () => {
+            this.effectsRenderer.render(layers.ui)
+        })
+
+        // 12. Debug overlay (dev)
+        safePixiOperation('Renderer', 'renderDebug', () => {
+            const stats = this.getStats()
+            this.debugOverlay.render(layers.ui, stats)
         })
     }
 
@@ -249,20 +267,176 @@ export class NewRenderer {
         this.viewportManager.setViewport(viewport)
     }
 
+    setLeftMargin(leftMargin: number) {
+        this.leftMargin = Math.max(0, Math.round(leftMargin || 0))
+    }
+
+    getHeaderHeight(): number {
+        return this.headerRenderer?.getHeaderHeight() || 56
+    }
+
+    getSidebarWidth(): number {
+        return this.leftMargin
+    }
+
+    hitTestUI(px: number, py: number): string | null {
+        return (
+            this.toolbarRenderer?.hitTest(px, py) ||
+            this.sidebarRenderer?.hitTest(px, py) ||
+            this.modalRenderer.hitTestUI(px, py) ||
+            null
+        )
+    }
+
+    openStaffManager() {
+        this.currentModal = 'staffManager'
+    }
+
+    setActions(actions: Partial<typeof this.actions>) {
+        this.actions = { ...this.actions, ...actions }
+    }
+
+    handleUIAction(key: string) {
+        try {
+            // Staff Manager actions
+            if (key === 'sm:close') {
+                this.closeModal(); return
+            }
+            if (key === 'sm:new:add') {
+                const name = (this.modalRenderer as any).getTempStaffName?.().trim() || `Staff ${Math.floor(Math.random() * 1000)}`
+                const lines = (this.modalRenderer as any).getTempStaffLines?.() || 5
+                const position = this.data.staffs.length
+                const now = new Date().toISOString()
+                this.actions.addStaff?.({
+                    id: `staff-${Date.now()}`,
+                    name,
+                    numberOfLines: lines,
+                    lineSpacing: 12,
+                    position,
+                    projectId: 'demo',
+                    createdAt: now,
+                    updatedAt: now
+                })
+                ;(this.modalRenderer as any).setTempStaffName?.('')
+                ;(this.modalRenderer as any).setTempStaffLines?.(5)
+                return
+            }
+            if (key.startsWith('sm:new:lines')) {
+                const cur = (this.modalRenderer as any).getTempStaffLines?.() || 5
+                if (key.endsWith(':inc')) (this.modalRenderer as any).setTempStaffLines?.(cur + 1)
+                else if (key.endsWith(':dec')) (this.modalRenderer as any).setTempStaffLines?.(cur - 1)
+                return
+            }
+            if (key.startsWith('sm:item:')) {
+                const parts = key.split(':')
+                const staffId = parts[2]
+                const action = parts[3]
+                if (action === 'del') { this.actions.deleteStaff?.(staffId); return }
+                if (action === 'up' || action === 'down') {
+                    const idx = this.data.staffs.findIndex(s => s.id === staffId)
+                    if (idx >= 0) {
+                        const newPos = action === 'up' ? Math.max(0, idx - 1) : Math.min(this.data.staffs.length - 1, idx + 1)
+                        this.actions.reorderStaffs?.({ staffId, newPosition: newPos })
+                    }
+                    return
+                }
+                if (action === 'lines') {
+                    const op = parts[4]
+                    const st = this.data.staffs.find(s => s.id === staffId)
+                    if (st) {
+                        const next = Math.max(1, Math.min(10, (st.numberOfLines || 5) + (op === 'inc' ? 1 : -1)))
+                        this.actions.updateStaff?.({ id: staffId, updates: { numberOfLines: next } })
+                    }
+                    return
+                }
+            }
+
+            // Task Details actions
+            if (key === 'td:close') { this.closeModal(); return }
+            if (key === 'td:status:next') {
+                const id = this.data.selection[0]
+                const t = this.data.tasks.find(tt => tt.id === id)
+                if (t) {
+                    const order = [TaskStatus.NOT_STARTED, TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED, TaskStatus.BLOCKED, TaskStatus.CANCELLED]
+                    const idx = Math.max(0, order.indexOf((t as any).status || TaskStatus.NOT_STARTED))
+                    const next = order[(idx + 1) % order.length]
+                    this.actions.updateTask?.({ id, updates: { status: next } })
+                }
+                return
+            }
+            if (key === 'td:title') {
+                const id = this.data.selection[0]
+                const t = this.data.tasks.find(tt => tt.id === id)
+                if (t) {
+                    this.beginEdit?.((value: string) => {
+                        this.actions.updateTask?.({ id, updates: { title: value || t.title } })
+                    }, t.title || '')
+                }
+                return
+            }
+            if (key.startsWith('td:start:') || key.startsWith('td:dur:')) {
+                const id = this.data.selection[0]
+                const t = this.data.tasks.find(tt => tt.id === id)
+                if (t) {
+                    const delta = key.endsWith(':inc') ? 1 : -1
+                    if (key.startsWith('td:dur:')) {
+                        const nd = Math.max(1, (t.durationDays || 1) + delta)
+                        this.actions.updateTask?.({ id, updates: { durationDays: nd } })
+                    } else {
+                        // start date shift in days based on ISO
+                        const parts = (t.startDate || '').split('-').map(Number)
+                        const d = new Date(Date.UTC(parts[0]!, (parts[1]! - 1), parts[2]!))
+                        d.setUTCDate(d.getUTCDate() + delta)
+                        const yyyy = d.getUTCFullYear()
+                        const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+                        const dd = String(d.getUTCDate()).padStart(2, '0')
+                        this.actions.updateTask?.({ id, updates: { startDate: `${yyyy}-${mm}-${dd}` } })
+                    }
+                }
+                return
+            }
+            if (key.startsWith('td:staff:')) {
+                const id = this.data.selection[0]
+                const t = this.data.tasks.find(tt => tt.id === id)
+                if (t) {
+                    const idx = this.data.staffs.findIndex(s => s.id === t.staffId)
+                    if (idx >= 0) {
+                        const nextIdx = key.endsWith(':next') ? Math.min(this.data.staffs.length - 1, idx + 1) : Math.max(0, idx - 1)
+                        const nextStaff = this.data.staffs[nextIdx]
+                        this.actions.updateTask?.({ id, updates: { staffId: nextStaff.id } })
+                    }
+                }
+                return
+            }
+            if (key.startsWith('td:line:')) {
+                const id = this.data.selection[0]
+                const t = this.data.tasks.find(tt => tt.id === id)
+                if (t) {
+                    const delta = key.endsWith(':inc') ? 1 : -1
+                    const nl = Math.max(0, (t.staffLine || 0) + delta)
+                    this.actions.updateTask?.({ id, updates: { staffLine: nl } })
+                }
+                return
+            }
+
+            if (import.meta?.env?.DEV) console.debug('[Renderer]Unhandled UI action:', key)
+        } catch (err) {
+            if (import.meta?.env?.DEV) console.debug('[Renderer]handleUIAction error', err)
+        }
+    }
+
     setVerticalScale(scale: number) {
         this.verticalScale = Math.max(0.5, Math.min(3, scale || 1))
     }
 
     resize() {
-        safePixiOperation('NewRenderer', 'resize', () => this.pixiApp.resize())
+        safePixiOperation('Renderer', 'resize', () => this.pixiApp.resize())
     }
 
     setHover(x: number | null, y: number | null) {
         this.hoverX = x
         this.hoverY = y
-        if (this.hudRenderer) {
-            this.hudRenderer.setHover(x, y)
-        }
+        // Hover effects for UI are currently handled in dedicated renderers (no-op here)
     }
 
     // Hit testing
@@ -284,117 +458,9 @@ export class NewRenderer {
     }
 
     // UI interaction methods
-    hitTestUI(px: number, py: number): string | null {
-        // Try HUD first, then modals
-        return (this.hudRenderer?.hitTestUI(px, py)) || this.modalRenderer.hitTestUI(px, py)
-    }
-
-    getHeaderHeight(): number {
-        return this.hudRenderer?.getHeaderHeight() || 56
-    }
-
-    getSidebarWidth(): number {
-        return this.hudRenderer?.getSidebarWidth() || 220
-    }
-
-    setSidebarWidth(w: number) {
-        if (this.hudRenderer) {
-            this.hudRenderer.setSidebarWidth(w)
-        }
-    }
-
-    // Modal management
-    openStaffManager() {
-        if (this.hudRenderer) {
-            this.hudRenderer.openStaffManager()
-        }
-    }
 
     closeModal() {
-        if (this.hudRenderer) {
-            this.hudRenderer.closeModal()
-        }
-    }
-
-    // Action management for UI interactions
-    setActions(actions: Partial<typeof this.actions>) {
-        this.actions = { ...this.actions, ...actions }
-    }
-
-    handleUIAction(key: string) {
-        // Handle modal and UI actions
-        if (key === 'sm:close') {
-            this.closeModal()
-            return
-        }
-
-        if (key === 'sm:new:add') {
-            if (this.hudRenderer) {
-                const name = this.hudRenderer.getTempStaffName().trim() || `Staff ${Math.floor(Math.random() * 1000)}`
-                const lines = this.hudRenderer.getTempStaffLines()
-                const position = this.data.staffs.length
-                const now = new Date().toISOString()
-
-                this.actions.addStaff?.({
-                    id: `staff-${Date.now()}`,
-                    name,
-                    numberOfLines: lines,
-                    lineSpacing: 12,
-                    position,
-                    projectId: 'demo',
-                    createdAt: now,
-                    updatedAt: now
-                })
-
-                this.hudRenderer.setTempStaffName('')
-                this.hudRenderer.setTempStaffLines(5)
-            }
-            return
-        }
-
-        // Handle staff line increment/decrement
-        if (key.startsWith('sm:new:lines') && this.hudRenderer) {
-            const currentLines = this.hudRenderer.getTempStaffLines()
-            if (key === 'sm:new:lines:inc') {
-                this.hudRenderer.setTempStaffLines(currentLines + 1)
-            } else if (key === 'sm:new:lines:dec') {
-                this.hudRenderer.setTempStaffLines(currentLines - 1)
-            }
-            return
-        }
-
-        // Handle existing staff actions
-        if (key.startsWith('sm:item:')) {
-            const parts = key.split(':')
-            const staffId = parts[2]
-            const action = parts[3]
-            const staff = this.data.staffs.find(s => s.id === staffId)
-            if (!staff) return
-
-            if (action === 'del') {
-                this.actions.deleteStaff?.(staffId)
-                return
-            }
-            if (action === 'up' || action === 'down') {
-                const idx = this.data.staffs.findIndex(s => s.id === staffId)
-                const newPos = action === 'up' ? Math.max(0, idx - 1) : Math.min(this.data.staffs.length - 1, idx + 1)
-                this.actions.reorderStaffs?.({ staffId, newPosition: newPos })
-                return
-            }
-            if (action === 'lines:inc') {
-                this.actions.updateStaff?.({ id: staffId, updates: { numberOfLines: Math.min(10, (staff.numberOfLines || 5) + 1) } })
-                return
-            }
-            if (action === 'lines:dec') {
-                this.actions.updateStaff?.({ id: staffId, updates: { numberOfLines: Math.max(1, (staff.numberOfLines || 5) - 1) } })
-                return
-            }
-        }
-
-        // Add more UI action handling as needed
-        try {
-            if (import.meta?.env?.DEV) console.debug('[NewRenderer]Unhandled UI action:', key)
-        } catch { }
+        this.currentModal = null
     }
 
     // Preview rendering
@@ -428,76 +494,18 @@ export class NewRenderer {
         this.depPreviewG = null
     }
 
-    // Hidden input management for text editing
-    private ensureHiddenInput() {
-        try {
-            if (this.hiddenInput) return
-            const input = document.createElement('input')
-            input.type = 'text'
-            Object.assign(input.style, {
-                position: 'absolute',
-                opacity: '0',
-                pointerEvents: 'none',
-                zIndex: '0',
-                left: '0px',
-                top: '0px',
-                width: '1px',
-                height: '1px'
-            })
-            document.body.appendChild(input)
-
-            input.addEventListener('blur', () => {
-                if (this.editing) {
-                    try { this.editing.onCommit(input.value) } catch (err) {
-                        if (import.meta?.env?.DEV) console.debug('[NewRenderer]commit edit', err)
-                    }
-                    this.editing = null
-                }
-            })
-
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    try { (e.target as HTMLInputElement).blur() } catch (err) {
-                        if (import.meta?.env?.DEV) console.debug('[NewRenderer]enter blur', err)
-                    }
-                }
-                if (e.key === 'Escape') {
-                    this.editing = null
-                    try { (e.target as HTMLInputElement).blur() } catch (err) {
-                        if (import.meta?.env?.DEV) console.debug('[NewRenderer]escape blur', err)
-                    }
-                }
-            })
-
-            this.hiddenInput = input
-        } catch (err) {
-            if (import.meta?.env?.DEV) console.debug('[NewRenderer]ensureHiddenInput', err)
-        }
+    beginEdit(onCommit: (value: string) => void, initialValue: string = '') {
+        this.textInput.beginEdit({ onCommit }, initialValue)
     }
 
     // CSS color utility
     private cssVarColorToHex(varName: string, fallback: number): number {
         try {
             if (this.colorCache.has(varName)) return this.colorCache.get(varName) as number
-            const v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
-            if (!v) return fallback
-            if (v.startsWith('#')) {
-                const hex = v.slice(1)
-                const n = parseInt(hex, 16)
-                if (!Number.isNaN(n)) { this.colorCache.set(varName, n); return n }
-            }
-            const m = v.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
-            if (m) {
-                const r = Math.max(0, Math.min(255, parseInt(m[1]!, 10)))
-                const g = Math.max(0, Math.min(255, parseInt(m[2]!, 10)))
-                const b = Math.max(0, Math.min(255, parseInt(m[3]!, 10)))
-                const n = (r << 16) | (g << 8) | b
-                this.colorCache.set(varName, n)
-                return n
-            }
-        } catch (err) {
-            if (import.meta?.env?.DEV) console.debug('[NewRenderer]cssVarColorToHex', err)
-        }
+            const n = getCssVarColor(varName, fallback)
+            this.colorCache.set(varName, n)
+            return n
+        } catch {}
         return fallback
     }
 
@@ -511,15 +519,7 @@ export class NewRenderer {
             this.effectsRenderer.clearEffects()
         }
 
-        // Cleanup hidden input
-        if (this.hiddenInput) {
-            try {
-                document.body.removeChild(this.hiddenInput)
-            } catch (err) {
-                if (import.meta?.env?.DEV) console.debug('[NewRenderer]remove hidden input', err)
-            }
-            this.hiddenInput = null
-        }
+        this.textInput.destroy()
 
         // Cleanup PixiJS app
         this.pixiApp.destroy()

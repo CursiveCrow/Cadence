@@ -1,10 +1,12 @@
-import { ViewportState } from '../../state/ui'
-import { pixelsPerDay, applyAnchorZoom, TIMELINE } from '../utils'
+import { ViewportState } from '../../state/slices/uiSlice'
+import { pixelsPerDay, applyAnchorZoom } from '@renderer/timeline'
+import { TIMELINE } from '../../shared/timeline'
 
 // Centralized viewport operations manager
 export class ViewportManager {
     private viewport: ViewportState = { x: 0, y: 0, zoom: 1 }
     private screenDimensions = { width: 1, height: 1 }
+    private leftMargin = 0
 
     constructor(initialViewport?: ViewportState) {
         if (initialViewport) {
@@ -20,6 +22,11 @@ export class ViewportManager {
     // Update screen dimensions
     setScreenDimensions(width: number, height: number) {
         this.screenDimensions = { width: Math.max(1, width), height: Math.max(1, height) }
+    }
+
+    // Update dynamic left margin (usually UI.sidebarWidth)
+    setLeftMargin(leftMargin: number) {
+        this.leftMargin = Math.max(0, Math.round(leftMargin || 0))
     }
 
     // Get current viewport
@@ -41,7 +48,7 @@ export class ViewportManager {
     worldToScreen(worldX: number, worldY: number): { x: number; y: number } {
         const ppd = this.getPixelsPerDay()
         return {
-            x: TIMELINE.LEFT_MARGIN + (worldX - this.viewport.x) * ppd,
+            x: this.leftMargin + (worldX - this.viewport.x) * ppd,
             y: worldY - this.viewport.y
         }
     }
@@ -50,7 +57,7 @@ export class ViewportManager {
     screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
         const ppd = this.getPixelsPerDay()
         return {
-            x: this.viewport.x + (screenX - TIMELINE.LEFT_MARGIN) / ppd,
+            x: this.viewport.x + (screenX - this.leftMargin) / ppd,
             y: this.viewport.y + screenY
         }
     }
@@ -75,8 +82,8 @@ export class ViewportManager {
     // Get visible world bounds
     getVisibleWorldBounds(): { left: number; right: number; top: number; bottom: number } {
         const ppd = this.getPixelsPerDay()
-        const leftWorldDays = this.viewport.x + (0 - TIMELINE.LEFT_MARGIN) / ppd
-        const rightWorldDays = this.viewport.x + (this.screenDimensions.width - TIMELINE.LEFT_MARGIN) / ppd
+        const leftWorldDays = this.viewport.x + (0 - this.leftMargin) / ppd
+        const rightWorldDays = this.viewport.x + (this.screenDimensions.width - this.leftMargin) / ppd
 
         return {
             left: leftWorldDays,
@@ -106,7 +113,7 @@ export class ViewportManager {
             this.viewport,
             newZoom,
             screenX,
-            TIMELINE.LEFT_MARGIN,
+            this.leftMargin,
             TIMELINE.DAY_WIDTH
         )
 
@@ -124,7 +131,7 @@ export class ViewportManager {
         const contentHeight = maxY - minY
 
         // Calculate zoom to fit content
-        const availableWidth = this.screenDimensions.width - TIMELINE.LEFT_MARGIN - padding * 2
+        const availableWidth = this.screenDimensions.width - this.leftMargin - padding * 2
         const availableHeight = this.screenDimensions.height - padding * 2
 
         const zoomX = availableWidth / (contentWidth * TIMELINE.DAY_WIDTH)
@@ -224,7 +231,7 @@ export class ViewportManager {
 
     // Calculate optimal zoom level for given content
     calculateOptimalZoom(contentWidth: number, padding: number = 50): number {
-        const availableWidth = this.screenDimensions.width - TIMELINE.LEFT_MARGIN - padding * 2
+        const availableWidth = this.screenDimensions.width - this.leftMargin - padding * 2
         const zoom = availableWidth / (contentWidth * TIMELINE.DAY_WIDTH)
         return Math.max(0.1, Math.min(20, zoom))
     }
@@ -237,4 +244,3 @@ export class ViewportManager {
         }
     }
 }
-

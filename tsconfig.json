@@ -1,36 +1,62 @@
-{
-    "compilerOptions": {
-        "target": "ES2020",
-        "module": "ESNext",
-        "lib": [
-            "ES2020",
-            "DOM",
-            "DOM.Iterable"
-        ],
-        "moduleResolution": "bundler",
-        "resolveJsonModule": true,
-        "allowImportingTsExtensions": true,
-        "strict": true,
-        "noEmit": true,
-        "esModuleInterop": true,
-        "forceConsistentCasingInFileNames": true,
-        "skipLibCheck": true,
-        "noUnusedLocals": true,
-        "noUnusedParameters": true,
-        "allowSyntheticDefaultImports": true,
-        "isolatedModules": true,
-        "baseUrl": ".",
-        "types": [
-            "vite/client"
-        ]
-    },
-    "include": [
-        "src/**/*"
-    ],
-    "exclude": [
-        "node_modules",
-        "dist",
-        "dist-electron",
-        "release"
-    ]
+﻿{
+    "compilerOptions":  {
+                            "target":  "ES2020",
+                            "module":  "ESNext",
+                            "lib":  [
+                                        "ES2020",
+                                        "DOM",
+                                        "DOM.Iterable"
+                                    ],
+                            "moduleResolution":  "bundler",
+                            "resolveJsonModule":  true,
+                            "allowImportingTsExtensions":  true,
+                            "strict":  true,
+                            "noEmit":  true,
+                            "esModuleInterop":  true,
+                            "forceConsistentCasingInFileNames":  true,
+                            "skipLibCheck":  true,
+                            "noUnusedLocals":  true,
+                            "noUnusedParameters":  true,
+                            "allowSyntheticDefaultImports":  true,
+                            "isolatedModules":  true,
+                            "baseUrl":  ".",
+                            "paths":  {
+                                          "@shared/*":  [
+                                                            "src/shared/*"
+                                                        ],
+                                          "@renderer/*":  [
+                                                              "src/renderer/*"
+                                                          ],
+                                          "@state/*":  [
+                                                           "src/state/*"
+                                                       ],
+                                          "@types/*":  [
+                                                           "src/types/*"
+                                                       ],
+                                          "@domain/*":  [
+                                                            "src/domain/*"
+                                                        ],
+                                          "@runtime/*":  [
+                                                             "src/runtime/*"
+                                                         ],
+                                          "@config":  [
+                                                          "src/config/index.ts"
+                                                      ],
+                                          "@config/*":  [
+                                                            "src/config/*"
+                                                        ]
+                                      },
+                            "types":  [
+                                          "vite/client"
+                                      ]
+                        },
+    "include":  [
+                    "src/**/*"
+                ],
+    "exclude":  [
+                    "node_modules",
+                    "dist",
+                    "dist-electron",
+                    "release"
+                ]
 }

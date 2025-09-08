@@ -1,5 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js'
-import { TIMELINE, nearlyZero } from '../utils'
+import { nearlyZero } from '@renderer/timeline'
 import type { Task } from '../../types'
 
 export class TooltipRenderer {
@@ -16,7 +16,8 @@ export class TooltipRenderer {
         hitTest: (x: number, y: number) => string | null,
         tasks: Task[],
         layout: { id: string; x: number; y: number; w: number; h: number }[],
-        screenDimensions: { width: number; height: number }
+        screenDimensions: { width: number; height: number },
+        leftMargin: number
     ) {
         try {
             if (hoverX != null && hoverY != null) {
@@ -25,7 +26,7 @@ export class TooltipRenderer {
                     const taskLayout = layout.find(l => l.id === hovered)
                     const task = tasks.find(t => t.id === hovered)
                     if (taskLayout && task) {
-                        this.renderTooltip(container, task, taskLayout, hoverX, hoverY, screenDimensions)
+                        this.renderTooltip(container, task, taskLayout, hoverX, hoverY, screenDimensions, leftMargin)
                     }
                 } else {
                     this.clearTooltip(container)
@@ -44,11 +45,12 @@ export class TooltipRenderer {
         layout: { x: number; y: number; w: number; h: number },
         mouseX: number,
         mouseY: number,
-        screenDimensions: { width: number; height: number }
+        screenDimensions: { width: number; height: number },
+        leftMargin: number
     ) {
         const padding = 8
         const titleText = task.title || 'Task'
-        const infoText = `${task.startDate} · ${Math.max(1, task.durationDays)}d`
+        const infoText = `${task.startDate} | ${Math.max(1, task.durationDays)}d`
 
         // Create or reuse text objects
         const title = this.tooltipTitle || new Text({
@@ -83,7 +85,7 @@ export class TooltipRenderer {
         const desiredYTop = mouseY - (boxH + 12)
         const screenW = screenDimensions.width
         const screenH = screenDimensions.height
-        const tipX = Math.round(Math.max(TIMELINE.LEFT_MARGIN + 2, Math.min(screenW - boxW - 2, desiredX)))
+        const tipX = Math.round(Math.max((leftMargin || 0) + 2, Math.min(screenW - boxW - 2, desiredX)))
         const tipY = Math.round(desiredYTop < 0
             ? Math.min(screenH - boxH - 2, mouseY + 16)
             : Math.min(screenH - boxH - 2, desiredYTop))
@@ -216,4 +218,5 @@ export class TooltipRenderer {
         }
     }
 }
+
 

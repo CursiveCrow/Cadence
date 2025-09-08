@@ -5,6 +5,7 @@ import type { Staff, Task } from './index'
 export interface RendererActions {
     addTask: (task: Task) => void
     updateTask: (payload: { id: string; updates: Partial<Task> }) => void
+    addDependency: (dep: any) => void
     addStaff: (staff: Staff) => void
     updateStaff: (payload: { id: string; updates: Partial<Staff> }) => void
     deleteStaff: (id: string) => void
@@ -14,7 +15,7 @@ export interface RendererActions {
 
 // Renderer UI interaction interfaces
 export interface RendererUIActions {
-    setActions: (actions: RendererActions) => void
+    setActions: (actions: Partial<RendererActions>) => void
     openStaffManager: () => void
     handleUIAction: (key: string) => void
     getHeaderHeight: () => number
@@ -76,7 +77,7 @@ export interface IRenderer {
     clearDependencyPreview(): void
 
     // UI actions (extend with RendererUIActions)
-    setActions(actions: RendererActions): void
+    setActions(actions: Partial<RendererActions>): void
     openStaffManager(): void
     handleUIAction(key: string): void
     getHeaderHeight(): number
@@ -105,4 +106,3 @@ export interface WheelEventHandler {
 export interface ResizeEventHandler {
     (event: Event, context: EventContext): void | boolean
 }
-

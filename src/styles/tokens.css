@@ -1,22 +1,23 @@
 @charset "UTF-8";
 :root {
   /* Base Colors - Sheet Music Inspired Dark Theme */
-  --ui-color-bg: #141311; /* darkest warm grey */
-  --ui-color-text: #f1f5f9;
-  --ui-color-text-soft: #cbd5e1;
-  --ui-color-muted: #94a3b8;
-  --ui-color-border: rgba(255, 255, 255, 0.11);
-  --ui-color-border-strong: rgba(255, 255, 255, 0.18);
+  /* Ink theme: charcoal canvas with soft paper lines and minimal color */
+  --ui-color-bg: #0b0b0f; /* deep charcoal */
+  --ui-color-text: #e6e7ea;
+  --ui-color-text-soft: #c9cdd3;
+  --ui-color-muted: #9aa1aa;
+  --ui-color-border: rgba(255, 255, 255, 0.10);
+  --ui-color-border-strong: rgba(255, 255, 255, 0.16);
   --ui-color-shadow: rgba(0, 0, 0, 0.6);
-  --ui-color-primary: #a855f7; /* vibrant purple - musical note color */
-  --ui-color-primary-glow: #c084fc; /* brighter for glow effects */
-  --ui-color-primary-weak: rgba(168, 85, 247, 0.15);
-  --ui-color-primary-border: rgba(168, 85, 247, 0.35);
+  --ui-color-primary: #9aa1aa; /* ink-grey for UI accents */
+  --ui-color-primary-glow: #d3d7de; /* subtle glow */
+  --ui-color-primary-weak: rgba(154, 161, 170, 0.15);
+  --ui-color-primary-border: rgba(154, 161, 170, 0.30);
   --ui-color-danger-weak: rgba(239, 68, 68, 0.18);
   --ui-color-danger: #f87171;
   /* Accent for highlights - golden like brass instruments */
-  --ui-color-accent: #facc15;
-  --ui-color-accent-glow: #fde047;
+  --ui-color-accent: #f6c560; /* warm brass accent, used sparingly */
+  --ui-color-accent-glow: #ffe08a;
 
   /* Musical Note Colors - for different note types */
   --ui-note-whole: #e9d5ff; /* lavender */
@@ -49,16 +50,12 @@
   --ui-surface-glass: rgba(255, 255, 255, 0.02);
 
   /* Grid and staff tokens - Vintage sheet music feel */
-  --ui-grid-major: rgba(241, 245, 249, 0.08);
-  --ui-grid-minor: rgba(241, 245, 249, 0.04);
-  --ui-staff-line: rgba(241, 245, 249, 0.12);
-  --ui-music-paper-bg: radial-gradient(
-    ellipse at top,
-    rgba(168, 85, 247, 0.02) 0%,
-    transparent 60%
-  );
-  --ui-music-paper-tint: rgba(168, 85, 247, 0.02);
-  --ui-music-paper-tint-strong: rgba(168, 85, 247, 0.04);
+  --ui-grid-major: rgba(240, 242, 248, 0.10);
+  --ui-grid-minor: rgba(240, 242, 248, 0.06);
+  --ui-staff-line: rgba(240, 242, 248, 0.14);
+  --ui-music-paper-bg: radial-gradient(ellipse at top, rgba(255, 255, 255, 0.02) 0%, transparent 60%);
+  --ui-music-paper-tint: rgba(255, 255, 255, 0.03);
+  --ui-music-paper-tint-strong: rgba(255, 255, 255, 0.045);
 
   /* Radii */
   --ui-radius-sm: 4px;

@@ -88,10 +88,10 @@ export const UI_CONSTANTS = {
     },
 
     // Timeline and grid
-    TIMELINE: {
-        LEFT_MARGIN: 240, // Should match TIMELINE.LEFT_MARGIN
-        DAY_WIDTH: 24,     // Should match TIMELINE.DAY_WIDTH
-        CULLING_MARGIN: 200, // Extra pixels for off-screen culling
+    // Timeline constants now sourced from shared/timeline.ts; avoid duplicating here
+    // CULLING_MARGIN maintained locally for UI heuristics only
+    CULLING: {
+        MARGIN: 200,
     },
 
     // Zoom and viewport
@@ -242,7 +242,7 @@ export const UI_CONSTANTS = {
         DEPENDENCIES: 30,
         HOVER_EFFECTS: 40,
         TOOLTIP: 50,
-        HUD: 100,
+        UI: 100,
         MODAL_BACKDROP: 200,
         MODAL: 210,
         DEBUG: 1000,
@@ -345,3 +345,6 @@ export const SPACING = UI_CONSTANTS.SPACING
 export const COLORS = UI_CONSTANTS.COLORS
 export const ALPHA = UI_CONSTANTS.ALPHA
 export const FONT = UI_CONSTANTS.FONT
+export const HEADER = UI_CONSTANTS.HEADER
+export const INPUT = UI_CONSTANTS.INPUT
+export const STAFF = UI_CONSTANTS.STAFF
