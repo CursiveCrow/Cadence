@@ -1,5 +1,5 @@
-import { configureStore, combineReducers } from '@reduxjs/toolkit'
-import { storage } from '../domain/services/storage'
+﻿import { configureStore, combineReducers } from '@reduxjs/toolkit'
+import { storage } from '@domain/services/storage'
 import ui from './slices/uiSlice'
 import staffs from './slices/staffsSlice'
 import tasks from './slices/tasksSlice'

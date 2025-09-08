@@ -1,5 +1,5 @@
-import { Container, Graphics, Text } from 'pixi.js'
-import { getCssVarColor } from '../../shared/colors'
+﻿import { Container, Graphics, Text } from 'pixi.js'
+import { getCssVarColor } from '@shared/colors'
 import { BUTTON, SPACING } from '@config/ui'
 
 type Rect = { x: number; y: number; w: number; h: number }
@@ -52,4 +52,3 @@ export class ToolbarRenderer {
     return null
   }
 }
-

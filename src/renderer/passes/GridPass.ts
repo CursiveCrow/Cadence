@@ -1,10 +1,10 @@
 ﻿import { Container, Graphics } from 'pixi.js'
-import { getCssVarColor } from '../../shared/colors'
+import { getCssVarColor } from '@shared/colors'
 import { drawGridBackground, drawStaffLines } from '../primitives/grid'
 import { drawMeasurePair, drawTodayMarker } from '../primitives/markers'
 import { dayIndexFromISO, EPS } from '@renderer/timeline'
 import { PROJECT_START_DATE } from '@config'
-import type { Staff } from '../../types'
+import type { Staff } from '@types'
 
 // Staff block interface for grid rendering
 interface StaffBlock {
@@ -385,4 +385,3 @@ export class GridPass {
         }
     }
 }
-

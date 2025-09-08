@@ -1,5 +1,5 @@
 ﻿import { store, RootState } from '@state/store'
-import type { Task } from '../../../types'
+import type { Task } from '@types'
 import { createDependencyBetweenTasks } from '@domain/services/tasks'
 
 export class DependencyLinkFSM {

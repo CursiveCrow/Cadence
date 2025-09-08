@@ -1,7 +1,7 @@
 ﻿import { createSelector } from '@reduxjs/toolkit'
 import { PROJECT_START_DATE } from '@config'
 import { dayIndexFromISO } from '@renderer/timeline'
-import type { Task } from '../../types'
+import type { Task } from '@types'
 import { selectTasks, selectTasksByStatus, selectTasksByStaff, selectStaffs } from './tasks'
 import { selectDependenciesWithTasks } from './dependencies'
 

@@ -1,6 +1,6 @@
-import { Container, Graphics, Text } from 'pixi.js'
+﻿import { Container, Graphics, Text } from 'pixi.js'
 import { nearlyZero } from '@renderer/timeline'
-import type { Task } from '../../types'
+import type { Task } from '@types'
 
 export class TooltipRenderer {
     private tooltipBox: Graphics | null = null

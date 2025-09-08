@@ -1,7 +1,7 @@
-import { Container, Graphics, Text } from 'pixi.js'
-import { getCssVarColor } from '../../../shared/colors'
+﻿import { Container, Graphics, Text } from 'pixi.js'
+import { getCssVarColor } from '@shared/colors'
 import { MODAL, BUTTON, INPUT, SPACING, UIUtils, STAFF } from '@config/ui'
-import type { Staff } from '../../../types'
+import type { Staff } from '@types'
 
 export interface StaffManagerAPI {
   setRect: (key: string, rect: { x: number; y: number; w: number; h: number }) => void

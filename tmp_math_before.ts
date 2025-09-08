@@ -1,4 +1,4 @@
-import { TIMELINE } from '@shared/timeline'
+import { TIMELINE } from '@shared/'
 
 // TIMELINE constants are provided from shared; keep functions pure and accept params
 
@@ -96,4 +96,3 @@ export function computeScaledTimeline(scale: number) {
 export function staffCenterY(yTop: number, staffLine: number, lineSpacing: number): number {
     return yTop + staffLine * (lineSpacing / 2)
 }
-

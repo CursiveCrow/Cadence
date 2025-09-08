@@ -1,5 +1,5 @@
-import { Graphics, Text } from 'pixi.js'
-import { getCssVarColor } from '../../shared/colors'
+﻿import { Graphics, Text } from 'pixi.js'
+import { getCssVarColor } from '@shared/colors'
 
 export function statusToColor(status: string): number {
     // Map task statuses to theme tokens (text colors work well for solid note heads)
@@ -196,4 +196,3 @@ export function renderLabelWithMast(gBox: Graphics, mast: Graphics, title: Text,
 
     return { box: { x: boxX, y: boxY, w: pillW, h: pillH } }
 }
-

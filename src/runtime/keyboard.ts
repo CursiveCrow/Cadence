@@ -1,4 +1,4 @@
-﻿import type { IRenderer } from '../types'
+﻿import type { IRenderer } from '@types'
 import { createCommandRegistry } from '@runtime/commands'
 
 export function setupKeyboardShortcuts(canvas: HTMLCanvasElement, renderer: IRenderer) {

@@ -1,5 +1,5 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import type { Dependency } from '../../types'
+﻿import { createSlice, PayloadAction } from '@reduxjs/toolkit'
+import type { Dependency } from '@types'
 
 export interface DependenciesState { list: Dependency[] }
 

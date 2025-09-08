@@ -1,6 +1,6 @@
-import { ViewportState } from '../../state/slices/uiSlice'
+import { ViewportState } from '@state/slices/uiSlice'
 import { pixelsPerDay, applyAnchorZoom } from '@renderer/timeline'
-import { TIMELINE } from '../../shared/timeline'
+import { TIMELINE } from '@shared/timeline'
 
 // Centralized viewport operations manager
 export class ViewportManager {
@@ -244,3 +244,4 @@ export class ViewportManager {
         }
     }
 }
+

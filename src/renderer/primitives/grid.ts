@@ -1,5 +1,5 @@
-import { Graphics } from 'pixi.js'
-import { getCssVarColor } from '../../shared/colors'
+﻿import { Graphics } from 'pixi.js'
+import { getCssVarColor } from '@shared/colors'
 
 export function drawGridBackground(params: {
     width: number
@@ -155,4 +155,3 @@ export function drawStaffLines(params: {
 
     return s
 }
-

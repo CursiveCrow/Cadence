@@ -21,30 +21,15 @@
                             "isolatedModules":  true,
                             "baseUrl":  ".",
                             "paths":  {
-                                          "@shared/*":  [
-                                                            "src/shared/*"
-                                                        ],
-                                          "@renderer/*":  [
-                                                              "src/renderer/*"
-                                                          ],
-                                          "@state/*":  [
-                                                           "src/state/*"
-                                                       ],
-                                          "@types/*":  [
-                                                           "src/types/*"
-                                                       ],
-                                          "@domain/*":  [
-                                                            "src/domain/*"
-                                                        ],
-                                          "@runtime/*":  [
-                                                             "src/runtime/*"
-                                                         ],
-                                          "@config":  [
-                                                          "src/config/index.ts"
-                                                      ],
-                                          "@config/*":  [
-                                                            "src/config/*"
-                                                        ]
+                                          "@shared/*":  [ "src/core/shared/*" ],
+                                          "@renderer/*":  [ "src/renderer/*" ],
+                                          "@state/*":  [ "src/core/state/*" ],
+                                          "@types":  [ "src/core/types/index.ts" ],
+                                          "@types/*":  [ "src/core/types/*" ],
+                                          "@domain/*":  [ "src/core/domain/*" ],
+                                          "@runtime/*":  [ "src/runtime/*" ],
+                                          "@config":  [ "src/config/index.ts" ],
+                                          "@config/*":  [ "src/config/*" ]
                                       },
                             "types":  [
                                           "vite/client"

@@ -1,4 +1,4 @@
-﻿import type { IRenderer, Staff, Task } from '../types'
+﻿import type { IRenderer, Staff, Task } from '@types'
 import { store } from '@state/store'
 import { addTask, updateTask } from '@state/slices/tasksSlice'
 import { addDependency } from '@state/slices/dependenciesSlice'

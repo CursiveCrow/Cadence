@@ -1,9 +1,9 @@
 ﻿import { createSelector } from '@reduxjs/toolkit'
 import { RootState } from '../store'
 import { dayIndexFromISO, pixelsPerDay } from '@renderer/timeline'
-import { TIMELINE } from '../../shared/timeline'
+import { TIMELINE } from '@shared/timeline'
 import { PROJECT_START_DATE } from '@config'
-import type { Task } from '../../types'
+import type { Task } from '@types'
 
 // Base selectors (tasks/UI)
 export const selectTasks = (state: RootState) => state.tasks.list
@@ -90,4 +90,3 @@ export const selectTaskConflicts = createSelector(
     return conflicts
   }
 )
-

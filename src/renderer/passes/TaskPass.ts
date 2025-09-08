@@ -2,7 +2,7 @@
 import { statusToColor, renderNoteHeadAndLine, renderLabelWithMast } from '../primitives/tasks'
 import { dayIndexFromISO } from '@renderer/timeline'
 import { PROJECT_START_DATE } from '@config'
-import type { Task } from '../../types'
+import type { Task } from '@types'
 
 // Task graphics cache interface
 interface TaskGraphicsCache {

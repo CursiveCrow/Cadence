@@ -1,10 +1,10 @@
-import { store, RootState } from '@state/store'
+﻿import { store, RootState } from '@state/store'
 import { dayIndexFromISO, isoFromDayIndex } from '@renderer/timeline'
 import { PROJECT_START_DATE } from '@config'
 import { updateTask } from '@state/slices/tasksSlice'
 import { addDependency } from '@state/slices/dependenciesSlice'
-import type { Staff, Task, Dependency, DependencyType } from '../../types'
-import { TaskStatus } from '../../types'
+import type { Staff, Task, Dependency, DependencyType } from '@types'
+import { TaskStatus } from '@types'
 
 // Task validation utilities
 export function getMinAllowedStartDayForTask(taskId: string, s: RootState): number {

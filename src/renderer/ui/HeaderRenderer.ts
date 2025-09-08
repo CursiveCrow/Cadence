@@ -1,6 +1,6 @@
-import { Container, Graphics, Text } from 'pixi.js'
+﻿import { Container, Graphics, Text } from 'pixi.js'
 import { PROJECT_START_DATE } from '@config'
-import { getCssVarColor } from '../../shared/colors'
+import { getCssVarColor } from '@shared/colors'
 import { computeDateHeaderHeight, computeDateHeaderViewModel, DAY_THRESHOLD, dayIndexFromISO, worldDaysToScreenX, TIMELINE } from '@renderer/timeline'
 import { HEADER, SPACING } from '@config/ui'
 
@@ -130,4 +130,3 @@ export class HeaderRenderer {
     } catch {}
   }
 }
-

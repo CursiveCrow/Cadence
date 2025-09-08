@@ -1,4 +1,4 @@
-Cadence — Detailed Architecture & Code Map
+Cadence - Detailed Architecture & Code Map
 ==========================================
 
 This document is a comprehensive, file-by-file review of the Cadence project. It covers project organization, core APIs, program flow, and code structure so contributors can onboard quickly and make changes confidently.
@@ -28,14 +28,14 @@ Organization
   - `src/renderer/passes/*`: Grid, tasks, and visual effects render passes.
   - `src/renderer/primitives/*`: Low-level drawing helpers reused by passes/UI.
   - `src/renderer/ui/*`: Header, sidebar, toolbar, tooltip, modals, and debug overlay (all rendered with Pixi).
-  - `src/renderer/{timelineMath,timeScale,dateHeader}.ts`: Time/scale math and date header VM logic.
+  - `src/renderer/timeline/{math,scale,header}.ts`: Time/scale math and date header VM logic.
 - State & domain
   - `src/state/*`: Redux store, slices (ui/staffs/tasks/dependencies), and selectors (tasks/dependencies/analytics).
   - `src/domain/services/storage.ts`: Storage abstraction (localStorage vs. Electron IPC).
   - `src/types/*`: Domain and renderer-facing types.
   - `src/shared/*`: Cross-cutting utilities (timeline constants, CSS color cache, geometry helpers).
 - Electron
-  - `src/main/index.ts`: App window, security flags, WebGPU flags, simple file-backed storage IPC, menu → IPC command routing.
+  - `src/main/index.ts`: App window, security flags, WebGPU flags, simple file-backed storage IPC, menu + IPC command routing.
   - `src/preload/index.ts`: Secure `window.cadence` bridge (version, sync storage, command subscription).
 - Build & styles
   - `vite.config.ts`, `tsconfig*.json`: Vite + Electron build, path aliases, strict TS config.
@@ -56,11 +56,11 @@ Program Flow
 - Sets keyboard shortcuts; binds IPC command sink to the command registry.
 
 3) Render pipeline (`src/renderer/core/Renderer.ts`)
-- Layers: background → dependencies → tasks → UI, managed by `PixiApplication`.
+ - Layers: background + dependencies + tasks + UI, managed by `PixiApplication`.
 - Steps per frame (all wrapped in `safePixiOperation`):
   1. Background grid, vignette.
   2. Staff lines; collect staff block metrics.
-  3. Measure markers and “today” marker.
+  3. Measure markers and 'today' marker.
   4. Hover effects.
   5. Tasks (note head + duration track + label + glyphs); returns layout rectangles.
   6. Dependencies (curved ties) using task layout.
@@ -75,7 +75,7 @@ Program Flow
 - FSMs:
   - `fsm/dragPan.ts`: Pans viewport from raw deltas with pixels-per-day scaling.
   - `fsm/moveTask.ts`: Computes snapped day/staff/line, previews position, commits via `moveTask()`.
-  - `fsm/resizeTask.ts`: Computes new duration from screenX → world days; previews width, commits via `resizeTask()`.
+  - `fsm/resizeTask.ts`: Computes new duration from screenX + world days; previews width, commits via `resizeTask()`.
   - `fsm/linkDependency.ts`: Previews curve, commits dependency if dropped on a different task.
   - `fsm/selection.ts`: Click/modified-click selection semantics.
 
@@ -86,7 +86,7 @@ Program Flow
 
 Renderer Architecture
 - `PixiApplication` (`src/renderer/core/PixiApplication.ts`): Initializes Pixi; enforces WebGPU availability (shows overlay if missing). Manages layered containers and safe cleanup; exposes stats.
-- `ViewportManager` (`src/renderer/core/ViewportManager.ts`): Centralized world↔screen math, left margin handling, visible bounds, snap/fit/animate helpers.
+ - `ViewportManager` (`src/renderer/core/ViewportManager.ts`): Centralized world-to-screen math, left margin handling, visible bounds, snap/fit/animate helpers.
 - `ErrorBoundary` (`src/renderer/core/ErrorBoundary.ts`): Severity-graded error logging, safe wrappers for Pixi ops, health checks, retry/degrade helpers, perf monitoring.
 
 State Model & Selectors
@@ -100,7 +100,7 @@ State Model & Selectors
   - Analytics: project time bounds, completion stats, staff utilization/workload.
 
 APIs
-- Renderer API (`src/types/renderer.ts` → `IRenderer` implemented by `Renderer`):
+ - Renderer API (`src/types/renderer.ts` + `IRenderer` implemented by `Renderer`):
   - Data/viewport: `setData(...)`, `setViewport(...)`, `setVerticalScale(...)`, `getHeaderHeight()`, `getSidebarWidth()`.
   - Hit-testing: `hitTest(x,y)`, `getTaskRect(id)`, `getMetrics()`.
   - UI: `setActions(...)`, `openStaffManager()`, `handleUIAction(key)`, `hitTestUI(x,y)`.
@@ -131,7 +131,7 @@ Entry points and HTML/CSS
 - `src/styles/ui.css`: Imports tokens/base/layout.
 
 Electron
-- `src/main/index.ts`: App lifecycle, window creation, WebGPU flags, secure `webPreferences`, load URL/file with retry/fallback, menu → IPC, file-backed kv storage using `app.getPath('userData')`.
+  - `src/main/index.ts`: App window, security flags, WebGPU flags, simple file-backed storage IPC, menu + IPC command routing.
 - `src/preload/index.ts`: Safe `contextBridge` for version, sync storage, and `onCommand` subscription.
 
 Runtime wiring and interactions
@@ -174,11 +174,11 @@ UI (Pixi)
 - `src/renderer/ui/DebugOverlay.ts`: FPS/draw calls/task counts overlay.
 
 Time and date helpers
-- `src/renderer/timeScale.ts`: Zoom → time scale selection (hour/day/week/month) and thresholds.
-- `src/renderer/dateHeader.ts`: Compute header VM (labels/ticks) with UTC-safe month math.
-- `src/renderer/timelineMath.ts`: Zoom clamps, pixels-per-day, world↔screen conversions, anchor-zoom, project day index conversions, staff vertical geometry, scaled timeline.
-- `src/renderer/utils/index.ts`: Re-exports timeline helpers for convenience.
-- `src/renderer/timelineConfig.ts`: Deprecated re-export of `shared/timeline`.
+- `src/renderer/timeline/scale.ts`: Zoom → time scale selection (hour/day/week/month) and thresholds.
+- `src/renderer/timeline/header.ts`: Compute header VM (labels/ticks) with UTC-safe month math.
+- `src/renderer/timeline/math.ts`: Zoom clamps, pixels-per-day, world↔screen conversions, anchor-zoom, project day index conversions, staff vertical geometry, scaled timeline.
+- `src/renderer/timeline/index.ts`: Re-exports timeline helpers for convenience.
+- `src/shared/timeline.ts`: Deprecated re-export of `shared/timeline`.
 
 State, domain, and shared
 - `src/state/store.ts`: Redux store config, persist/load with versioning and debounce.
@@ -213,7 +213,7 @@ Design Notes & Trade-offs
 
 Known Issues / Follow-ups
 - `src/renderer/ui/ToolbarRenderer.ts` uses placeholder glyphs for buttons that may render as mojibake on some systems. Consider replacing with crisp vector icons or text labels.
-- `src/renderer/ui/TooltipRenderer.ts` composes the info line with a non-ASCII separator (`A�` in some encodings). Swap for a standard en dash (`–`) or `·` for clarity.
+- `src/renderer/ui/TooltipRenderer.ts` composes the info line with a non-ASCII separator; use a standard en dash (`�`) or hyphen (`-`) for clarity.
 - WebGPU requirement is strict; if a compatibility fallback is desired, add a WebGL2 pathway (non-trivial) or preflight environment checks in the Electron main process.
 
 Contributing
@@ -223,3 +223,8 @@ Contributing
 
 License
 MIT
+
+
+
+
+

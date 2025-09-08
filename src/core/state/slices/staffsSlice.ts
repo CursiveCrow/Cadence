@@ -1,5 +1,5 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import type { Staff } from '../../types'
+﻿import { createSlice, PayloadAction } from '@reduxjs/toolkit'
+import type { Staff } from '@types'
 
 export interface StaffsState { list: Staff[] }
 

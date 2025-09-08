@@ -1,4 +1,4 @@
-import { TIMELINE } from '@shared/timeline'
+import { TIMELINE } from '@shared/'
 
 // TIMELINE constants are provided from shared; keep functions pure and accept params
 

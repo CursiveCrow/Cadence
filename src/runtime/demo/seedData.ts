@@ -1,8 +1,8 @@
 ﻿import { store } from '@state/store'
 import { setStaffs } from '@state/slices/staffsSlice'
 import { setTasks } from '@state/slices/tasksSlice'
-import type { Staff, Task } from '../../types'
-import { TaskStatus } from '../../types'
+import type { Staff, Task } from '@types'
+import { TaskStatus } from '@types'
 
 // Initialize demo data if in development mode and no data exists
 export function initializeDemoDataIfNeeded() {

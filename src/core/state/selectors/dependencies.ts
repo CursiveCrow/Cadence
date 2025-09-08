@@ -1,5 +1,5 @@
-import { createSelector } from '@reduxjs/toolkit'
-import type { Task } from '../../types'
+﻿import { createSelector } from '@reduxjs/toolkit'
+import type { Task } from '@types'
 import { RootState } from '../store'
 import { selectTasks } from './tasks'
 

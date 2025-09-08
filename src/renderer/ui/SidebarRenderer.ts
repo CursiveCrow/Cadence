@@ -1,8 +1,8 @@
-import { Container, Graphics, Text } from 'pixi.js'
-import { firstHit } from '../../shared/geom'
-import { getCssVarColor } from '../../shared/colors'
+﻿import { Container, Graphics, Text } from 'pixi.js'
+import { firstHit } from '@shared/geom'
+import { getCssVarColor } from '@shared/colors'
 import { SIDEBAR, SPACING } from '@config/ui'
-import type { Staff } from '../../types'
+import type { Staff } from '@types'
 
 export class SidebarRenderer {
   private bg?: Graphics

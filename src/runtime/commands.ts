@@ -2,7 +2,7 @@
 import { setSelection, setViewport } from '@state/slices/uiSlice'
 import { applyAnchorZoom } from '@renderer/timeline'
 import { TIMELINE } from '@shared/timeline'
-import type { IRenderer } from '../types'
+import type { IRenderer } from '@types'
 
 export type CommandId = 'zoom.in' | 'zoom.out' | 'zoom.reset' | 'selection.clear'
 

@@ -1,7 +1,7 @@
-import { Container, Graphics, Text } from 'pixi.js'
-import { getCssVarColor } from '../../../shared/colors'
+﻿import { Container, Graphics, Text } from 'pixi.js'
+import { getCssVarColor } from '@shared/colors'
 import { MODAL, BUTTON, INPUT, SPACING } from '@config/ui'
-import type { Staff, Task } from '../../../types'
+import type { Staff, Task } from '@types'
 
 export interface TaskDetailsAPI {
   setRect: (key: string, rect: { x: number; y: number; w: number; h: number }) => void

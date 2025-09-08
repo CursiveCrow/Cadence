@@ -1,26 +1,26 @@
 {
-  "entry": [
-    "src/app/bootstrap.ts",
-    "src/main/index.ts",
-    "src/preload/index.ts"
-  ],
-  "project": [
-    "src/**/*.{ts,tsx}",
-    "!src/**/*.test.{ts,tsx}",
-    "!src/**/*.spec.{ts,tsx}"
-  ],
-  "ignore": [
-    "src/renderer/utils/index.ts"
-  ],
-  "ignoreBinaries": [
-    "electron",
-    "vite"
-  ],
-  "ignoreDependencies": [
-    "@reduxjs/toolkit",
-    "pixi.js",
-    "electron",
-    "vite",
-    "typescript"
-  ]
+    "entry":  [
+                  "src/runtime/bootstrap.ts",
+                  "src/main/index.ts",
+                  "src/preload/index.ts"
+              ],
+    "project":  [
+                    "src/**/*.{ts,tsx}",
+                    "!src/**/*.test.{ts,tsx}",
+                    "!src/**/*.spec.{ts,tsx}"
+                ],
+    "ignore":  [
+
+               ],
+    "ignoreBinaries":  [
+                           "electron",
+                           "vite"
+                       ],
+    "ignoreDependencies":  [
+                               "@reduxjs/toolkit",
+                               "pixi.js",
+                               "electron",
+                               "vite",
+                               "typescript"
+                           ]
 }

@@ -1,5 +1,5 @@
-import { Graphics } from 'pixi.js'
-import { getCssVarColor } from '../../shared/colors'
+﻿import { Graphics } from 'pixi.js'
+import { getCssVarColor } from '@shared/colors'
 
 export function drawTodayMarker(x: number, height: number): Graphics {
     const line = new Graphics()
@@ -22,4 +22,3 @@ export function drawMeasurePair(xThick: number, xThin: number, yTop: number, yBo
     g.stroke({ width: 1, color: minor, alpha: 0.25 })
     return g
 }
-

@@ -1,4 +1,4 @@
-import { store, RootState } from '@state/store'
+﻿import { store, RootState } from '@state/store'
 import { TIMELINE, pixelsPerDay, applyAnchorZoom } from '@renderer/timeline'
 import { DragPanFSM } from '@runtime/interactions/fsm/dragPan'
 import { MoveTaskFSM } from '@runtime/interactions/fsm/moveTask'
@@ -9,7 +9,7 @@ import { setViewport, setSelection, setSelectionWithAnchor, setSidebarWidth } fr
 import { addTask, updateTask } from '@state/slices/tasksSlice'
 import { errorLogger, ErrorSeverity } from '@renderer/core/ErrorBoundary'
 import { createNewTask, createLinkDependency, shouldTreatAsClick } from '@domain/services/tasks'
-import type { Staff, Task, IRenderer } from '../../types'
+import type { Staff, Task, IRenderer } from '@types'
 
 // Types for event handler context  
 interface EventHandlerContext {

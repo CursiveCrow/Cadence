@@ -1,11 +1,8 @@
 import { defineConfig } from 'vite'
 import electron from 'vite-plugin-electron'
-// Load ESM-only plugin via dynamic import to avoid CJS require issues
 import path from 'path'
 
-export default defineConfig(async () => {
-  const tsconfigPaths = (await import('vite-tsconfig-paths')).default
-  return ({
+export default defineConfig({
   root: 'src',
   base: './',
   build: {
@@ -18,9 +15,18 @@ export default defineConfig(async () => {
       },
     },
   },
+  resolve: {
+    alias: {
+      '@shared': path.resolve(__dirname, 'src/shared'),
+      '@renderer': path.resolve(__dirname, 'src/renderer'),
+      '@config': path.resolve(__dirname, 'src/config'),
+      '@runtime': path.resolve(__dirname, 'src/runtime'),
+      '@state': path.resolve(__dirname, 'src/state'),
+      '@types': path.resolve(__dirname, 'src/types'),
+      '@domain': path.resolve(__dirname, 'src/domain'),
+    },
+  },
   plugins: [
-    // Resolve aliases from tsconfig paths
-    tsconfigPaths(),
     electron([
       {
         // with root set to 'src', entries are relative to it
@@ -53,5 +59,4 @@ export default defineConfig(async () => {
     strictPort: true,
     open: false,
   },
-  })
 })

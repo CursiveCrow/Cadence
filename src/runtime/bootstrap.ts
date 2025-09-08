@@ -147,29 +147,21 @@ function bootstrap() {
   // 2. Initialize renderer and data
   const renderer = setupRenderer(canvas)
   // Dev-only HMR bridge: re-render when modules ask for it
+  // Dev-only HMR: accept updates and re-render; also listen for custom rerender event
   if (import.meta && (import.meta as any).hot) {
-    try { console.debug?.("[HMR] bootstrap: accepting module updates") } catch {}
-    ;(import.meta as any).hot.accept(() => { try { console.debug?.("[HMR] bootstrap: module updated ? re-rendering"); (renderer as any).render?.() } catch {} })
-    try { window.addEventListener("cadence:hmr:rerender", () => { try { console.debug?.("[HMR] rerender event received"); (renderer as any).render?.() } catch {} }) } catch {}
-  }
-  // Dev-only: accept HMR updates and force a repaint so visual changes appear immediately
-  if (import.meta && (import.meta as any).hot) {
-    // Log so it’s obvious HMR is hooked up
     try { console.debug?.('[HMR] bootstrap: accepting module updates') } catch {}
     ;(import.meta as any).hot.accept(() => {
       try {
-        console.debug?.('[HMR] bootstrap: module updated → re-rendering')
+        console.debug?.('[HMR] bootstrap: module updated - re-rendering')
         ;(renderer as any).render?.()
       } catch {}
     })
+    try {
+      window.addEventListener('cadence:hmr:rerender', () => {
+        try { console.debug?.('[HMR] bootstrap: rerender event received'); (renderer as any).render?.() } catch {}
+      })
+    } catch {}
   }
-  // Dev: trigger a render on hot updates to avoid manual interaction
-  if (import.meta && (import.meta as any).hot) {
-    (import.meta as any).hot.accept(() => {
-      try { (renderer as any).render?.() } catch {}
-    })
-  }
-
   // 3. Setup store synchronization
   const { scheduleRender, viewportRef } = setupStoreSync(renderer)
 
