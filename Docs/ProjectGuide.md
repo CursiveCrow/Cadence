@@ -1,6 +1,10 @@
 # Project Architecture
 
 ```
+<<<<<<< HEAD
+=======
+your-project/
+>>>>>>> c47740cab903e1aa0819a87f27272e129cef90a8
 ├── dist/                       # Compiled output (managed by Vite)
 ├── node_modules/
 ├── src/
@@ -39,7 +43,11 @@
 │   │   │
 │   │   ├── shaders/            # Raw Shader files (WGSL for WebGPU)
 │   │   │   └── effects/
+<<<<<<< HEAD
 │   │   │       └── example.wgsl
+=======
+│   │   │       └── noise_bg.wgsl
+>>>>>>> c47740cab903e1aa0819a87f27272e129cef90a8
 │   │   │
 │   │   ├── types/              # Renderer-specific types
 │   │   └── utils/              # Helper functions
