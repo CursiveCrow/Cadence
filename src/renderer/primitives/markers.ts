@@ -22,3 +22,23 @@ export function drawMeasurePair(xThick: number, xThin: number, yTop: number, yBo
     g.stroke({ width: 1, color: minor, alpha: 0.25 })
     return g
 }
+
+// New: draw onto existing Graphics (container-local coords)
+export function drawTodayMarkerOn(g: Graphics, x: number, height: number) {
+    const accent = getCssVarColor('--ui-color-accent', 0xF59E0B)
+    const xl = Math.round(x) + 0.5
+    g.moveTo(xl, 0)
+    g.lineTo(xl, Math.max(0, height))
+    g.stroke({ width: 2, color: accent, alpha: 0.9 })
+}
+
+export function drawMeasurePairOn(g: Graphics, xThick: number, xThin: number, yTop: number, yBottom: number) {
+    const major = getCssVarColor('--ui-grid-major', 0xffffff)
+    const minor = getCssVarColor('--ui-grid-minor', 0xffffff)
+    g.moveTo(xThick, yTop)
+    g.lineTo(xThick, yBottom)
+    g.stroke({ width: 3, color: major, alpha: 0.35 })
+    g.moveTo(xThin, yTop)
+    g.lineTo(xThin, yBottom)
+    g.stroke({ width: 1, color: minor, alpha: 0.25 })
+}

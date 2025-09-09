@@ -40,7 +40,8 @@ export class MoveTaskFSM {
 
     const minIdx = getMinAllowedStartDayForTask(this.taskId, s)
     const clampedDay = Math.max(position.dayIndex, minIdx)
-    const sb = metrics.staffBlocks.find((b: any) => localY >= b.yTop && localY <= b.yBottom)
+    const wy = this.viewportRef.current.y + localY
+    const sb = metrics.staffBlocks.find((b: any) => wy >= b.yTop && wy <= b.yBottom)
     const lineStep = scaled.lineSpacing / 2
     const hpx = Math.max(18, Math.min(28, Math.floor(lineStep * 1.8)))
     const allowedDay = findAvailableDay((sb as any)?.id || t.staffId, clampedDay, t.id)
@@ -72,6 +73,5 @@ export class MoveTaskFSM {
     moveTask(this.taskId, position.staffId, position.staffLine, allowedDay)
   }
 }
-
 
 

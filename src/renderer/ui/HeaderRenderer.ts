@@ -2,7 +2,7 @@
 import { PROJECT_START_DATE } from '@config'
 import { getCssVarColor } from '@shared/colors'
 import { computeDateHeaderHeight, computeDateHeaderViewModel, DAY_THRESHOLD, HOUR_THRESHOLD, dayIndexFromISO, worldDaysToScreenX, TIMELINE } from '@renderer/timeline'
-import { HEADER, SPACING } from '@config/ui'
+import { UI_CONSTANTS } from '@config/ui'
 
 export class HeaderRenderer {
   private bg?: Graphics
@@ -10,7 +10,7 @@ export class HeaderRenderer {
   private labelsMonth: Text[] = []
   private labelsDay: Text[] = []
   private labelsHour: Text[] = []
-  private headerHeight: number = HEADER.DEFAULT_HEIGHT
+  private headerHeight: number = UI_CONSTANTS.HEADER.DEFAULT_HEIGHT
 
   getHeaderHeight() { return this.headerHeight }
 
@@ -35,7 +35,7 @@ export class HeaderRenderer {
     // Opaque underlay to ensure nothing from the timeline shows through
     this.bg.rect(0, 0, Math.max(0, screenW), Math.max(0, this.headerHeight))
     this.bg.fill({ color: hdrBg, alpha: 1.0 })
-    const monthBandH = Math.min(SPACING.EXTRA_LARGE + 6, Math.max(SPACING.EXTRA_LARGE, Math.round(this.headerHeight * 0.5)))
+    const monthBandH = Math.min(UI_CONSTANTS.SPACING.EXTRA_LARGE + 6, Math.max(UI_CONSTANTS.SPACING.EXTRA_LARGE, Math.round(this.headerHeight * 0.5)))
     const dayBandH = Math.max(0, this.headerHeight - monthBandH)
     const x0 = Math.round(leftMargin)
     const w = Math.max(0, screenW - leftMargin)
@@ -85,6 +85,13 @@ export class HeaderRenderer {
       lbl.x = vm.monthLabels[i]!.x
       ui.addChild(lbl)
     }
+    // prune extra month labels
+    for (let i = vm.monthLabels.length; i < this.labelsMonth.length; i++) {
+      const t = this.labelsMonth[i]
+      try { if (t.parent) (t.parent as any).removeChild(t) } catch {}
+      try { (t as any).destroy?.() } catch {}
+    }
+    this.labelsMonth.length = vm.monthLabels.length
     // Day labels: numeric-only and slide-in as zoom crosses DAY_THRESHOLD
     const slidePx = Math.round((1 - dayProg) * 12)
     const dayAlpha = Math.max(0, Math.min(1, dayProg))
@@ -96,6 +103,12 @@ export class HeaderRenderer {
       lbl.alpha = dayAlpha
       ui.addChild(lbl)
     }
+    for (let i = vm.dayLabels.length; i < this.labelsDay.length; i++) {
+      const t = this.labelsDay[i]
+      try { if (t.parent) (t.parent as any).removeChild(t) } catch {}
+      try { (t as any).destroy?.() } catch {}
+    }
+    this.labelsDay.length = vm.dayLabels.length
     // Hour labels
     for (let i = 0; i < vm.hourLabels.length; i++) {
       const baseY = Math.max(monthBandH + 20, this.headerHeight - 14)
@@ -107,6 +120,12 @@ export class HeaderRenderer {
       lbl.alpha = hoursProg
       ui.addChild(lbl)
     }
+    for (let i = vm.hourLabels.length; i < this.labelsHour.length; i++) {
+      const t = this.labelsHour[i]
+      try { if (t.parent) (t.parent as any).removeChild(t) } catch {}
+      try { (t as any).destroy?.() } catch {}
+    }
+    this.labelsHour.length = vm.hourLabels.length
 
     // Today tick in header (ink accent)
     try {

@@ -56,7 +56,7 @@ export class TaskPass {
             const taskLayout = this.calculateTaskLayout(task, staffBlock, viewport, leftMargin, pxPerDay)
 
             // Cull off-screen tasks
-            if (this.isTaskOffScreen(taskLayout, leftMargin, width, height)) continue
+            if (this.isTaskOffScreen(taskLayout, viewport, leftMargin, pxPerDay, width, height)) continue
 
             const selected = selection.includes(task.id)
             const status = (task as any).status || 'not_started'
@@ -107,20 +107,23 @@ export class TaskPass {
 
         // compute x from startDate relative to PROJECT_START_DATE
         const day = dayIndexFromISO(task.startDate, PROJECT_START_DATE)
-        const xLeft = leftMargin + (day - viewport.x) * pxPerDay
-        const w = Math.max(4, Math.round(task.durationDays * pxPerDay))
+        const xLeft = Math.round(day * pxPerDay)
+        const w = Math.max(4, Math.round((task.durationDays || 1) * pxPerDay))
 
         return { xLeft, yTop, w, h }
     }
 
     private isTaskOffScreen(
         layout: { xLeft: number; yTop: number; w: number; h: number },
+        viewport: { x: number; y: number; zoom: number },
         leftMargin: number,
+        pxPerDay: number,
         screenWidth: number,
         screenHeight: number
     ): boolean {
-        return layout.xLeft + layout.w < leftMargin - 200 ||
-            layout.xLeft > screenWidth + 200 ||
+        const screenXLeft = leftMargin - viewport.x * pxPerDay + layout.xLeft
+        return screenXLeft + layout.w < -200 ||
+            screenXLeft > screenWidth + 200 ||
             layout.yTop > screenHeight ||
             layout.yTop + layout.h < 0
     }
@@ -469,8 +472,6 @@ private statusToAccidental(status: string): string {
         this.taskCache.clear()
     }
 }
-
-
 
 
 

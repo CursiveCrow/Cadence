@@ -17,6 +17,8 @@ import type { Staff, Task, Dependency } from '@types'
 import { TaskStatus } from '@types'
 import { TextInputManager } from '../ui/TextInputManager'
 import { DebugOverlay } from '../ui/DebugOverlay'
+import { UI_CONSTANTS } from '@config/ui'
+import { TIMELINE } from '@shared/timeline'
 
 // Data interface for renderer
 interface RendererData {
@@ -61,7 +63,7 @@ export class Renderer implements IRenderer {
     private hoverX: number | null = null
     private hoverY: number | null = null
     private verticalScale: number = 1
-    private leftMargin: number = 0
+    private leftMargin: number = UI_CONSTANTS.SIDEBAR.DEFAULT_WIDTH
     private currentModal: null | 'staffManager' = null
 
     // Preview graphics state
@@ -160,6 +162,11 @@ export class Renderer implements IRenderer {
         // Ensure viewport uses dynamic left margin
         this.viewportManager.setLeftMargin(this.leftMargin)
 
+        // Apply world-space translation to viewport container
+        safePixiOperation('Renderer', 'setViewportTransform', () => {
+            this.pixiApp.setViewportTransform(layers.viewport, viewport, this.leftMargin, pxPerDay)
+        })
+
         // 1. Render background and grid with error boundaries
         safePixiOperation('Renderer', 'renderBackground', () => {
             // Use timeline-specific background token so header/sidebar can differ
@@ -188,9 +195,11 @@ export class Renderer implements IRenderer {
             )
         })
 
-        // 4. Render hover effects with error boundaries
+        // 4. Render hover effects with error boundaries (convert to container-local)
         safePixiOperation('Renderer', 'renderHoverEffects', () => {
-            this.gridRenderer.renderHoverEffects(layers.background, this.hoverX, this.hoverY, staffBlocks, height)
+            const localX = this.hoverX == null ? null : this.screenToLocalX(this.hoverX, viewport, this.leftMargin, pxPerDay)
+            const localY = this.hoverY == null ? null : this.screenToLocalY(this.hoverY, viewport)
+            this.gridRenderer.renderHoverEffects(layers.background, localX, localY, staffBlocks, height)
         })
 
         // 5. Render tasks with error boundaries
@@ -208,11 +217,18 @@ export class Renderer implements IRenderer {
             this.gridRenderer.renderDependencies(layers.dependencies, this.data.dependencies, this.layout)
         })
 
-        // 7. Render tooltip with error boundaries
+        // 7. Render tooltip with error boundaries (use screen-projected rects)
         safePixiOperation('Renderer', 'renderTooltip', () => {
+            const layoutScreen = this.layout.map((r) => ({
+                id: r.id,
+                x: this.localToScreenX(r.x, viewport, this.leftMargin, pxPerDay),
+                y: this.localToScreenY(r.y, viewport),
+                w: r.w,
+                h: r.h,
+            }))
             this.tooltipRenderer.render(
                 layers.tasks, this.hoverX, this.hoverY, this.hitTest.bind(this),
-                this.data.tasks, this.layout, screenDimensions, this.leftMargin
+                this.data.tasks, layoutScreen, screenDimensions, this.leftMargin
             )
         })
 
@@ -220,14 +236,26 @@ export class Renderer implements IRenderer {
         safePixiOperation('Renderer', 'renderHeader', () => {
             this.headerRenderer?.render(layers.ui, width, viewport, this.leftMargin)
         })
+        // Sidebar background (persistent container), then dynamic overlay
+        safePixiOperation('Renderer', 'renderSidebarBackground', () => {
+            const uiPersistent = this.pixiApp.getUiPersistent()
+            if (uiPersistent) this.sidebarRenderer?.renderBackground(uiPersistent, height, this.leftMargin)
+        })
         safePixiOperation('Renderer', 'renderSidebar', () => {
-            this.sidebarRenderer?.render(
+            const viewport = this.viewportManager.getViewport()
+            const pxPerDay = this.viewportManager.getPixelsPerDay()
+            const staffBlocksScreen = staffBlocks.map((b) => ({
+                id: b.id,
+                yTop: this.localToScreenY(b.yTop, viewport),
+                yBottom: this.localToScreenY(b.yBottom, viewport),
+                lineSpacing: b.lineSpacing,
+            }))
+            this.sidebarRenderer?.renderForeground(
                 layers.ui,
                 height,
                 this.leftMargin,
                 this.data.staffs,
-                staffBlocks,
-                { x: this.hoverX, y: this.hoverY }
+                staffBlocksScreen,
             )
         })
         safePixiOperation('Renderer', 'renderToolbar', () => {
@@ -248,7 +276,15 @@ export class Renderer implements IRenderer {
                 const task = this.data.tasks.find(t => t.id === taskId)
                 const taskLayout = this.layout.find(l => l.id === taskId)
                 if (task && taskLayout) {
-                    this.modalRenderer.renderTaskDetails(layers.ui, width, height, task, taskLayout, this.data.staffs)
+                    const viewport = this.viewportManager.getViewport()
+                    const pxPerDay = this.viewportManager.getPixelsPerDay()
+                    const screenLayout = {
+                        x: this.localToScreenX(taskLayout.x, viewport, this.leftMargin, pxPerDay),
+                        y: this.localToScreenY(taskLayout.y, viewport),
+                        w: taskLayout.w,
+                        h: taskLayout.h,
+                    }
+                    this.modalRenderer.renderTaskDetails(layers.ui, width, height, task, screenLayout as any, this.data.staffs)
                 }
             }
         })
@@ -447,18 +483,30 @@ export class Renderer implements IRenderer {
         // Hover effects for UI are currently handled in dedicated renderers (no-op here)
     }
 
-    // Hit testing
+    // Hit testing (convert screen -> container-local)
     hitTest(px: number, py: number): string | null {
+        const viewport = this.viewportManager.getViewport()
+        const pxPerDay = this.viewportManager.getPixelsPerDay()
+        const localX = this.screenToLocalX(px, viewport, this.leftMargin, pxPerDay)
+        const localY = this.screenToLocalY(py, viewport)
         for (let i = this.layout.length - 1; i >= 0; i--) {
             const r = this.layout[i]
-            if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return r.id
+            if (localX >= r.x && localX <= r.x + r.w && localY >= r.y && localY <= r.y + r.h) return r.id
         }
         return null
     }
 
     getTaskRect(id: string): { x: number; y: number; w: number; h: number } | null {
         const r = this.layout.find(l => l.id === id)
-        return r ? { x: r.x, y: r.y, w: r.w, h: r.h } : null
+        if (!r) return null
+        const viewport = this.viewportManager.getViewport()
+        const pxPerDay = this.viewportManager.getPixelsPerDay()
+        return {
+            x: this.localToScreenX(r.x, viewport, this.leftMargin, pxPerDay),
+            y: this.localToScreenY(r.y, viewport),
+            w: r.w,
+            h: r.h,
+        }
     }
 
     getMetrics() {
@@ -476,8 +524,12 @@ export class Renderer implements IRenderer {
         const layers = this.pixiApp.getLayers()
         if (!layers) return
 
+        const viewport = this.viewportManager.getViewport()
+        const pxPerDay = this.viewportManager.getPixelsPerDay()
+        const localX = this.screenToLocalX(x, viewport, this.leftMargin, pxPerDay)
+        const localY = this.screenToLocalY(y, viewport)
         this.previewG = this.taskRenderer.renderDragPreview(
-            layers.tasks, x, y, w, h, this.previewG
+            layers.tasks, localX, localY, w, h, this.previewG
         )
     }
 
@@ -489,8 +541,20 @@ export class Renderer implements IRenderer {
         const layers = this.pixiApp.getLayers()
         if (!layers) return
 
+        const viewport = this.viewportManager.getViewport()
+        const pxPerDay = this.viewportManager.getPixelsPerDay()
+        const srcLocal = {
+            x: this.screenToLocalX(src.x, viewport, this.leftMargin, pxPerDay),
+            y: this.screenToLocalY(src.y, viewport),
+            w: src.w,
+            h: src.h,
+        }
+        const dstLocal = {
+            x: this.screenToLocalX(dstPoint.x, viewport, this.leftMargin, pxPerDay),
+            y: this.screenToLocalY(dstPoint.y, viewport),
+        }
         this.depPreviewG = this.taskRenderer.renderDependencyPreview(
-            layers.dependencies, src, dstPoint, this.depPreviewG
+            layers.dependencies, srcLocal, dstLocal, this.depPreviewG
         )
     }
 
@@ -515,6 +579,20 @@ export class Renderer implements IRenderer {
             return n
         } catch {}
         return fallback
+    }
+
+    // Coordinate helpers for container-local transforms
+    private screenToLocalX(screenX: number, viewport: { x: number; y: number; zoom: number }, leftMargin: number, pxPerDay: number) {
+        return screenX - leftMargin + viewport.x * pxPerDay
+    }
+    private screenToLocalY(screenY: number, viewport: { x: number; y: number; zoom: number }) {
+        return viewport.y + screenY
+    }
+    private localToScreenX(localX: number, viewport: { x: number; y: number; zoom: number }, leftMargin: number, pxPerDay: number) {
+        return leftMargin - viewport.x * pxPerDay + localX
+    }
+    private localToScreenY(localY: number, viewport: { x: number; y: number; zoom: number }) {
+        return localY - viewport.y
     }
 
     // Cleanup method

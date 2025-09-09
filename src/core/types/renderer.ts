@@ -1,5 +1,5 @@
 // TypeScript interfaces for Renderer interactions
-import type { Staff, Task } from './index'
+import type { Staff, Task, Dependency } from './index'
 
 // Renderer action interfaces
 export interface RendererActions {
@@ -28,7 +28,7 @@ export interface RendererUIActions {
 export interface RendererData {
     staffs: Staff[]
     tasks: Task[]
-    dependencies: any[]  // Will be properly typed later
+    dependencies: Dependency[]
     selection: string[]
 }
 
