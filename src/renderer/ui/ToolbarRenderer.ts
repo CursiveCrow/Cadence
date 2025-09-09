@@ -1,6 +1,6 @@
 ﻿import { Container, Graphics, Text } from 'pixi.js'
 import { getCssVarColor } from '@shared/colors'
-import { BUTTON, SPACING } from '@config/ui'
+import { UI_CONSTANTS } from '@config/ui'
 
 type Rect = { x: number; y: number; w: number; h: number }
 
@@ -10,10 +10,10 @@ export class ToolbarRenderer {
   private labels: Record<string, Text> = {}
 
   render(ui: Container, screenW: number, selection: string[]) {
-    const btnW = BUTTON.SMALL_WIDTH || 28
-    const btnH = BUTTON.MEDIUM_HEIGHT || 22
-    const pad = SPACING.MEDIUM || 8
-    const top = SPACING.SMALL || 6
+    const btnW = UI_CONSTANTS.BUTTON.SMALL_WIDTH || 28
+    const btnH = UI_CONSTANTS.BUTTON.MEDIUM_HEIGHT || 22
+    const pad = UI_CONSTANTS.SPACING.MEDIUM || 8
+    const top = UI_CONSTANTS.SPACING.SMALL || 6
     const keys = ['btn:addNote', 'btn:manage', 'btn:link']
     const startX = Math.max(0, screenW - (btnW + pad) * keys.length - pad)
     this.rects = {}
@@ -28,13 +28,13 @@ export class ToolbarRenderer {
       const x = startX + i * (btnW + pad)
       const r = { x, y: top, w: btnW, h: btnH }
       this.rects[k] = r
-      g.roundRect(r.x, r.y, r.w, r.h, BUTTON.BORDER_RADIUS || 6)
+      g.roundRect(r.x, r.y, r.w, r.h, UI_CONSTANTS.BUTTON.BORDER_RADIUS || 6)
       const active = (k === 'btn:link' ? selection.length >= 2 : true)
       g.fill({ color: active ? primary : btnBg, alpha: active ? 0.35 : 0.15 })
 
       const label: any = this.labels[k] ?? (this.labels[k] = new Text({ text: '', style: { fill: 0xffffff, fontSize: 12 } }))
       label.text = k === 'btn:addNote' ? '+' : k === 'btn:manage' ? 'Manage' : 'Link'
-      label.style = { fill: 0xffffff, fontSize: 12 }
+      try { (label.style as any).fill = 0xffffff; (label.style as any).fontSize = 12 } catch {}
       const lw = (label.width || 0) as number
       const lh = (label.height || 0) as number
       label.x = Math.round(x + r.w / 2 - lw / 2)

@@ -1,6 +1,4 @@
 import { Application, Container } from 'pixi.js'
-// Ensure the Filter system is registered (per Pixi v8 docs)
-import 'pixi.js/filters'
 
 // PixiJS application lifecycle management
 export class PixiApplication {
@@ -38,6 +36,8 @@ export class PixiApplication {
                 antialias: true,
                 clearBeforeRender: true,
                 preserveDrawingBuffer: false,
+                // Force WebGPU renderer to avoid WebGL paths and warnings
+                preference: 'webgpu',
                 powerPreference: 'high-performance',
                 resizeTo: (this.canvas.parentElement || window) as any,
                 eventFeatures: { move: true, click: true, wheel: true, globalMove: true },
@@ -219,12 +219,23 @@ export class PixiApplication {
         }
     }
 
-    // Set viewport transform on viewport container
-    setViewportTransform(container: Container | null, viewport: { x: number; y: number; zoom: number }) {
+    // Set viewport transform on viewport container (world-space translation)
+    // Horizontal translation applies camera (left margin and viewport.x * pxPerDay)
+    // We purposefully avoid scaling here to keep vertical geometry and text crisp.
+    setViewportTransform(
+        container: Container | null,
+        viewport: { x: number; y: number; zoom: number },
+        leftMargin: number,
+        pixelsPerDay: number,
+    ) {
         if (!container) return
 
-        container.scale.set(viewport.zoom)
-        container.position.set(-viewport.x * viewport.zoom, -viewport.y)
+        try {
+            container.scale.set(1, 1)
+            const x = Math.round(leftMargin - viewport.x * pixelsPerDay)
+            const y = Math.round(-viewport.y)
+            container.position.set(x, y)
+        } catch {}
     }
 
     // Create a new container for layered rendering

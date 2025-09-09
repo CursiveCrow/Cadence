@@ -1,7 +1,7 @@
 ﻿import { Container } from 'pixi.js'
 import { firstHit } from '@shared/geom'
 import type { Staff, Task } from '@types'
-import { STAFF } from '@config/ui'
+import { UI_CONSTANTS } from '@config/ui'
 import { StaffManagerModal } from './modals/StaffManagerModal'
 import { TaskDetailsModal } from './modals/TaskDetailsModal'
 
@@ -39,7 +39,7 @@ export class ModalRenderer {
   getTempStaffName(): string { return this.tempStaffName }
   setTempStaffName(name: string) { this.tempStaffName = name }
   getTempStaffLines(): number { return this.tempStaffLines }
-  setTempStaffLines(lines: number) { this.tempStaffLines = Math.max(STAFF.MIN_LINES, Math.min(STAFF.MAX_LINES, lines)) }
+  setTempStaffLines(lines: number) { this.tempStaffLines = Math.max(UI_CONSTANTS.STAFF.MIN_LINES, Math.min(UI_CONSTANTS.STAFF.MAX_LINES, lines)) }
 
   // UI hit testing
   hitTestUI(px: number, py: number): string | null { return firstHit(this.uiRects, px, py) }

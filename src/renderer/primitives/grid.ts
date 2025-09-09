@@ -155,3 +155,122 @@ export function drawStaffLines(params: {
 
     return s
 }
+
+// New: draw background and grid lines onto an existing Graphics (container-local coords)
+export function drawGridBackgroundOn(g: Graphics, params: {
+    widthLocal: number
+    height: number
+    pxPerDay: number
+    viewportXDays: number
+    bgColor?: number
+}) {
+    const { widthLocal, height, pxPerDay, viewportXDays, bgColor = 0x292524 } = params
+    const lineMajor = getCssVarColor('--ui-grid-major', 0x4a5568)
+    const lineMinor = getCssVarColor('--ui-grid-minor', 0x1e293b)
+    const accent = getCssVarColor('--ui-color-primary', 0xa855f7)
+
+    g.beginPath()
+    g.rect(0, 0, Math.max(0, widthLocal), Math.max(0, height))
+    g.fill({ color: bgColor, alpha: 0.28 })
+
+    const vx = viewportXDays
+    const startDay = Math.max(0, Math.floor(vx))
+    const endDay = Math.ceil(vx + widthLocal / Math.max(pxPerDay, 1e-4))
+
+    for (let day = startDay; day <= endDay; day++) {
+        const gx = day * pxPerDay
+        const xInt = Math.round(gx)
+        if (xInt <= 1) continue
+
+        const xl = xInt + 0.5
+        const isBarLine = day % 7 === 0
+
+        if (isBarLine) {
+            g.moveTo(xl - 0.5, 0)
+            g.lineTo(xl - 0.5, height)
+            g.stroke({ width: 2, color: lineMajor, alpha: 0.18 })
+            g.moveTo(xl + 1.5, 0)
+            g.lineTo(xl + 1.5, height)
+            g.stroke({ width: 1, color: lineMajor, alpha: 0.10 })
+        } else {
+            g.moveTo(xl, 0)
+            g.lineTo(xl, height)
+            g.stroke({ width: 1, color: lineMinor, alpha: 0.16 })
+        }
+
+        if (pxPerDay > 64 && !isBarLine) {
+            for (let i = 0.25; i < 1; i += 0.25) {
+                const subX = xInt + i * pxPerDay
+                if (subX < widthLocal) {
+                    for (let y = 50; y < height; y += 100) {
+                        g.circle(subX, y, 0.5)
+                        g.fill({ color: accent, alpha: 0.05 })
+                    }
+                }
+            }
+        }
+    }
+}
+
+// New: draw staff lines onto an existing Graphics (container-local coords)
+export function drawStaffLinesOn(g: Graphics, params: {
+    widthLocal: number
+    yTop: number
+    lineSpacing: number
+    lines: number
+}) {
+    const { widthLocal, yTop, lineSpacing, lines } = params
+
+    const staffHeight = (lines - 1) * lineSpacing + 10
+    g.beginPath()
+    g.rect(0, yTop - 5, Math.max(0, widthLocal), staffHeight)
+    g.fill({ color: 0xffffff, alpha: 0.01 })
+
+    const clefX = 10
+    const clefCenterY = yTop + (lines - 1) * lineSpacing / 2
+    g.beginPath()
+    g.moveTo(clefX, clefCenterY - lineSpacing * 2)
+    g.bezierCurveTo(
+        clefX - 5, clefCenterY - lineSpacing,
+        clefX + 5, clefCenterY + lineSpacing,
+        clefX, clefCenterY + lineSpacing * 2
+    )
+    const accent = getCssVarColor('--ui-color-primary', 0xa855f7)
+    g.stroke({ width: 2, color: accent, alpha: 0.2 })
+    g.circle(clefX, clefCenterY, 3)
+    g.fill({ color: accent, alpha: 0.3 })
+
+    for (let i = 0; i < lines; i++) {
+        const ly = yTop + i * lineSpacing
+        const lineY = Math.round(ly) + 0.5
+        g.moveTo(0, lineY)
+        g.lineTo(widthLocal, lineY)
+        const isEdgeLine = i === 0 || i === lines - 1
+        const lineAlpha = isEdgeLine ? 0.4 : 0.3
+        const lineWidth = isEdgeLine ? 1.5 : 1
+        const staffColor = getCssVarColor('--ui-staff-line', 0x4a5568)
+        g.stroke({ width: lineWidth, color: staffColor, alpha: lineAlpha })
+        g.moveTo(0, lineY + 1)
+        g.lineTo(widthLocal, lineY + 1)
+        g.stroke({ width: 1, color: 0x000000, alpha: 0.1 })
+
+        if (i < lines - 1) {
+            const bandTop = Math.round(ly) + 1
+            const bandH = Math.max(0.5, Math.round(lineSpacing) - 2)
+            for (let j = 0; j < 3; j++) {
+                g.rect(0, bandTop + j * (bandH / 3), widthLocal, bandH / 3)
+                g.fill({ color: 0xffffff, alpha: 0.003 - j * 0.001 })
+            }
+        }
+    }
+
+    const ledgerExtension = 20
+    for (let i = -1; i <= lines; i += lines + 1) {
+        const ly = yTop + i * lineSpacing
+        if (i === -1 || i === lines) {
+            g.moveTo(-ledgerExtension, Math.round(ly) + 0.5)
+            g.lineTo(0, Math.round(ly) + 0.5)
+            g.stroke({ width: 1, color: 0x4a5568, alpha: 0.1 })
+        }
+    }
+}

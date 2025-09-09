@@ -1,7 +1,7 @@
 ﻿import { Container, Graphics } from 'pixi.js'
 import { getCssVarColor } from '@shared/colors'
-import { drawGridBackground, drawStaffLines } from '../primitives/grid'
-import { drawMeasurePair, drawTodayMarker } from '../primitives/markers'
+import { drawGridBackgroundOn, drawStaffLinesOn } from '../primitives/grid'
+import { drawMeasurePairOn, drawTodayMarkerOn } from '../primitives/markers'
 import { dayIndexFromISO, EPS } from '@renderer/timeline'
 import { PROJECT_START_DATE } from '@config'
 import type { Staff } from '@types'
@@ -15,6 +15,12 @@ interface StaffBlock {
 }
 
 export class GridPass {
+    private _bg?: Graphics
+    private _grid?: Graphics
+    private _staff?: Graphics
+    private _measure?: Graphics
+    private _hover?: Graphics
+    private _today?: Graphics
 
     // Render background grid and staff lines
     renderBackground(
@@ -26,27 +32,26 @@ export class GridPass {
         bgColor: number
     ) {
         const { width, height } = screenDimensions
+        const widthLocal = Math.max(0, width - leftMargin)
 
-        // Content background (uses CSS variable --ui-color-bg)
-        const bg = new Graphics()
-        bg.rect(0, 0, width, Math.max(0, height))
-        bg.fill({ color: bgColor, alpha: 1 })
-        // subtle vignette edges to create depth and focus
-        bg.rect(0, 0, width, Math.max(0, height))
-        bg.fill({ color: 0x000000, alpha: 0.06 })
-        container.addChild(bg)
+        if (!this._bg) { this._bg = new Graphics(); container.addChild(this._bg) }
+        if (!this._grid) { this._grid = new Graphics(); container.addChild(this._grid) }
 
-        // Draw grid background patterns using the original helper for consistent visuals
-        for (const g of drawGridBackground({
-            width,
+        this._bg.clear()
+        this._grid.clear()
+
+        this._bg.rect(0, 0, widthLocal, Math.max(0, height))
+        this._bg.fill({ color: bgColor, alpha: 1 })
+        this._bg.rect(0, 0, widthLocal, Math.max(0, height))
+        this._bg.fill({ color: 0x000000, alpha: 0.06 })
+
+        drawGridBackgroundOn(this._grid, {
+            widthLocal,
             height,
-            LEFT_MARGIN: leftMargin,
             pxPerDay,
             viewportXDays: viewport.x,
-            bgColor
-        })) {
-            container.addChild(g)
-        }
+            bgColor,
+        })
     }
 
     // Render staff lines and return staff block metrics
@@ -56,37 +61,38 @@ export class GridPass {
         scaledTimeline: { topMargin: number; staffSpacing: number; lineSpacing: number },
         viewport: { x: number; y: number; zoom: number },
         screenWidth: number,
-        leftMargin: number
+        leftMargin: number,
+        pxPerDay: number,
     ): StaffBlock[] {
         const staffBlocks: StaffBlock[] = []
+        const widthLocal = Math.max(0, screenWidth - leftMargin)
         let yCursor = scaledTimeline.topMargin - viewport.y
+
+        if (!this._staff) { this._staff = new Graphics(); container.addChild(this._staff) }
+        this._staff.clear()
 
         let idx = 0
         for (const staff of staffs) {
             const spacing = scaledTimeline.lineSpacing
-            // Alternating soft band to separate staffs visually
             try {
-                const band = new Graphics()
                 const bandH = (staff.numberOfLines - 1) * spacing + 10
                 const tint = getCssVarColor(idx % 2 === 0 ? '--ui-music-paper-tint' : '--ui-music-paper-tint-strong', 0x000000)
-                band.rect(leftMargin, Math.round(yCursor - 5), Math.max(0, screenWidth - leftMargin), Math.max(0, bandH))
-                band.fill({ color: tint, alpha: idx % 2 === 0 ? 0.03 : 0.045 })
-                container.addChild(band)
+                this._staff.rect(0, Math.round(yCursor - 5), widthLocal, Math.max(0, bandH))
+                this._staff.fill({ color: tint, alpha: idx % 2 === 0 ? 0.03 : 0.045 })
             } catch {}
-            container.addChild(drawStaffLines({
-                width: screenWidth,
-                LEFT_MARGIN: leftMargin,
+
+            drawStaffLinesOn(this._staff, {
+                widthLocal,
                 yTop: yCursor,
                 lineSpacing: spacing,
-                lines: staff.numberOfLines
-            }))
+                lines: staff.numberOfLines,
+            })
 
-            // yBottom aligns with the last staff line (not one line beyond)
             staffBlocks.push({
                 id: staff.id,
                 yTop: yCursor,
                 yBottom: yCursor + (staff.numberOfLines - 1) * spacing,
-                lineSpacing: spacing
+                lineSpacing: spacing,
             })
             yCursor += scaledTimeline.staffSpacing
             idx++
@@ -114,6 +120,9 @@ export class GridPass {
             const leftWorldDays = vx + (0 - leftMargin) / Math.max(pxPerDay, EPS)
             const rightWorldDays = vx + (screenWidth - leftMargin) / Math.max(pxPerDay, EPS)
 
+            if (!this._measure) { this._measure = new Graphics(); container.addChild(this._measure) }
+            this._measure.clear()
+
             for (const sb of staffBlocks) {
                 const staff = staffs.find(s => s.id === sb.id)
                 const stepDays = this.measureLengthDaysFromTimeSignature(staff?.timeSignature)
@@ -122,17 +131,13 @@ export class GridPass {
 
                 for (let k = firstK; k <= lastK; k++) {
                     const dayIndex = k * stepDays + offsetDays
-                    const xScreen = leftMargin + (dayIndex - vx) * pxPerDay
-                    const xThick = Math.round(xScreen) + (thickW % 2 ? 0.5 : 0)
-                    const xThin = Math.round(xScreen - pairSpacingPx) + (thinW % 2 ? 0.5 : 0)
-
-                    if (xThin > screenWidth + 2) break
-                    if (xThick < leftMargin + 2) continue
-                    if (xThin < leftMargin + 2) continue
+                    const xLocal = dayIndex * pxPerDay
+                    const xThick = Math.round(xLocal) + (thickW % 2 ? 0.5 : 0)
+                    const xThin = Math.round(xLocal - pairSpacingPx) + (thinW % 2 ? 0.5 : 0)
 
                     const yTopStaff = Math.round(sb.yTop)
                     const yBottomStaff = Math.round(sb.yBottom)
-                    container.addChild(drawMeasurePair(xThick, xThin, yTopStaff, yBottomStaff))
+                    drawMeasurePairOn(this._measure, xThick, xThin, yTopStaff, yBottomStaff)
                 }
             }
         } catch (err) {
@@ -155,8 +160,10 @@ export class GridPass {
             const dd = String(now.getUTCDate()).padStart(2, '0')
             const isoToday = `${yyyy}-${mm}-${dd}`
             const dayIndex = dayIndexFromISO(isoToday, PROJECT_START_DATE)
-            const xToday = leftMargin + (dayIndex - viewport.x) * pxPerDay
-            container.addChild(drawTodayMarker(xToday, Math.max(0, screenHeight)))
+            const xLocal = dayIndex * pxPerDay
+            if (!this._today) { this._today = new Graphics(); container.addChild(this._today) }
+            this._today.clear()
+            drawTodayMarkerOn(this._today, xLocal, Math.max(0, screenHeight))
         } catch (err) {
             if (import.meta?.env?.DEV) console.debug('[GridPass]today marker', err)
         }
@@ -170,56 +177,40 @@ export class GridPass {
         staffBlocks: StaffBlock[],
         screenHeight: number
     ) {
-        // Hover vertical guideline with musical accent
-        if (hoverX != null) {
-            const gHover = new Graphics()
-            const xh = Math.round(hoverX) + 0.5
+        if (!this._hover) { this._hover = new Graphics(); container.addChild(this._hover) }
+        this._hover.clear()
 
-            // Gradient line
+        if (hoverX != null) {
+            const xh = Math.round(hoverX) + 0.5
             for (let i = 0; i < screenHeight; i += 20) {
                 const alpha = 0.2 * (1 - i / screenHeight)
-                gHover.moveTo(xh, i)
-                gHover.lineTo(xh, Math.min(i + 10, screenHeight))
-                gHover.stroke({ width: 1, color: 0xA855F7, alpha })
+                this._hover.moveTo(xh, i)
+                this._hover.lineTo(xh, Math.min(i + 10, screenHeight))
+                this._hover.stroke({ width: 1, color: 0xA855F7, alpha })
             }
-
-            // Accent dots at intersections
             for (const sb of staffBlocks) {
                 for (let i = 0; i < 5; i++) {
                     const y = sb.yTop + i * sb.lineSpacing
-                    gHover.circle(xh, y, 2)
-                    gHover.fill({ color: 0xFACC15, alpha: 0.5 })
+                    this._hover.circle(xh, y, 2)
+                    this._hover.fill({ color: 0xFACC15, alpha: 0.5 })
                 }
             }
-
-            container.addChild(gHover)
         }
 
-        // Hover row highlight with glow
         if (hoverY != null && staffBlocks.length > 0) {
-            const yHover = hoverY
-            const sb = staffBlocks.find(b => yHover >= b.yTop && yHover <= b.yBottom)
+            const sb = staffBlocks.find(b => hoverY >= b.yTop && hoverY <= b.yBottom)
             if (sb) {
-                const r = new Graphics()
                 const height = Math.max(1, Math.round(sb.yBottom - sb.yTop))
-
-                // Gradient glow effect
                 for (let i = 0; i < 3; i++) {
-                    r.rect(-100000, Math.round(sb.yTop - i * 2), 200000, height + i * 4)
-                    r.fill({ color: 0xA855F7, alpha: 0.02 * (3 - i) })
+                    this._hover.rect(-100000, Math.round(sb.yTop - i * 2), 200000, height + i * 4)
+                    this._hover.fill({ color: 0xA855F7, alpha: 0.02 * (3 - i) })
                 }
-
-                // Main highlight
-                r.rect(-100000, Math.round(sb.yTop), 200000, height)
-                r.fill({ color: 0xffffff, alpha: 0.08 })
-
-                // Top and bottom accent lines
-                r.rect(-100000, Math.round(sb.yTop), 200000, 1)
-                r.fill({ color: 0xC084FC, alpha: 0.3 })
-                r.rect(-100000, Math.round(sb.yBottom), 200000, 1)
-                r.fill({ color: 0xC084FC, alpha: 0.3 })
-
-                container.addChild(r)
+                this._hover.rect(-100000, Math.round(sb.yTop), 200000, height)
+                this._hover.fill({ color: 0xffffff, alpha: 0.08 })
+                this._hover.rect(-100000, Math.round(sb.yTop), 200000, 1)
+                this._hover.fill({ color: 0xC084FC, alpha: 0.3 })
+                this._hover.rect(-100000, Math.round(sb.yBottom), 200000, 1)
+                this._hover.fill({ color: 0xC084FC, alpha: 0.3 })
             }
         }
     }

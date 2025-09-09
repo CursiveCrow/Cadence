@@ -36,6 +36,7 @@ export class EffectsPass {
         particles: [],
         animations: new Map()
     }
+    private particleG?: Graphics
 
     // Render visual effects overlay
     render(container: Container, deltaTime: number = 16) {
@@ -191,18 +192,12 @@ export class EffectsPass {
     }
 
     private renderParticles(container: Container) {
-        this.ensureGradientTextures()
-
-        for (const particle of this.effects.particles) {
-            const sprite = new Sprite(this.gradientTextures.particle!)
-            sprite.anchor.set(0.5)
-            sprite.x = particle.x
-            sprite.y = particle.y
-            sprite.width = particle.size
-            sprite.height = particle.size
-            sprite.alpha = particle.alpha * (particle.life / particle.maxLife)
-            sprite.tint = particle.color
-            container.addChild(sprite)
+        if (!this.particleG) { this.particleG = new Graphics(); container.addChild(this.particleG) }
+        this.particleG.clear()
+        for (const p of this.effects.particles) {
+            const alpha = p.alpha * (p.life / p.maxLife)
+            this.particleG.circle(p.x, p.y, p.size)
+            this.particleG.fill({ color: p.color, alpha })
         }
     }
 
